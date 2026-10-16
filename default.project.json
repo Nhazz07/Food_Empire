@@ -1,0 +1,30 @@
+
+{
+  "name": "FoodEmpires",
+  "tree": {
+    "$className": "DataModel",
+
+    "ReplicatedStorage": {
+      "shared": {
+        "$path": "src/shared"
+      }
+    },
+
+    "ServerScriptService": {
+      "Main": {
+        "$path": "src/server/Main.server.luau"
+      },
+      "Services": {
+        "$path": "src/server/Services"
+      }
+    },
+
+    "StarterPlayer": {
+      "StarterPlayerScripts": {
+        "Main": {
+          "$path": "src/client/Main.client.luau"
+        }
+      }
+    }
+  }
+}
