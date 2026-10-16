@@ -1,10 +1,11 @@
-local SectorConfig= {
+
+local SectorConfig = {
     GreenfieldMarket = {
         DisplayName = "Greenfield Market",
-        owner = "Netural",
+        Owner = "Neutral",
         Status = "Available",
         IngredientType = "Vegetables",
-        ProductRate = 5,
+        ProductionRate = 5,
     },
 
     IronMarket = {
@@ -12,7 +13,7 @@ local SectorConfig= {
         Owner = "Rival",
         Status = "Controlled",
         IngredientType = "Meat",
-        ProductRate = 5,
+        ProductionRate = 5,
     },
 }
 

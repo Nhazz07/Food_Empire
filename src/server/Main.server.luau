@@ -2,7 +2,8 @@
 local ServerScriptService = game:GetService("ServerScriptService")
 
 local SectorService = require(
-    ServerScriptService:WaitForChild("Services"):WaitForChild("SectorService")
+    ServerScriptService:WaitForChild("Services")
+        :WaitForChild("SectorService")
 )
 
 SectorService.Initialize()
