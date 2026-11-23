@@ -14,6 +14,7 @@ local PlayerDataService = require("./PlayerDataService")
 local SectorService = require("./SectorService")
 local MonetizationService = require("./MonetizationService")
 local ShipmentService = require("./ShipmentService")
+local TurfService = require("./TurfService")
 
 type RaiderAgent = {
 	Owner: Player,
@@ -370,13 +371,14 @@ local function stepRaiderAgent(agent: RaiderAgent): ()
 		return
 	end
 
-	-- 1. Defend Owner if a Rival Chef or Mafia is attacking near the Owner (within 50 studs)!
+	-- 1. Defend Owner & engage Mafia / Rival Chefs / Enemy Turf Guards!
 	local now = os.clock()
+	local myFaction = "Player_" .. tostring(agent.Owner.UserId)
 	local ownerChar = agent.Owner.Character
 	local ownerRoot = if ownerChar then ownerChar:FindFirstChild("HumanoidRootPart") else nil
-	for _, tagName in ipairs({ "MafiaUnit", "RivalAIUnit" }) do
+	for _, tagName in ipairs({ "MafiaUnit", "RivalAIUnit", "TurfGuardUnit" }) do
 		for _, rival in ipairs(CollectionService:GetTagged(tagName)) do
-			if rival:IsA("Model") then
+			if rival:IsA("Model") and rival:GetAttribute("Faction") ~= myFaction then
 				local rRoot = rival:FindFirstChild("HumanoidRootPart")
 				local rHum = rival:FindFirstChildOfClass("Humanoid")
 				if rRoot and rRoot:IsA("BasePart") and rHum and rHum.Health > 0 then
@@ -389,7 +391,7 @@ local function stepRaiderAgent(agent: RaiderAgent): ()
 						end
 						agent.Humanoid:MoveTo(rRoot.Position)
 						return
-					elseif dMe <= 36 or (nearOwner and dMe <= 90) then
+					elseif dMe <= 40 or (nearOwner and dMe <= 90) then
 						agent.Humanoid:MoveTo(rRoot.Position)
 						return
 					end
@@ -398,10 +400,20 @@ local function stepRaiderAgent(agent: RaiderAgent): ()
 		end
 	end
 
-	-- 2. Collect arrived Central Plaza Shipments & patrol the Expanded Center!
+	-- 2. Raider #1 captures & defends Urban Mafia Territory Blocks; Raider #2 claims Shipments or captures blocks!
 	ShipmentService.TryRaiderClaimAtPosition(agent.Owner, agent.Root.Position)
+	local _, turfTarget = TurfService.GetBestCaptureTargetForPlayer(agent.Owner, agent.Root.Position)
 	local shipTarget = ShipmentService.GetBestActiveShipmentPosition(nil)
-	local targetPos = shipTarget or Vector3.new(if agent.Index == 1 then 48 else -48, 4, 48)
+	local targetPos: Vector3
+	if agent.Index == 1 and turfTarget then
+		targetPos = turfTarget
+	elseif shipTarget and (shipTarget - Vector3.new(0, 4, 0)).Magnitude > 10 then
+		targetPos = shipTarget
+	elseif turfTarget then
+		targetPos = turfTarget
+	else
+		targetPos = Vector3.new(if agent.Index == 1 then 48 else -48, 4, 48)
+	end
 
 	if (targetPos - agent.Root.Position).Magnitude <= 10 then
 		return

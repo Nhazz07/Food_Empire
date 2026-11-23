@@ -25,6 +25,7 @@ local DeliveryRunnerService = require("./DeliveryRunnerService")
 local BodyguardService = require("./BodyguardService")
 local BlackMarketService = require("./BlackMarketService")
 local DayNightService = require("./DayNightService")
+local TurfService = require("./TurfService")
 
 type KitchenState = {
 	IsCooking: boolean,
@@ -83,6 +84,7 @@ local unsubProfile: (() -> ())? = nil
 local unsubWarehouse: (() -> ())? = nil
 local unsubSector: (() -> ())? = nil
 local unsubShipments: (() -> ())? = nil
+local unsubTurf: (() -> ())? = nil
 
 local CUSTOMER_COLORS: { Color3 } = {
 	Color3.fromRGB(72, 168, 238),
@@ -1626,6 +1628,7 @@ local function buildClientPayload(player: Player): { [string]: any }
 		DeliveryRunnerActive = DeliveryRunnerService.IsActive(player),
 		DeliveryRunnerCooldown = DeliveryRunnerService.GetCooldownRemaining(player),
 		BlackMarket = BlackMarketService.GetCatalogPayload(player),
+		Turf = TurfService.GetSnapshotForPlayer(player),
 	}
 end
 
@@ -2190,6 +2193,12 @@ function RestaurantService.Start(): ()
 		end
 	end)
 
+	unsubTurf = TurfService.OnTurfChanged(function()
+		for _, p in ipairs(Players:GetPlayers()) do
+			RestaurantService.PushStateToClient(p)
+		end
+	end)
+
 	unsubBase = BaseService.OnBaseAssigned(function(player)
 		spawnCustomersForPlayer(player)
 		syncRestaurantVisuals(player)
@@ -2268,6 +2277,7 @@ function RestaurantService.Stop(): ()
 	if unsubWarehouse then unsubWarehouse(); unsubWarehouse = nil end
 	if unsubSector then unsubSector(); unsubSector = nil end
 	if unsubShipments then unsubShipments(); unsubShipments = nil end
+	if unsubTurf then unsubTurf(); unsubTurf = nil end
 	for p in pairs(customerModels) do
 		clearCustomers(p)
 	end

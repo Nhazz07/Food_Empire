@@ -7,6 +7,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SectorConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("SectorConfig")
 )
+local TurfConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("TurfConfig")
+)
 local WaypointController = require("./WaypointController")
 local AudioController = require("./AudioController")
 
@@ -20,6 +23,8 @@ local gpsPinFrame: Frame? = nil
 local gpsStatusLabel: TextLabel? = nil
 local clearPinBtn: TextButton? = nil
 local sectorMarkers: { [string]: TextButton } = {}
+local turfMarkers: { [string]: TextButton } = {}
+local turfStrokes: { [string]: UIStroke } = {}
 local heartbeatConn: RBXScriptConnection? = nil
 
 local function makeCorner(parent: Instance, r: number): ()
@@ -159,6 +164,43 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	sectorMarkers.FruitOrchard = addClickableMarker(ocean, -725,  725, 24, SectorConfig.FactionColors.Neutral, "FRT", "Fruit Orchard")
 	sectorMarkers.FishingPort = addClickableMarker(ocean,  755,  795, 24, SectorConfig.FactionColors.Neutral, "FSH", "Fishing Port")
 
+	-- 16 Clickable Mid-Town Urban Territory Block Tiles (live base-color synced!)
+	table.clear(turfMarkers)
+	table.clear(turfStrokes)
+	for _, blockId in ipairs(TurfConfig.BlockOrder) do
+		local spec = TurfConfig.Blocks[blockId]
+		if spec then
+			local initCol = TurfConfig.ResolveFactionColor(spec.InitialOwner)
+			local tile = Instance.new("TextButton")
+			tile.Name = "TurfTile_" .. blockId
+			tile.AnchorPoint = Vector2.new(0.5, 0.5)
+			tile.Position = worldToMinimap(spec.PlazaPos.X, spec.PlazaPos.Z)
+			tile.Size = UDim2.fromOffset(if spec.IsHQ then 11 else 9, if spec.IsHQ then 11 else 9)
+			tile.BackgroundColor3 = initCol
+			tile.BorderSizePixel = 0
+			tile.Font = Enum.Font.GothamBlack
+			tile.Text = if spec.IsHQ then "★" else ""
+			tile.TextSize = 8
+			tile.TextColor3 = Color3.new(1, 1, 1)
+			tile.ZIndex = 4
+			tile.Parent = ocean
+			makeCorner(tile, 3)
+
+			local st = Instance.new("UIStroke")
+			st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			st.Color = Color3.fromRGB(16, 20, 30)
+			st.Thickness = 1.1
+			st.Parent = tile
+
+			tile.MouseButton1Click:Connect(function()
+				setMapDestination(spec.PlazaPos.X, spec.PlazaPos.Z, spec.DisplayName)
+			end)
+
+			turfMarkers[blockId] = tile
+			turfStrokes[blockId] = st
+		end
+	end
+
 	-- Custom GPS Pin Marker on Minimap
 	local pin = Instance.new("Frame")
 	pin.Name = "GPSPin"
@@ -284,6 +326,38 @@ function MinimapController.Update(state: { [string]: any }): ()
 				marker.BackgroundColor3 = SectorConfig.FactionColors[slot]
 			else
 				marker.BackgroundColor3 = SectorConfig.FactionColors.Player
+			end
+		end
+	end
+
+	-- Sync all 16 Mid-Town Urban Territory Blocks to controlling faction Base Color!
+	local turf = state.Turf
+	if typeof(turf) == "table" and typeof(turf.Blocks) == "table" then
+		for blockId, tile in pairs(turfMarkers) do
+			local b = turf.Blocks[blockId]
+			if typeof(b) == "table" then
+				local st = turfStrokes[blockId]
+				if b.Status == "Contested" then
+					tile.BackgroundColor3 = TurfConfig.ContestedColor
+					if st then
+						st.Color = Color3.fromRGB(255, 255, 255)
+						st.Thickness = 1.8
+					end
+				else
+					local r = tonumber(b.ColorR) or 160
+					local g = tonumber(b.ColorG) or 160
+					local bl = tonumber(b.ColorB) or 160
+					tile.BackgroundColor3 = Color3.fromRGB(r, g, bl)
+					if st then
+						if b.UnderAttack == true then
+							st.Color = Color3.fromRGB(255, 86, 86)
+							st.Thickness = 2.0
+						else
+							st.Color = Color3.fromRGB(16, 20, 30)
+							st.Thickness = 1.1
+						end
+					end
+				end
 			end
 		end
 	end

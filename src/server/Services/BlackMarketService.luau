@@ -381,7 +381,9 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 
 	local isRival = CollectionService:HasTag(hitModel, "RivalAIUnit")
 	local isMafia = CollectionService:HasTag(hitModel, "MafiaUnit")
-	if isRival or isMafia then
+	local isEnemyTurfGuard = CollectionService:HasTag(hitModel, "TurfGuardUnit")
+		and hitModel:GetAttribute("Faction") ~= ("Player_" .. tostring(player.UserId))
+	if isRival or isMafia or isEnemyTurfGuard then
 		targetHum:TakeDamage(dmg)
 		emitCombatSFX("MeleeHit", hitPos)
 		if targetHum.Health <= 0 then
@@ -390,6 +392,8 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 				PlayerDataService.AddRewards(player, 220, 80, 45)
 			elseif isMafia then
 				PlayerDataService.AddRewards(player, 90, 35, 20)
+			elseif isEnemyTurfGuard then
+				PlayerDataService.AddRewards(player, 65, 25, 15)
 			else
 				local bountyAttr = hitModel:GetAttribute("BountyGold")
 				local bounty = if typeof(bountyAttr) == "number" then bountyAttr else 45

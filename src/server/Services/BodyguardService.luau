@@ -343,15 +343,18 @@ local function hookPlayerDamageDefense(player: Player): ()
 	end
 end
 
-local function findNearestHostileToPoint(anchor: Vector3, radius: number): (Humanoid?, BasePart?, Model?)
+local function findNearestHostileToPoint(anchor: Vector3, radius: number, ownerFaction: string?): (Humanoid?, BasePart?, Model?)
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
 	local bestModel: Model? = nil
 	local bestDist = radius
 
-	for _, tagName in ipairs({ "MafiaUnit", "RivalAIUnit" }) do
+	for _, tagName in ipairs({ "MafiaUnit", "RivalAIUnit", "TurfGuardUnit" }) do
 		for _, unit in ipairs(CollectionService:GetTagged(tagName)) do
 			if unit:IsA("Model") then
+				if tagName == "TurfGuardUnit" and ownerFaction and unit:GetAttribute("Faction") == ownerFaction then
+					continue
+				end
 				local r = unit:FindFirstChild("HumanoidRootPart")
 				local h = unit:FindFirstChildOfClass("Humanoid")
 				if r and r:IsA("BasePart") and h and h.Health > 0 then
@@ -392,14 +395,15 @@ local function stepGuard(agent: BodyguardAgent): ()
 	end
 
 	-- 1. Priority Defense: Protect Boss (expanded 60-stud alert radius if Boss just took damage!)
+	local ownerFaction = "Player_" .. tostring(owner.UserId)
 	local alertRadius = if (playerUnderAttackUntil[owner] or 0) > now then 62 else PROTECT_RADIUS
-	local targetHum, targetRoot, targetModel = findNearestHostileToPoint(ownerPos, alertRadius)
+	local targetHum, targetRoot, targetModel = findNearestHostileToPoint(ownerPos, alertRadius, ownerFaction)
 
 	-- 2. Also defend your active Stealth Delivery Runner if nearby!
 	if not targetHum then
 		local runnerPos = DeliveryRunnerService.GetActiveRunnerPosition(owner)
 		if runnerPos and (runnerPos - ownerPos).Magnitude < 120 then
-			targetHum, targetRoot, targetModel = findNearestHostileToPoint(runnerPos, 40)
+			targetHum, targetRoot, targetModel = findNearestHostileToPoint(runnerPos, 40, ownerFaction)
 		end
 	end
 

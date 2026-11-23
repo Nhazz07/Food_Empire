@@ -34,10 +34,12 @@ local ExpressDeliveryService = {}
 local DROP_POINTS: { DropPoint } = {
 	{ Name = "Plaza Fountain",       Pos = Vector3.new(0, 2.2, 26) },
 	{ Name = "Royal Hall Steps",     Pos = Vector3.new(0, 2.2, -96) },
-	{ Name = "NE Tower Courtyard",   Pos = Vector3.new(104, 2.2, -104) },
-	{ Name = "SW Cherry Park",       Pos = Vector3.new(-104, 2.2, 104) },
-	{ Name = "East Avenue Bistro",   Pos = Vector3.new(112, 2.2, 28) },
-	{ Name = "West Avenue Plaza",    Pos = Vector3.new(-112, 2.2, -28) },
+	{ Name = "Little Italy Row",     Pos = Vector3.new(-158, 2.2, -266) },
+	{ Name = "Jade Tea Arcade",      Pos = Vector3.new(158, 2.2, -266) },
+	{ Name = "Sunset Cafe Strip",    Pos = Vector3.new(-158, 2.2, 266) },
+	{ Name = "Harborview Bistro",    Pos = Vector3.new(158, 2.2, 266) },
+	{ Name = "Black Market Row",     Pos = Vector3.new(-288, 2.2, 216) },
+	{ Name = "Spice Bazaar Square",  Pos = Vector3.new(282, 2.2, -142) },
 }
 
 local EXPRESS_MEALS: { { Name: string, Gold: number, Rep: number, Time: number } } = {

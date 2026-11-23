@@ -1,10 +1,14 @@
 --!strict
 
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 local SectorConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("SectorConfig")
+)
+local TurfConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("TurfConfig")
 )
 
 export type OpenMenuCallback = (tabName: "Kitchen" | "Warehouses" | "Upgrades" | "Shop" | "BlackMarket") -> ()
@@ -43,6 +47,15 @@ local toastLabel: TextLabel? = nil
 local receiptTicket: Frame? = nil
 local receiptHeaderLbl: TextLabel? = nil
 local receiptBodyLbl: TextLabel? = nil
+local turfSummaryLabel: TextLabel? = nil
+local turfAlertLabel: TextLabel? = nil
+local activeBlockBanner: Frame? = nil
+local activeBlockTitle: TextLabel? = nil
+local activeBlockOwnerPill: TextLabel? = nil
+local activeBlockFill: Frame? = nil
+local activeBlockSub: TextLabel? = nil
+local latestTurfState: { [string]: any }? = nil
+local turfProximityConn: RBXScriptConnection? = nil
 local sectorDots: { [string]: Frame } = {}
 local sectorStatusLabels: { [string]: TextLabel } = {}
 local toastToken = 0
@@ -597,6 +610,203 @@ function HUDController.Init(
 	rBody.Parent = ticket
 	receiptBodyLbl = rBody
 
+	-- Top-Right Urban Turf Control Card (Cleanly in the open gap between Armor Bar and Minimap!)
+	local turfCard = Instance.new("Frame")
+	turfCard.Name = "UrbanTurfCard"
+	turfCard.AnchorPoint = Vector2.new(1, 0)
+	turfCard.Position = UDim2.new(1, -14, 0, 152)
+	turfCard.Size = UDim2.fromOffset(216, 54)
+	turfCard.BackgroundColor3 = Color3.fromRGB(20, 26, 40)
+	turfCard.BackgroundTransparency = 0.08
+	turfCard.Parent = gui
+	makeCorner(turfCard, 10)
+	makeBorderStroke(turfCard, Color3.fromRGB(246, 192, 54), 1.6)
+
+	local tHead = Instance.new("TextLabel")
+	tHead.Size = UDim2.new(1, 0, 0, 18)
+	tHead.BackgroundTransparency = 1
+	tHead.Font = FONT_TITLE
+	tHead.Text = "🏙️ URBAN TURF CONTROL"
+	tHead.TextSize = 11
+	tHead.TextColor3 = Color3.fromRGB(255, 224, 108)
+	tHead.Parent = turfCard
+	makeTextOutline(tHead, 1.0)
+
+	local tSum = Instance.new("TextLabel")
+	tSum.Position = UDim2.new(0, 8, 0, 18)
+	tSum.Size = UDim2.new(1, -16, 0, 17)
+	tSum.BackgroundTransparency = 1
+	tSum.Font = FONT_TITLE
+	tSum.Text = "Blocks: 0 / 16  •  +0G / 20s"
+	tSum.TextSize = 11
+	tSum.TextColor3 = Color3.fromRGB(134, 248, 178)
+	tSum.Parent = turfCard
+	turfSummaryLabel = tSum
+
+	local tAlert = Instance.new("TextLabel")
+	tAlert.Position = UDim2.new(0, 8, 0, 35)
+	tAlert.Size = UDim2.new(1, -16, 0, 16)
+	tAlert.BackgroundTransparency = 1
+	tAlert.Font = FONT_BODY
+	tAlert.Text = "Click minimap blocks to raid Mafia!"
+	tAlert.TextSize = 10
+	tAlert.TextColor3 = Color3.fromRGB(208, 220, 242)
+	tAlert.TextTruncate = Enum.TextTruncate.AtEnd
+	tAlert.Parent = turfCard
+	turfAlertLabel = tAlert
+
+	-- Top-Center Contextual Live Block Capture Banner (auto-shows when standing in any of the 16 Urban Block Plazas!)
+	local bBanner = Instance.new("Frame")
+	bBanner.Name = "ActiveBlockCaptureBanner"
+	bBanner.AnchorPoint = Vector2.new(0.5, 0)
+	bBanner.Position = UDim2.new(0.5, 0, 0, 116)
+	bBanner.Size = UDim2.fromOffset(356, 56)
+	bBanner.BackgroundColor3 = Color3.fromRGB(18, 24, 38)
+	bBanner.BackgroundTransparency = 0.08
+	bBanner.Visible = false
+	bBanner.Parent = gui
+	makeCorner(bBanner, 12)
+	makeBorderStroke(bBanner, Color3.fromRGB(246, 198, 56), 1.8)
+	activeBlockBanner = bBanner
+
+	local bTitle = Instance.new("TextLabel")
+	bTitle.Position = UDim2.new(0, 10, 0, 4)
+	bTitle.Size = UDim2.new(0.58, -10, 0, 22)
+	bTitle.BackgroundTransparency = 1
+	bTitle.Font = FONT_TITLE
+	bTitle.TextXAlignment = Enum.TextXAlignment.Left
+	bTitle.Text = "LITTLE ITALY ROW"
+	bTitle.TextSize = 13
+	bTitle.TextColor3 = Color3.fromRGB(255, 232, 134)
+	bTitle.Parent = bBanner
+	makeTextOutline(bTitle, 1.2)
+	activeBlockTitle = bTitle
+
+	local bOwner = Instance.new("TextLabel")
+	bOwner.AnchorPoint = Vector2.new(1, 0)
+	bOwner.Position = UDim2.new(1, -10, 0, 5)
+	bOwner.Size = UDim2.new(0.40, 0, 0, 20)
+	bOwner.BackgroundColor3 = Color3.fromRGB(238, 112, 24)
+	bOwner.Font = FONT_TITLE
+	bOwner.Text = "IRON CLAW"
+	bOwner.TextSize = 11
+	bOwner.TextColor3 = Color3.new(1, 1, 1)
+	bOwner.Parent = bBanner
+	makeCorner(bOwner, 6)
+	makeTextOutline(bOwner, 1.0)
+	activeBlockOwnerPill = bOwner
+
+	local bBarBg = Instance.new("Frame")
+	bBarBg.Position = UDim2.new(0, 10, 0, 30)
+	bBarBg.Size = UDim2.new(1, -20, 0, 19)
+	bBarBg.BackgroundColor3 = Color3.fromRGB(12, 16, 26)
+	bBarBg.Parent = bBanner
+	makeCorner(bBarBg, 7)
+
+	local bFill = Instance.new("Frame")
+	bFill.Size = UDim2.fromScale(0, 1)
+	bFill.BackgroundColor3 = Color3.fromRGB(58, 214, 118)
+	bFill.Parent = bBarBg
+	makeCorner(bFill, 7)
+	activeBlockFill = bFill
+
+	local bSub = Instance.new("TextLabel")
+	bSub.Size = UDim2.fromScale(1, 1)
+	bSub.BackgroundTransparency = 1
+	bSub.Font = FONT_TITLE
+	bSub.Text = "MAFIA CONTROLLED"
+	bSub.TextSize = 11
+	bSub.TextColor3 = Color3.new(1, 1, 1)
+	bSub.ZIndex = 3
+	bSub.Parent = bBarBg
+	makeTextOutline(bSub, 1.0)
+	activeBlockSub = bSub
+
+	if turfProximityConn then
+		turfProximityConn:Disconnect()
+	end
+	local checkAcc = 0
+	turfProximityConn = RunService.Heartbeat:Connect(function(dt: number)
+		checkAcc += dt
+		if checkAcc < 0.2 then
+			return
+		end
+		checkAcc = 0
+		if not activeBlockBanner then
+			return
+		end
+		local char = Players.LocalPlayer.Character
+		local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
+		local turf = latestTurfState
+		if not root or not root:IsA("BasePart") or typeof(turf) ~= "table" or typeof(turf.Blocks) ~= "table" then
+			activeBlockBanner.Visible = false
+			return
+		end
+
+		local pos = root.Position
+		local foundBlock: { [string]: any }? = nil
+		for _, blockId in ipairs(TurfConfig.BlockOrder) do
+			local b = turf.Blocks[blockId]
+			if typeof(b) == "table" and typeof(b.PlazaX) == "number" and typeof(b.PlazaZ) == "number" then
+				local r = (tonumber(b.CaptureRadius) or 29) + 12
+				local dx = pos.X - b.PlazaX
+				local dz = pos.Z - b.PlazaZ
+				if (dx * dx + dz * dz) <= (r * r) then
+					foundBlock = b
+					break
+				end
+			end
+		end
+
+		if not foundBlock then
+			activeBlockBanner.Visible = false
+			return
+		end
+
+		activeBlockBanner.Visible = true
+		local ownerCol = Color3.fromRGB(
+			tonumber(foundBlock.ColorR) or 160,
+			tonumber(foundBlock.ColorG) or 160,
+			tonumber(foundBlock.ColorB) or 160
+		)
+		local capCol = Color3.fromRGB(
+			tonumber(foundBlock.CapColorR) or 68,
+			tonumber(foundBlock.CapColorG) or 214,
+			tonumber(foundBlock.CapColorB) or 118
+		)
+		if activeBlockTitle then
+			activeBlockTitle.Text = "🏙️ " .. string.upper(tostring(foundBlock.DisplayName or "BLOCK"))
+		end
+		if activeBlockOwnerPill then
+			if foundBlock.Status == "Contested" then
+				activeBlockOwnerPill.Text = "⚔️ CONTESTED"
+				activeBlockOwnerPill.BackgroundColor3 = TurfConfig.ContestedColor
+			else
+				activeBlockOwnerPill.Text = tostring(foundBlock.OwnerName or "MAFIA")
+				activeBlockOwnerPill.BackgroundColor3 = ownerCol
+			end
+		end
+		if activeBlockFill then
+			activeBlockFill.Size = UDim2.fromScale(math.clamp(tonumber(foundBlock.Progress) or 0, 0, 1), 1)
+			activeBlockFill.BackgroundColor3 = capCol
+		end
+		if activeBlockSub then
+			local defs = tonumber(foundBlock.DefendersAlive) or 0
+			local prog = tonumber(foundBlock.Progress) or 0
+			if foundBlock.Status == "Contested" then
+				activeBlockSub.Text = "⚔️ CONTESTED! Defeat or drive out rivals in the plaza!"
+			elseif prog > 0.01 then
+				activeBlockSub.Text = string.format("⚡ %s CAPTURING... %d%%", tostring(foundBlock.CapturingName or "CAPTURING"), math.floor(prog * 100))
+			elseif TurfConfig.IsMafiaFaction(tostring(foundBlock.Owner or "")) then
+				activeBlockSub.Text = if defs > 0
+					then string.format("🕶️ %d Mafia Defender(s) • Clear & hold plaza!", defs)
+					else "⚡ Guards cleared! Stand in plaza to capture!"
+			else
+				activeBlockSub.Text = string.format("🛡️ Controlled (+%dG/20s) • %d Guard(s) on patrol", tonumber(foundBlock.IncomeGold) or 18, defs)
+			end
+		end
+	end)
+
 	return gui
 end
 
@@ -815,6 +1025,40 @@ function HUDController.Update(state: { [string]: any }): ()
 				expressOrderLabel.Text = string.format("Next Express Call in %ds...%s", tonumber(exp.Remaining) or 5, comboStr)
 				expressAcceptBtn.Text = "⏳ Waiting for Call..."
 				expressAcceptBtn.BackgroundColor3 = Color3.fromRGB(68, 78, 96)
+			end
+		end
+	end
+
+	-- Update Urban Turf Control Card & cache latest block states for live proximity capture banner
+	local turf = state.Turf
+	if typeof(turf) == "table" then
+		latestTurfState = turf
+		local owned = tonumber(turf.OwnedCount) or 0
+		local total = tonumber(turf.TotalBlocks) or 16
+		local inc = tonumber(turf.IncomePerCycle) or 0
+		local mono = tonumber(turf.Monopolies) or 0
+		if turfSummaryLabel then
+			local monoTag = if mono > 0 then string.format(" ★%d", mono) else ""
+			turfSummaryLabel.Text = string.format("Blocks: %d/%d • +%dG/20s%s", owned, total, inc, monoTag)
+		end
+		if turfAlertLabel and typeof(turf.Blocks) == "table" then
+			local myFaction = "Player_" .. tostring(Players.LocalPlayer.UserId)
+			local underAttackName: string? = nil
+			for _, b in pairs(turf.Blocks) do
+				if typeof(b) == "table" and b.Owner == myFaction and b.UnderAttack == true then
+					underAttackName = tostring(b.DisplayName or "Your Block")
+					break
+				end
+			end
+			if underAttackName then
+				turfAlertLabel.Text = "🚨 RAID AT " .. string.upper(underAttackName) .. "!"
+				turfAlertLabel.TextColor3 = Color3.fromRGB(255, 114, 114)
+			elseif owned == 0 then
+				turfAlertLabel.Text = "Fight Mafia in Mid-Town blocks!"
+				turfAlertLabel.TextColor3 = Color3.fromRGB(210, 224, 246)
+			else
+				turfAlertLabel.Text = "Capture all 4 in a quadrant for +50%!"
+				turfAlertLabel.TextColor3 = Color3.fromRGB(154, 238, 192)
 			end
 		end
 	end
