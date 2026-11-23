@@ -280,11 +280,149 @@ local function fixWorldMapLayout(): ()
 			arch.Parent = parent
 		end
 
+		local function addCurvedHighwayToEntry(parent: Instance, midPos: Vector3, targetPos: Vector3, targetForward: Vector3, targetWidth: number): ()
+			local u = Vector3.new(targetForward.X, 0, targetForward.Z).Unit
+			local right = u:Cross(Vector3.new(0, 1, 0)).Unit
+			local flatMid = Vector3.new(midPos.X, 0, midPos.Z)
+			local flatTarget = Vector3.new(targetPos.X, 0, targetPos.Z)
+			local delta = flatTarget - flatMid
+			local L = delta:Dot(u)
+			local h = delta:Dot(right)
+
+			if L <= 24 then
+				return
+			end
+
+			if math.abs(h) < 0.25 then
+				local dir = delta.Unit
+				addCleanHighwaySegment(parent, flatMid + dir * 18, flatTarget, false)
+				return
+			end
+
+			local sign = if h >= 0 then 1 else -1
+			local absH = math.abs(h)
+			local v = right * sign
+			local R = (L * L + absH * absH) / (2 * absH)
+			local center = flatMid + u * L + v * (absH - R)
+			local thetaTotal = math.atan2(L, R - absH)
+			local totalArcLen = R * thetaTotal
+
+			local function arcPoint(phi: number): Vector3
+				return center - u * (R * math.sin(phi)) + v * (R * math.cos(phi))
+			end
+
+			local function arcTangent(phi: number): Vector3
+				return (u * math.cos(phi) + v * math.sin(phi)).Unit
+			end
+
+			local sStart = 18
+			local sCurbStart = 21.5
+			local numSegs = 14
+			local phiStart = thetaTotal - (sStart / R)
+			local terrain = Workspace.Terrain
+
+			for i = 1, numSegs do
+				local t0 = (i - 1) / numSegs
+				local t1 = i / numSegs
+				local phi0 = phiStart * (1 - t0)
+				local phi1 = phiStart * (1 - t1)
+
+				local p0 = arcPoint(phi0)
+				local p1 = arcPoint(phi1)
+				local segDelta = p1 - p0
+				local chordLen = segDelta.Magnitude
+				local segMid = (p0 + p1) * 0.5
+				local segCF = CFrame.lookAt(segMid, p1)
+
+				local halfW0 = 10 + (targetWidth * 0.5 - 10) * t0
+				local halfW1 = 10 + (targetWidth * 0.5 - 10) * t1
+				local segWidth = math.max(halfW0, halfW1) * 2 + 0.12
+				local segLen = chordLen + (if i == numSegs then 0.8 else 0.45)
+				local yStagger = if (i % 2) == 0 then -0.003 else 0
+
+				-- Clear any stray terrain grass voxels poking above ground along the road ribbon
+				terrain:FillBlock(segCF * CFrame.new(0, 4.0, 0), Vector3.new(segWidth + 4, 6.0, segLen + 2), Enum.Material.Air)
+
+				makeRoadPart(
+					parent,
+					"Asphalt",
+					Vector3.new(segWidth, 0.34, segLen),
+					segCF * CFrame.new(0, 1.12 + yStagger, if i == numSegs then -0.15 else 0),
+					Color3.fromRGB(54, 58, 68),
+					Enum.Material.Asphalt,
+					nil
+				)
+			end
+
+			-- Smooth tapering curbs starting cleanly outside MidRoundabout rim and meeting RoadEmbankment flush
+			local phiCurbStart = thetaTotal - (sCurbStart / R)
+			for i = 1, numSegs do
+				local t0 = (i - 1) / numSegs
+				local t1 = i / numSegs
+				local phi0 = phiCurbStart * (1 - t0)
+				local phi1 = phiCurbStart * (1 - t1)
+
+				local p0 = arcPoint(phi0)
+				local p1 = arcPoint(phi1)
+				local r0 = arcTangent(phi0):Cross(Vector3.new(0, 1, 0)).Unit
+				local r1 = arcTangent(phi1):Cross(Vector3.new(0, 1, 0)).Unit
+
+				local halfW0 = 10 + (targetWidth * 0.5 - 10) * t0
+				local halfW1 = 10 + (targetWidth * 0.5 - 10) * t1
+				local cw0 = 1.3 + (0.9 - 1.3) * t0
+				local cw1 = 1.3 + (0.9 - 1.3) * t1
+				local off0 = halfW0 + cw0 * 0.5 - 0.05 * t0
+				local off1 = halfW1 + cw1 * 0.5 - 0.05 * t1
+
+				local cwMid = (cw0 + cw1) * 0.5
+				local tMid = (t0 + t1) * 0.5
+				local curbH = 0.55 + (0.50 - 0.55) * tMid
+				local curbY = 1.24 + (1.12 - 1.24) * tMid
+
+				for _, side in ipairs({ { Name = "Curb_L", Sign = -1 }, { Name = "Curb_R", Sign = 1 } }) do
+					local q0 = p0 + r0 * (off0 * side.Sign)
+					local q1 = p1 + r1 * (off1 * side.Sign)
+					local qLen = (q1 - q0).Magnitude + 0.35
+					local qMid = (q0 + q1) * 0.5
+					local qCF = CFrame.lookAt(qMid, q1)
+					makeRoadPart(
+						parent,
+						side.Name,
+						Vector3.new(cwMid, curbH, qLen),
+						qCF * CFrame.new(0, curbY, 0),
+						Color3.fromRGB(152, 156, 166),
+						Enum.Material.Concrete,
+						nil
+					)
+				end
+			end
+
+			-- Evenly spaced center yellow dashes following the curve centerline
+			local s = 32
+			while s <= totalArcLen - 14 do
+				local phi = thetaTotal - (s / R)
+				local dp = arcPoint(phi)
+				local dDir = arcTangent(phi)
+				local dCF = CFrame.lookAt(dp, dp + dDir)
+				local dash = makeRoadPart(
+					parent,
+					"Dash",
+					Vector3.new(0.75, 0.06, 9.5),
+					dCF * CFrame.new(0, 1.31, 0),
+					Color3.fromRGB(246, 206, 72),
+					Enum.Material.SmoothPlastic,
+					nil
+				)
+				dash.CanCollide = false
+				s += 24
+			end
+		end
+
 		local highwaySpecs = {
 			{ Name = "Highway_VegetableFarm_NW", Inner1 = Vector3.new(-204, 0, -204), Mid = Vector3.new(-490, 0, -490), Outer2 = Vector3.new(-685, 0, -685), ArchTerritory = "VegetableFarm_Territory", ArchPos = Vector3.new(-625, 1.2, -625), ArchTitle = "🥕 VEGETABLE FARM", ArchCol = Color3.fromRGB(76, 178, 74) },
 			{ Name = "Highway_Ranch_NE",         Inner1 = Vector3.new(204, 0, -204),  Mid = Vector3.new(490, 0, -490),  Outer2 = Vector3.new(685, 0, -685),  ArchTerritory = "Ranch_Territory",         ArchPos = Vector3.new(625, 1.2, -625),  ArchTitle = "🥩 MEAT RANCH",     ArchCol = Color3.fromRGB(196, 78, 54) },
 			{ Name = "Highway_FruitOrchard_SW",  Inner1 = Vector3.new(-204, 0, 204),  Mid = Vector3.new(-490, 0, 490),  Outer2 = Vector3.new(-685, 0, 685),  ArchTerritory = "FruitOrchard_Territory",  ArchPos = Vector3.new(-625, 1.2, 625),  ArchTitle = "🍎 FRUIT ORCHARD",  ArchCol = Color3.fromRGB(218, 134, 42) },
-			{ Name = "Highway_FishingPort_SE",   Inner1 = Vector3.new(204, 0, 204),   Mid = Vector3.new(490, 0, 490),   Outer2 = Vector3.new(665, 0, 680),   ArchTerritory = nil,                       ArchPos = nil,                          ArchTitle = "",                  ArchCol = Color3.fromRGB(64, 156, 214) },
+			{ Name = "Highway_FishingPort_SE",   Inner1 = Vector3.new(204, 0, 204),   Mid = Vector3.new(490, 0, 490),   Outer2 = Vector3.new(627.75, 0, 671.75), ArchTerritory = nil,                     ArchPos = nil,                          ArchTitle = "",                  ArchCol = Color3.fromRGB(64, 156, 214) },
 		}
 
 		for _, hs in ipairs(highwaySpecs) do
@@ -298,8 +436,39 @@ local function fixWorldMapLayout(): ()
 			local dir1 = (hs.Mid - hs.Inner1).Unit
 			addCleanHighwaySegment(hModel, hs.Inner1 + dir1 * 18, hs.Mid - dir1 * 18, true)
 
-			local dir2 = (hs.Outer2 - hs.Mid).Unit
-			addCleanHighwaySegment(hModel, hs.Mid + dir2 * 18, hs.Outer2, false)
+			if hs.Name == "Highway_FishingPort_SE" then
+				local sectors = map:FindFirstChild("Sectors")
+				local fpTerr = if sectors then sectors:FindFirstChild("FishingPort_Territory") else nil
+				local entryInst = if fpTerr then fpTerr:FindFirstChild("HarborRoad_Entry") else nil
+				if entryInst and entryInst:IsA("BasePart") then
+					local look = Vector3.new(entryInst.CFrame.LookVector.X, 0, entryInst.CFrame.LookVector.Z).Unit
+					local entryNW = Vector3.new(entryInst.Position.X, 0, entryInst.Position.Z) - look * (entryInst.Size.Z * 0.5)
+					-- Trim protruding RoadEmbankment curbs so they end cleanly flush with HarborRoad_Entry
+					local upgrade = fpTerr:FindFirstChild("FishingPort_HarborUpgrade")
+					local emb = if upgrade then upgrade:FindFirstChild("RoadEmbankment") else nil
+					if emb then
+						for _, curb in ipairs(emb:GetChildren()) do
+							if curb:IsA("BasePart") then
+								local cLook = Vector3.new(curb.CFrame.LookVector.X, 0, curb.CFrame.LookVector.Z).Unit
+								local seEnd = curb.Position + cLook * (curb.Size.Z * 0.5)
+								local flatSE = Vector3.new(seEnd.X, 0, seEnd.Z)
+								local desiredLen = (flatSE - entryNW):Dot(cLook)
+								if desiredLen > 10 then
+									local newCenter = seEnd - cLook * (desiredLen * 0.5)
+									curb.Size = Vector3.new(curb.Size.X, curb.Size.Y, desiredLen)
+									curb.CFrame = (curb.CFrame - curb.CFrame.Position) + newCenter
+								end
+							end
+						end
+					end
+					addCurvedHighwayToEntry(hModel, hs.Mid, entryNW, look, entryInst.Size.X)
+				else
+					addCurvedHighwayToEntry(hModel, hs.Mid, hs.Outer2, Vector3.new(1, 0, 1).Unit, 18)
+				end
+			else
+				local dir2 = (hs.Outer2 - hs.Mid).Unit
+				addCleanHighwaySegment(hModel, hs.Mid + dir2 * 18, hs.Outer2, false)
+			end
 
 			-- 3. Rebuild the Corner Territory Entrance Gate (TerritoryArch) high above the road with posts outside the curbs!
 			if hs.ArchTerritory and hs.ArchPos then
