@@ -41,38 +41,38 @@ local citizens: { UrbanCitizen } = {}
 local blockStatesCache: { [string]: { Owner: string, Status: string, UnderAttack: boolean, OwnerName: string } } = {}
 
 local SKIN_TONES = {
-	Color3.fromRGB(246, 212, 178),
-	Color3.fromRGB(224, 178, 138),
-	Color3.fromRGB(178, 128, 92),
-	Color3.fromRGB(252, 224, 198),
+	Color3.fromRGB(224, 188, 156),
+	Color3.fromRGB(204, 166, 134),
+	Color3.fromRGB(168, 124, 92),
+	Color3.fromRGB(234, 202, 174),
 	Color3.fromRGB(142, 98, 68),
 }
 
 local OUTFIT_COLORS = {
-	Color3.fromRGB(238, 96, 78),
-	Color3.fromRGB(56, 154, 224),
-	Color3.fromRGB(242, 182, 48),
-	Color3.fromRGB(78, 182, 92),
-	Color3.fromRGB(168, 92, 224),
-	Color3.fromRGB(240, 124, 168),
-	Color3.fromRGB(248, 248, 252),
-	Color3.fromRGB(48, 178, 174),
-	Color3.fromRGB(224, 132, 62),
+	Color3.fromRGB(48, 52, 62),
+	Color3.fromRGB(92, 42, 46),
+	Color3.fromRGB(78, 62, 48),
+	Color3.fromRGB(46, 62, 54),
+	Color3.fromRGB(62, 56, 72),
+	Color3.fromRGB(116, 88, 64),
+	Color3.fromRGB(228, 226, 220),
+	Color3.fromRGB(42, 58, 72),
+	Color3.fromRGB(66, 48, 42),
 }
 
 local PANTS_COLORS = {
-	Color3.fromRGB(44, 52, 70),
-	Color3.fromRGB(72, 62, 54),
-	Color3.fromRGB(38, 68, 102),
-	Color3.fromRGB(58, 64, 76),
+	Color3.fromRGB(32, 36, 44),
+	Color3.fromRGB(48, 42, 38),
+	Color3.fromRGB(30, 44, 62),
+	Color3.fromRGB(40, 42, 48),
 }
 
 local HAIR_COLORS = {
-	Color3.fromRGB(52, 34, 24),
-	Color3.fromRGB(184, 132, 56),
-	Color3.fromRGB(28, 28, 36),
-	Color3.fromRGB(146, 68, 38),
-	Color3.fromRGB(92, 78, 68),
+	Color3.fromRGB(46, 30, 20),
+	Color3.fromRGB(132, 92, 44),
+	Color3.fromRGB(24, 24, 28),
+	Color3.fromRGB(98, 52, 32),
+	Color3.fromRGB(120, 122, 128),
 }
 
 local MAFIA_CHAT_LINES = {
@@ -132,40 +132,50 @@ local function buildCitizen(parent: Instance, blockId: string, index: number, rn
 
 	local root = makePart(m, "Root", Vector3.new(1, 1, 1), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic, nil)
 	root.Transparency = 1
-	local torso = makePart(m, "Torso", Vector3.new(2.1, 2.4, 1.15), if isChef then Color3.fromRGB(248, 248, 252) else shirt, Enum.Material.SmoothPlastic, nil)
-	local head = makePart(m, "Head", Vector3.new(1.7, 1.7, 1.7), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	local leftArm = makePart(m, "LeftArm", Vector3.new(0.8, 2.1, 0.8), if isChef then Color3.fromRGB(248, 248, 252) else shirt, Enum.Material.SmoothPlastic, nil)
-	local rightArm = makePart(m, "RightArm", Vector3.new(0.8, 2.1, 0.8), if isChef then Color3.fromRGB(248, 248, 252) else shirt, Enum.Material.SmoothPlastic, nil)
-	local leftLeg = makePart(m, "LeftLeg", Vector3.new(0.9, 2.2, 0.9), pants, Enum.Material.SmoothPlastic, nil)
-	local rightLeg = makePart(m, "RightLeg", Vector3.new(0.9, 2.2, 0.9), pants, Enum.Material.SmoothPlastic, nil)
+	local coatCol = if isChef then Color3.fromRGB(232, 230, 224) else shirt
+	local torso = makePart(m, "Torso", Vector3.new(2.02, 2.32, 1.10), coatCol, Enum.Material.Fabric, nil)
+	makePart(m, "Collar", Vector3.new(1.50, 0.38, 1.14), if isChef then Color3.fromRGB(122, 28, 34) else Color3.fromRGB(214, 210, 202), Enum.Material.Fabric, nil)
+	makePart(m, "Belt", Vector3.new(2.06, 0.22, 1.16), Color3.fromRGB(22, 22, 26), Enum.Material.Leather, nil)
+
+	local head = makePart(m, "Head", Vector3.new(1.24, 1.26, 1.24), skin, Enum.Material.SmoothPlastic, nil)
+	local hm = Instance.new("SpecialMesh")
+	hm.MeshType = Enum.MeshType.Head
+	hm.Scale = Vector3.new(1.18, 1.16, 1.18)
+	hm.Parent = head
+	makePart(m, "FaceEyes", Vector3.new(0.74, 0.14, 0.08), Color3.fromRGB(24, 24, 28), Enum.Material.SmoothPlastic, nil)
+
+	local leftArm = makePart(m, "LeftArm", Vector3.new(0.76, 2.12, 0.76), coatCol, Enum.Material.Fabric, nil)
+	local rightArm = makePart(m, "RightArm", Vector3.new(0.76, 2.12, 0.76), coatCol, Enum.Material.Fabric, nil)
+	local leftLeg = makePart(m, "LeftLeg", Vector3.new(0.84, 2.24, 0.86), pants, Enum.Material.Fabric, nil)
+	local rightLeg = makePart(m, "RightLeg", Vector3.new(0.84, 2.24, 0.86), pants, Enum.Material.Fabric, nil)
 
 	local hat: Part
 	if isChef then
-		hat = makePart(m, "ChefHat", Vector3.new(1.4, 1.25, 1.4), Color3.fromRGB(252, 252, 255), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		hat = makePart(m, "ChefHat", Vector3.new(0.78, 1.34, 1.34), Color3.fromRGB(238, 236, 232), Enum.Material.Fabric, Enum.PartType.Cylinder)
 	else
-		hat = makePart(m, "HairCap", Vector3.new(1.8, 0.82, 1.8), hair, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		hat = makePart(m, "HairCap", Vector3.new(1.32, 0.42, 1.36), hair, Enum.Material.SmoothPlastic, nil)
 	end
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "CitizenChat"
 	bb.Size = UDim2.fromOffset(185, 32)
-	bb.StudsOffset = Vector3.new(0, 2.6, 0)
+	bb.StudsOffset = Vector3.new(0, 2.2, 0)
 	bb.MaxDistance = 68
 	bb.Enabled = false
 	bb.Parent = head
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(255, 250, 238)
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
 	lbl.BackgroundTransparency = 0.08
-	lbl.Font = Enum.Font.GothamBold
+	lbl.Font = Enum.Font.GothamMedium
 	lbl.Text = ""
-	lbl.TextColor3 = Color3.fromRGB(36, 34, 46)
-	lbl.TextSize = 12
+	lbl.TextColor3 = Color3.fromRGB(228, 224, 216)
+	lbl.TextSize = 11
 	lbl.TextWrapped = true
 	lbl.Parent = bb
-	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 9); c.Parent = lbl
-	local st = Instance.new("UIStroke"); st.Color = Color3.fromRGB(218, 188, 126); st.Thickness = 1.6; st.Parent = lbl
+	local c = Instance.new("UICorner"); c.CornerRadius = UDim.new(0, 5); c.Parent = lbl
+	local st = Instance.new("UIStroke"); st.Color = Color3.fromRGB(64, 68, 78); st.Thickness = 1.2; st.Parent = lbl
 
 	m.PrimaryPart = root
 	m.Parent = parent
@@ -204,20 +214,27 @@ local function updateCitizenPose(c: UrbanCitizen, isWalking: boolean): ()
 
 	local baseCF = CFrame.new(c.CurrentPos.X, SIDEWALK_Y + bob, c.CurrentPos.Z) * CFrame.Angles(0, c.FacingYaw, 0)
 	c.RootPart.CFrame = baseCF * CFrame.new(0, 3.3, 0)
-	c.Torso.CFrame = baseCF * CFrame.new(0, 3.45, 0)
+	c.Torso.CFrame = baseCF * CFrame.new(0, 3.42, 0)
 
-	local headCF = baseCF * CFrame.new(0, 5.45, 0)
+	local collar = c.Model:FindFirstChild("Collar")
+	if collar and collar:IsA("BasePart") then collar.CFrame = baseCF * CFrame.new(0, 4.38, -0.02) end
+	local belt = c.Model:FindFirstChild("Belt")
+	if belt and belt:IsA("BasePart") then belt.CFrame = baseCF * CFrame.new(0, 2.38, 0) end
+
+	local headCF = baseCF * CFrame.new(0, 5.34, 0)
 	c.Head.CFrame = headCF
+	local faceEyes = c.Model:FindFirstChild("FaceEyes")
+	if faceEyes and faceEyes:IsA("BasePart") then faceEyes.CFrame = headCF * CFrame.new(0, 0.12, -0.58) end
 	if c.IsChefHat then
-		c.Hat.CFrame = headCF * CFrame.new(0, 1.0, 0) * CFrame.Angles(0, 0, math.rad(90))
+		c.Hat.CFrame = headCF * CFrame.new(0, 0.88, 0) * CFrame.Angles(0, 0, math.rad(90))
 	else
-		c.Hat.CFrame = headCF * CFrame.new(0, 0.5, 0.1)
+		c.Hat.CFrame = headCF * CFrame.new(0, 0.52, 0.06)
 	end
 
-	c.LeftArm.CFrame = baseCF * CFrame.new(-1.45, 4.3, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -0.9, 0)
-	c.RightArm.CFrame = baseCF * CFrame.new(1.45, 4.3, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -0.9, 0)
-	c.LeftLeg.CFrame = baseCF * CFrame.new(-0.52, 2.2, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -1.1, 0)
-	c.RightLeg.CFrame = baseCF * CFrame.new(0.52, 2.2, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -1.1, 0)
+	c.LeftArm.CFrame = baseCF * CFrame.new(-1.38, 4.30, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -0.90, 0)
+	c.RightArm.CFrame = baseCF * CFrame.new(1.38, 4.30, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -0.90, 0)
+	c.LeftLeg.CFrame = baseCF * CFrame.new(-0.50, 2.24, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -1.12, 0)
+	c.RightLeg.CFrame = baseCF * CFrame.new(0.50, 2.24, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -1.12, 0)
 end
 
 local function getBlockWalkRoutes(spec: TurfConfig.TurfBlockSpec): { { Vector3 } }
@@ -355,7 +372,7 @@ function UrbanNPCController.Start(): ()
 						elseif isPlayerOwned then LIBERATED_CHAT_LINES
 						else MAFIA_CHAT_LINES
 					c.ChatLabel.Text = pool[rng:NextInteger(1, #pool)]
-					c.ChatLabel.TextColor3 = if isConflict then Color3.fromRGB(196, 36, 48) else Color3.fromRGB(36, 34, 46)
+					c.ChatLabel.TextColor3 = if isConflict then Color3.fromRGB(224, 96, 102) else Color3.fromRGB(228, 224, 216)
 					c.ChatGui.Enabled = true
 					c.ChatTimer = 3.0
 				end

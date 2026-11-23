@@ -87,23 +87,24 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	frame.AnchorPoint = Vector2.new(1, 1)
 	frame.Position = UDim2.new(1, -14, 1, -14)
 	frame.Size = UDim2.fromOffset(MAP_PIXEL_SIZE + 14, MAP_PIXEL_SIZE + 54)
-	frame.BackgroundColor3 = Color3.fromRGB(20, 32, 52)
-	frame.BackgroundTransparency = 0.1
+	frame.BackgroundColor3 = Color3.fromRGB(15, 17, 21)
+	frame.BackgroundTransparency = 0.05
 	frame.Parent = parentGui
-	makeCorner(frame, 14)
+	makeCorner(frame, 6)
 
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(248, 196, 56)
-	stroke.Thickness = 1.8
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	stroke.Color = Color3.fromRGB(48, 52, 62)
+	stroke.Thickness = 1.2
 	stroke.Parent = frame
 
 	local title = Instance.new("TextLabel")
 	title.Size = UDim2.new(1, 0, 0, 22)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.GothamBlack
-	title.Text = "🗺️ CLICK MAP FOR ARROW (N^)"
+	title.Text = "TACTICAL MAP  |  NORTH UP"
 	title.TextSize = 10
-	title.TextColor3 = Color3.fromRGB(255, 224, 96)
+	title.TextColor3 = Color3.fromRGB(196, 166, 102)
 	title.Parent = frame
 
 	-- Interactive Click-Anywhere Ocean + Island canvas
@@ -111,22 +112,22 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	ocean.Name = "MapCanvas"
 	ocean.Position = UDim2.new(0, 7, 0, 24)
 	ocean.Size = UDim2.fromOffset(MAP_PIXEL_SIZE, MAP_PIXEL_SIZE)
-	ocean.BackgroundColor3 = Color3.fromRGB(28, 152, 196)
+	ocean.BackgroundColor3 = Color3.fromRGB(24, 42, 54)
 	ocean.Text = ""
 	ocean.AutoButtonColor = false
 	ocean.ClipsDescendants = true
 	ocean.Parent = frame
-	makeCorner(ocean, 10)
+	makeCorner(ocean, 5)
 
 	local island = Instance.new("Frame")
 	island.AnchorPoint = Vector2.new(0.5, 0.5)
 	island.Position = UDim2.fromScale(0.5, 0.5)
 	island.Size = UDim2.fromScale(0.88, 0.88)
-	island.BackgroundColor3 = Color3.fromRGB(82, 174, 76)
+	island.BackgroundColor3 = Color3.fromRGB(52, 74, 54)
 	island.BorderSizePixel = 0
 	island.ZIndex = 1
 	island.Parent = ocean
-	makeCorner(island, 14)
+	makeCorner(island, 8)
 
 	-- Click ANY spot on the map to drop a Custom GPS Pin & Guide Arrow!
 	ocean.MouseButton1Click:Connect(function()
@@ -240,19 +241,19 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	local statusBar = Instance.new("Frame")
 	statusBar.Position = UDim2.new(0, 7, 1, -26)
 	statusBar.Size = UDim2.new(1, -14, 0, 21)
-	statusBar.BackgroundColor3 = Color3.fromRGB(14, 22, 36)
+	statusBar.BackgroundColor3 = Color3.fromRGB(11, 12, 16)
 	statusBar.Parent = frame
-	makeCorner(statusBar, 6)
+	makeCorner(statusBar, 4)
 
 	local sLbl = Instance.new("TextLabel")
 	sLbl.Position = UDim2.new(0, 6, 0, 0)
 	sLbl.Size = UDim2.new(1, -28, 1, 0)
 	sLbl.BackgroundTransparency = 1
 	sLbl.Font = Enum.Font.GothamBold
-	sLbl.Text = "Tap any place for GPS arrow!"
+	sLbl.Text = "Click map to set waypoint"
 	sLbl.TextSize = 10
 	sLbl.TextXAlignment = Enum.TextXAlignment.Left
-	sLbl.TextColor3 = Color3.fromRGB(186, 226, 255)
+	sLbl.TextColor3 = Color3.fromRGB(168, 172, 182)
 	sLbl.TextTruncate = Enum.TextTruncate.AtEnd
 	sLbl.Parent = statusBar
 	gpsStatusLabel = sLbl
@@ -260,14 +261,14 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	local clr = Instance.new("TextButton")
 	clr.Position = UDim2.new(1, -22, 0, 1)
 	clr.Size = UDim2.fromOffset(20, 19)
-	clr.BackgroundColor3 = Color3.fromRGB(204, 52, 64)
+	clr.BackgroundColor3 = Color3.fromRGB(142, 30, 38)
 	clr.Font = Enum.Font.GothamBlack
-	clr.Text = "✕"
+	clr.Text = "X"
 	clr.TextSize = 10
-	clr.TextColor3 = Color3.new(1, 1, 1)
+	clr.TextColor3 = Color3.fromRGB(238, 236, 230)
 	clr.Visible = false
 	clr.Parent = statusBar
-	makeCorner(clr, 5)
+	makeCorner(clr, 4)
 	clr.MouseButton1Click:Connect(function()
 		AudioController.PlayClick()
 		WaypointController.ClearCustomWaypoint()
@@ -278,13 +279,13 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		if pos and gpsPinFrame and gpsStatusLabel and clearPinBtn then
 			gpsPinFrame.Position = worldToMinimap(pos.X, pos.Z)
 			gpsPinFrame.Visible = true
-			gpsStatusLabel.Text = "📍 Arrow -> " .. (label or "Pin")
-			gpsStatusLabel.TextColor3 = Color3.fromRGB(112, 246, 255)
+			gpsStatusLabel.Text = "ROUTE -> " .. (label or "Pin")
+			gpsStatusLabel.TextColor3 = Color3.fromRGB(196, 166, 102)
 			clearPinBtn.Visible = true
 		elseif gpsPinFrame and gpsStatusLabel and clearPinBtn then
 			gpsPinFrame.Visible = false
-			gpsStatusLabel.Text = "Tap any place for GPS arrow!"
-			gpsStatusLabel.TextColor3 = Color3.fromRGB(186, 226, 255)
+			gpsStatusLabel.Text = "Click map to set waypoint"
+			gpsStatusLabel.TextColor3 = Color3.fromRGB(168, 172, 182)
 			clearPinBtn.Visible = false
 		end
 	end)

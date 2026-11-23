@@ -2,6 +2,11 @@
 
 local SoundService = game:GetService("SoundService")
 local ContentProvider = game:GetService("ContentProvider")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local WeaponConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WeaponConfig")
+)
 
 local AudioController = {}
 
@@ -43,34 +48,34 @@ type PoolEntry = {
 local POOL_SPECS: { [string]: PoolSpec } = {
 	PistolShot = {
 		SoundId = PISTOL_SFX_URL,
-		PoolSize = 4,
+		PoolSize = 6,
 		BaseVolume = 0.78,
 		BaseSpeed = 1.05,
-		StartOffset = 0,
+		StartOffset = 0.035, -- Trimmed measured leading silence for instant 0ms shot transient!
 		PitchJitter = 0.03,
 	},
 	ShotgunBlast = {
 		SoundId = SHOTGUN_SFX_URL,
-		PoolSize = 3,
+		PoolSize = 4,
 		BaseVolume = 0.88,
 		BaseSpeed = 0.90,
-		StartOffset = 0,
+		StartOffset = 0.055, -- Trimmed measured leading silence for instant 0ms blast!
 		PitchJitter = 0.025,
 	},
 	ShotgunBoomTail = {
 		SoundId = EXPLOSION_URL,
-		PoolSize = 3,
+		PoolSize = 4,
 		BaseVolume = 0.30,
 		BaseSpeed = 1.72,
-		StartOffset = 0,
+		StartOffset = 0.02,
 		PitchJitter = 0.03,
 	},
 	SMGShot = {
 		SoundId = SMG_SFX_URL,
-		PoolSize = 6,
-		BaseVolume = 0.65,
+		PoolSize = 8,
+		BaseVolume = 0.66,
 		BaseSpeed = 1.22,
-		StartOffset = 0,
+		StartOffset = 0.055, -- Trimmed measured leading silence for snappy automatic cadence!
 		PitchJitter = 0.035,
 	},
 	ReloadMag = {
@@ -96,6 +101,22 @@ local POOL_SPECS: { [string]: PoolSpec } = {
 		BaseSpeed = 1.05,
 		StartOffset = 0.08,
 		PitchJitter = 0.02,
+	},
+	BodyDrop = {
+		SoundId = PUNCH_SFX_URL,
+		PoolSize = 4,
+		BaseVolume = 0.68,
+		BaseSpeed = 0.44,
+		StartOffset = 0.02,
+		PitchJitter = 0.06,
+	},
+	BodyDropTail = {
+		SoundId = HIT_URL,
+		PoolSize = 4,
+		BaseVolume = 0.36,
+		BaseSpeed = 0.50,
+		StartOffset = 0,
+		PitchJitter = 0.06,
 	},
 	DryFireClick = {
 		SoundId = CLICK_URL,
@@ -324,12 +345,30 @@ function AudioController.PlaySMGShot(volScale: number?): ()
 end
 
 function AudioController.PlayWeaponFire(weaponId: string, volScale: number?): ()
-	if weaponId == "PepperShotgun" then
-		AudioController.PlayShotgunBlast(volScale)
-	elseif weaponId == "TacticalSMG" then
-		AudioController.PlaySMGShot(volScale)
+	local v = volScale or 1
+	local spec = WeaponConfig.WEAPONS[weaponId]
+	if weaponId == "ShadowSniper" then
+		playPooled("ShotgunBlast", v * 1.05, 0.80)
+		playPooled("ShotgunBoomTail", v * 0.95, 1.35)
+		return
+	elseif weaponId == "SilencedDeagle" then
+		playPooled("PistolShot", v * 0.92, 0.82)
+		return
+	elseif weaponId == "SyndicateCarbine" or weaponId == "CrimsonDragonAR" then
+		playPooled("SMGShot", v * 1.05, 0.84)
+		return
+	elseif weaponId == "GoldenEmperorPistol" then
+		playPooled("PistolShot", v * 1.0, 1.12)
+		return
+	end
+
+	local audioKey = if spec then spec.AudioKey else "PistolShot"
+	if audioKey == "ShotgunBlast" then
+		AudioController.PlayShotgunBlast(v)
+	elseif audioKey == "SMGShot" then
+		AudioController.PlaySMGShot(v)
 	else
-		AudioController.PlayPistolShot(volScale)
+		AudioController.PlayPistolShot(v)
 	end
 end
 
@@ -340,7 +379,9 @@ function AudioController.PlayDryFire(): ()
 end
 
 function AudioController.PlayMagReload(weaponId: string): ()
-	local speed = if weaponId == "TacticalSMG" then 0.84 else 1.04
+	local spec = WeaponConfig.WEAPONS[weaponId]
+	local dur = if spec then spec.ReloadTime else 1.45
+	local speed = math.clamp(1.50 / math.max(0.8, dur), 0.68, 1.28)
 	playPooled("ReloadMag", 1, speed)
 end
 
@@ -356,6 +397,12 @@ function AudioController.PlayShotgunPump(): ()
 	playPooled("ShotgunPump", 1, 1)
 end
 
+function AudioController.PlayBodyDrop(volScale: number?): ()
+	local v = volScale or 1
+	playPooled("BodyDrop", v, 1)
+	playPooled("BodyDropTail", v, 1)
+end
+
 function AudioController.PlayCombatSFX(kind: string, volScale: number?): ()
 	if kind == "PistolShot" or kind == "EnemyShot" then
 		AudioController.PlayPistolShot(volScale)
@@ -369,6 +416,8 @@ function AudioController.PlayCombatSFX(kind: string, volScale: number?): ()
 		AudioController.PlayMeleeSwing(volScale)
 	elseif kind == "ShotgunPump" then
 		AudioController.PlayShotgunPump()
+	elseif kind == "BodyDrop" then
+		AudioController.PlayBodyDrop(volScale)
 	end
 end
 

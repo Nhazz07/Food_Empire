@@ -15,12 +15,22 @@ export type PlayerProfile = {
 	RestaurantLevel: number,
 	DefenseLevel: number,
 	CrewCount: number,
+	WaiterCount: number,
+	CourierCount: number,
+	OwnsCentralParkBranch: boolean,
+	CentralParkBranchStaffed: boolean,
+	LastFreeSpinAt: number,
 	RaiderCount: number,
 	BodyguardCount: number,
 	OwnsMotorbike: boolean,
 	OwnedWeapons: { [string]: boolean },
 	HasKevlarVest: boolean,
 	Armor: number,
+	AmmoInventory: { [string]: number },
+	ActiveBodyguards: { string },
+	UnlockedGuardClasses: { [string]: boolean },
+	OwnedGuardGear: { [string]: boolean },
+	GuardLoadouts: { [string]: { [string]: string } },
 }
 
 export type ProfileChangedCallback = (player: Player, profile: PlayerProfile) -> ()
@@ -58,12 +68,28 @@ local function createDefaultProfile(): PlayerProfile
 		RestaurantLevel = 1,
 		DefenseLevel = 1,
 		CrewCount = 0,
+		WaiterCount = 0,
+		CourierCount = 0,
+		OwnsCentralParkBranch = false,
+		CentralParkBranchStaffed = false,
+		LastFreeSpinAt = 0,
 		RaiderCount = 0,
 		BodyguardCount = 0,
 		OwnsMotorbike = false,
 		OwnedWeapons = {},
 		HasKevlarVest = false,
 		Armor = 0,
+		AmmoInventory = {
+			Pistol9mm = 60,
+			Shotgun12G = 24,
+			SMG45 = 120,
+			Rifle556 = 90,
+			Sniper308 = 20,
+		},
+		ActiveBodyguards = {},
+		UnlockedGuardClasses = {},
+		OwnedGuardGear = {},
+		GuardLoadouts = {},
 	}
 end
 
@@ -199,6 +225,33 @@ function PlayerDataService.SetCrewCount(player: Player, count: number): ()
 	notifyChanged(player)
 end
 
+function PlayerDataService.SetWaiterCount(player: Player, count: number): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.WaiterCount = math.clamp(math.floor(count), 0, 3)
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetCourierCount(player: Player, count: number): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.CourierCount = math.clamp(math.floor(count), 0, 2)
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetCentralParkBranch(player: Player, owned: boolean, staffed: boolean?): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.OwnsCentralParkBranch = owned
+	if staffed ~= nil then
+		profile.CentralParkBranchStaffed = staffed
+	end
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetLastFreeSpinAt(player: Player, timestamp: number): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.LastFreeSpinAt = math.max(0, math.floor(timestamp))
+	notifyChanged(player)
+end
+
 function PlayerDataService.SetRaiderCount(player: Player, count: number): ()
 	local profile = PlayerDataService.GetProfile(player)
 	profile.RaiderCount = math.clamp(math.floor(count), 0, 2)
@@ -207,8 +260,79 @@ end
 
 function PlayerDataService.SetBodyguardCount(player: Player, count: number): ()
 	local profile = PlayerDataService.GetProfile(player)
-	profile.BodyguardCount = math.clamp(math.floor(count), 0, 2)
+	profile.BodyguardCount = math.clamp(math.floor(count), 0, 4)
+	-- Keep ActiveBodyguards synchronized if legacy SetBodyguardCount is invoked
+	while #profile.ActiveBodyguards < profile.BodyguardCount do
+		table.insert(profile.ActiveBodyguards, "BasicGuard")
+		profile.UnlockedGuardClasses.BasicGuard = true
+	end
+	while #profile.ActiveBodyguards > profile.BodyguardCount do
+		table.remove(profile.ActiveBodyguards)
+	end
 	notifyChanged(player)
+end
+
+function PlayerDataService.AddBodyguardClass(player: Player, classId: string): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.UnlockedGuardClasses[classId] = true
+	if #profile.ActiveBodyguards < 4 then
+		table.insert(profile.ActiveBodyguards, classId)
+	else
+		profile.ActiveBodyguards[#profile.ActiveBodyguards] = classId
+	end
+	profile.BodyguardCount = #profile.ActiveBodyguards
+	notifyChanged(player)
+end
+
+function PlayerDataService.ReplaceBodyguardSlot(player: Player, slotIndex: number, classId: string): ()
+	local profile = PlayerDataService.GetProfile(player)
+	if slotIndex < 1 or slotIndex > 4 then
+		return
+	end
+	profile.UnlockedGuardClasses[classId] = true
+	if slotIndex > #profile.ActiveBodyguards then
+		table.insert(profile.ActiveBodyguards, classId)
+	else
+		profile.ActiveBodyguards[slotIndex] = classId
+	end
+	profile.BodyguardCount = #profile.ActiveBodyguards
+	notifyChanged(player)
+end
+
+function PlayerDataService.UnlockGuardGear(player: Player, gearId: string): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.OwnedGuardGear[gearId] = true
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetGuardGearSlot(player: Player, slotKey: string, gearSlot: string, gearId: string?): ()
+	local profile = PlayerDataService.GetProfile(player)
+	local loadout = profile.GuardLoadouts[slotKey]
+	if not loadout then
+		loadout = {}
+		profile.GuardLoadouts[slotKey] = loadout
+	end
+	loadout[gearSlot] = gearId :: any
+	notifyChanged(player)
+end
+
+function PlayerDataService.GetAmmo(player: Player, ammoType: string): number
+	local profile = PlayerDataService.GetProfile(player)
+	return math.max(0, math.floor(profile.AmmoInventory[ammoType] or 0))
+end
+
+function PlayerDataService.SetAmmo(player: Player, ammoType: string, amount: number, maxCap: number?): number
+	local profile = PlayerDataService.GetProfile(player)
+	local cap = maxCap or 999
+	local nextVal = math.clamp(math.floor(amount), 0, cap)
+	profile.AmmoInventory[ammoType] = nextVal
+	notifyChanged(player)
+	return nextVal
+end
+
+function PlayerDataService.AddAmmo(player: Player, ammoType: string, delta: number, maxCap: number?): number
+	local cur = PlayerDataService.GetAmmo(player, ammoType)
+	return PlayerDataService.SetAmmo(player, ammoType, cur + delta, maxCap)
 end
 
 function PlayerDataService.SetOwnsMotorbike(player: Player, owned: boolean): ()
@@ -300,8 +424,62 @@ local function loadPlayer(player: Player): ()
 			if typeof(saved.DefenseLevel) == "number" then profile.DefenseLevel = math.clamp(saved.DefenseLevel, 1, 3) end
 			if typeof(saved.CrewCount) == "number" then profile.CrewCount = math.max(0, saved.CrewCount) end
 			if typeof(saved.RaiderCount) == "number" then profile.RaiderCount = math.clamp(saved.RaiderCount, 0, 2) end
-			if typeof(saved.BodyguardCount) == "number" then profile.BodyguardCount = math.clamp(saved.BodyguardCount, 0, 2) end
+			if typeof(saved.BodyguardCount) == "number" then profile.BodyguardCount = math.clamp(saved.BodyguardCount, 0, 4) end
+			if typeof(saved.ActiveBodyguards) == "table" then
+				table.clear(profile.ActiveBodyguards)
+				for _, cid in ipairs(saved.ActiveBodyguards) do
+					if typeof(cid) == "string" and #profile.ActiveBodyguards < 4 then
+						table.insert(profile.ActiveBodyguards, cid)
+						profile.UnlockedGuardClasses[cid] = true
+					end
+				end
+				profile.BodyguardCount = #profile.ActiveBodyguards
+			elseif profile.BodyguardCount > 0 then
+				for _ = 1, profile.BodyguardCount do
+					table.insert(profile.ActiveBodyguards, "BasicGuard")
+				end
+				profile.UnlockedGuardClasses.BasicGuard = true
+			end
+			if typeof(saved.UnlockedGuardClasses) == "table" then
+				for cid, val in pairs(saved.UnlockedGuardClasses) do
+					if typeof(cid) == "string" and val == true then
+						profile.UnlockedGuardClasses[cid] = true
+					end
+				end
+			end
+			if typeof(saved.OwnedGuardGear) == "table" then
+				for gid, val in pairs(saved.OwnedGuardGear) do
+					if typeof(gid) == "string" and val == true then
+						profile.OwnedGuardGear[gid] = true
+					end
+				end
+			end
+			if typeof(saved.GuardLoadouts) == "table" then
+				for sk, ld in pairs(saved.GuardLoadouts) do
+					if typeof(sk) == "string" and typeof(ld) == "table" then
+						local copy: { [string]: string } = {}
+						for slotName, gId in pairs(ld) do
+							if typeof(slotName) == "string" and typeof(gId) == "string" then
+								copy[slotName] = gId
+							end
+						end
+						profile.GuardLoadouts[sk] = copy
+					end
+				end
+			end
+			if typeof(saved.AmmoInventory) == "table" then
+				for ammoKey, qty in pairs(saved.AmmoInventory) do
+					if typeof(ammoKey) == "string" and typeof(qty) == "number" then
+						profile.AmmoInventory[ammoKey] = math.max(0, math.floor(qty))
+					end
+				end
+			end
 			if typeof(saved.OwnsMotorbike) == "boolean" then profile.OwnsMotorbike = saved.OwnsMotorbike end
+			if typeof(saved.WaiterCount) == "number" then profile.WaiterCount = math.clamp(math.floor(saved.WaiterCount), 0, 3) end
+			if typeof(saved.CourierCount) == "number" then profile.CourierCount = math.clamp(math.floor(saved.CourierCount), 0, 2) end
+			if typeof(saved.OwnsCentralParkBranch) == "boolean" then profile.OwnsCentralParkBranch = saved.OwnsCentralParkBranch end
+			if typeof(saved.CentralParkBranchStaffed) == "boolean" then profile.CentralParkBranchStaffed = saved.CentralParkBranchStaffed end
+			if typeof(saved.LastFreeSpinAt) == "number" then profile.LastFreeSpinAt = math.max(0, math.floor(saved.LastFreeSpinAt)) end
 			if typeof(saved.Armor) == "number" then
 				profile.Armor = math.clamp(math.floor(saved.Armor), 0, 100)
 				profile.HasKevlarVest = (profile.Armor > 0)
@@ -347,8 +525,18 @@ local function savePlayer(player: Player): ()
 		RestaurantLevel = profile.RestaurantLevel,
 		DefenseLevel = profile.DefenseLevel,
 		CrewCount = profile.CrewCount,
+		WaiterCount = profile.WaiterCount,
+		CourierCount = profile.CourierCount,
+		OwnsCentralParkBranch = profile.OwnsCentralParkBranch,
+		CentralParkBranchStaffed = profile.CentralParkBranchStaffed,
+		LastFreeSpinAt = profile.LastFreeSpinAt,
 		RaiderCount = profile.RaiderCount,
 		BodyguardCount = profile.BodyguardCount,
+		ActiveBodyguards = profile.ActiveBodyguards,
+		UnlockedGuardClasses = profile.UnlockedGuardClasses,
+		OwnedGuardGear = profile.OwnedGuardGear,
+		GuardLoadouts = profile.GuardLoadouts,
+		AmmoInventory = profile.AmmoInventory,
 		OwnsMotorbike = profile.OwnsMotorbike,
 		HasKevlarVest = profile.HasKevlarVest,
 		Armor = profile.Armor,

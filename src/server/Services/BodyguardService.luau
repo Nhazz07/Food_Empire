@@ -8,37 +8,59 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SectorConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("SectorConfig")
 )
+local BodyguardConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("BodyguardConfig")
+)
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local DeliveryRunnerService = require("./DeliveryRunnerService")
 local BlackMarketService = require("./BlackMarketService")
+local MonetizationService = require("./MonetizationService")
+
+type ComputedStats = {
+	MaxHP: number,
+	Damage: number,
+	Range: number,
+	WalkSpeed: number,
+	Cooldown: number,
+	IsRanged: boolean,
+	HealAura: number,
+	HasStun: boolean,
+	ArmorColor: Color3?,
+	HelmetColor: Color3?,
+	OutfitColor: Color3?,
+	WeaponColor: Color3?,
+	HasRiotPlate: boolean,
+}
 
 type BodyguardAgent = {
 	Owner: Player,
-	Index: number,
+	SlotIndex: number,
+	ClassSpec: BodyguardConfig.BodyguardClassSpec,
+	Stats: ComputedStats,
 	Model: Model,
 	Humanoid: Humanoid,
 	Root: BasePart,
 	StatusLabel: TextLabel,
 	LastAttackAt: number,
+	LastHealAt: number,
 }
 
 local BodyguardService = {}
 
-BodyguardService.MAX_BODYGUARDS = 2
-BodyguardService.COSTS = { [1] = 280, [2] = 520 }
+BodyguardService.MAX_BODYGUARDS = BodyguardConfig.MAX_ACTIVE_GUARDS
+BodyguardService.COSTS = { [1] = 280, [2] = 620, [3] = 780, [4] = 1180 }
 
-local GUARD_MAX_HP = 240
-local GUARD_SPEED = 23
-local GUARD_DAMAGE = 34
-local GUARD_ATTACK_RANGE = 11.5
-local GUARD_COOLDOWN = 0.9
-local PROTECT_RADIUS = 44
+local PROTECT_RADIUS = 52
 local RESPAWN_DELAY = 12
 
 local isRunning = false
 local guardFolder: Folder? = nil
 local guardsByPlayer: { [Player]: { BodyguardAgent } } = {}
+local slotRespawnUntil: { [Player]: { [number]: number } } = {}
 local playerUnderAttackUntil: { [Player]: number } = {}
 local charConns: { [Player]: RBXScriptConnection } = {}
 local hpConns: { [Player]: RBXScriptConnection } = {}
@@ -47,18 +69,80 @@ local playerRemovingConn: RBXScriptConnection? = nil
 local unsubBase: (() -> ())? = nil
 
 function BodyguardService.GetGuardCount(player: Player): number
-	return math.clamp(PlayerDataService.GetProfile(player).BodyguardCount or 0, 0, BodyguardService.MAX_BODYGUARDS)
+	local prof = PlayerDataService.GetProfile(player)
+	return math.clamp(#prof.ActiveBodyguards, 0, BodyguardConfig.MAX_ACTIVE_GUARDS)
 end
 
 function BodyguardService.GetNextCost(player: Player): number?
 	local count = BodyguardService.GetGuardCount(player)
-	if count >= BodyguardService.MAX_BODYGUARDS then
+	if count >= BodyguardConfig.MAX_ACTIVE_GUARDS then
 		return nil
 	end
-	return BodyguardService.COSTS[count + 1]
+	return BodyguardService.COSTS[count + 1] or 620
 end
 
-local function spawnGuardHitBurst(pos: Vector3): ()
+local function computeGuardStats(player: Player, slotIndex: number, classSpec: BodyguardConfig.BodyguardClassSpec): ComputedStats
+	local prof = PlayerDataService.GetProfile(player)
+	local loadout = prof.GuardLoadouts[tostring(slotIndex)] or {}
+
+	local maxHP = classSpec.MaxHP
+	local dmg = classSpec.Damage
+	local rng = classSpec.AttackRange
+	local spd = classSpec.WalkSpeed
+	local cdMult = 1.0
+	local healAura = if classSpec.Id == "TacticalGuard" then 10 else 0
+	local hasStun = false
+	local armorCol: Color3? = nil
+	local helmCol: Color3? = nil
+	local outfitCol: Color3? = nil
+	local weaponCol: Color3? = nil
+	local hasRiotPlate = (classSpec.Id == "HeavyGuard")
+
+	for _, gearId in pairs(loadout) do
+		local gSpec = BodyguardConfig.GEAR[gearId]
+		if gSpec and prof.OwnedGuardGear[gearId] and BodyguardConfig.IsGearCompatible(classSpec.Id, gearId) then
+			maxHP += gSpec.BonusHP
+			dmg += gSpec.BonusDamage
+			rng += gSpec.BonusRange
+			spd += gSpec.BonusSpeed
+			cdMult *= gSpec.CooldownMult
+			healAura += gSpec.HealAuraBonus
+			if gSpec.StunEffect then
+				hasStun = true
+			end
+			if gSpec.Slot == "Armor" then
+				armorCol = gSpec.VisualColor
+			elseif gSpec.Slot == "Helmet" then
+				helmCol = gSpec.VisualColor
+			elseif gSpec.Slot == "Outfit" then
+				outfitCol = gSpec.VisualColor
+			elseif gSpec.Slot == "Weapon" then
+				weaponCol = gSpec.VisualColor
+			elseif gearId == "GuardRiotPlate" then
+				hasRiotPlate = true
+			end
+		end
+	end
+
+	local isRanged = (classSpec.CombatStyle ~= "Melee") or (rng >= 30)
+	return {
+		MaxHP = math.max(100, math.floor(maxHP)),
+		Damage = math.max(10, math.floor(dmg)),
+		Range = math.max(12, rng),
+		WalkSpeed = math.max(14, spd),
+		Cooldown = math.max(0.32, classSpec.AttackCooldown * cdMult),
+		IsRanged = isRanged,
+		HealAura = healAura,
+		HasStun = hasStun,
+		ArmorColor = armorCol,
+		HelmetColor = helmCol,
+		OutfitColor = outfitCol,
+		WeaponColor = weaponCol,
+		HasRiotPlate = hasRiotPlate,
+	}
+end
+
+local function spawnGuardHitBurst(pos: Vector3, col: Color3?): ()
 	local bp = Instance.new("Part")
 	bp.Size = Vector3.new(1, 1, 1)
 	bp.CFrame = CFrame.new(pos)
@@ -67,175 +151,144 @@ local function spawnGuardHitBurst(pos: Vector3): ()
 	bp.CanCollide = false
 	bp.Parent = Workspace
 	local pe = Instance.new("ParticleEmitter")
-	pe.Color = ColorSequence.new(Color3.fromRGB(255, 224, 78))
+	pe.Color = ColorSequence.new(col or Color3.fromRGB(255, 224, 78))
 	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.9), NumberSequenceKeypoint.new(1, 0) })
-	pe.Lifetime = NumberRange.new(0.2, 0.38)
+	pe.Lifetime = NumberRange.new(0.2, 0.36)
 	pe.Speed = NumberRange.new(10, 16)
 	pe.SpreadAngle = Vector2.new(180, 180)
 	pe.Parent = bp
-	pe:Emit(12)
-	task.delay(0.5, function()
+	pe:Emit(10)
+	task.delay(0.45, function()
 		if bp.Parent then bp:Destroy() end
 	end)
 end
 
-local function getOwnerAnchorPos(owner: Player, index: number): Vector3
+local function getOwnerAnchorPos(owner: Player, slotIndex: number): Vector3
+	local offsets = {
+		Vector3.new(-6.5, 0, 5.5),
+		Vector3.new(6.5, 0, 5.5),
+		Vector3.new(-9.5, 0, 9.5),
+		Vector3.new(9.5, 0, 9.5),
+	}
+	local off = offsets[slotIndex] or offsets[1]
 	local char = owner.Character
 	local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
 	if root and root:IsA("BasePart") then
-		local side = if index == 1 then -6.5 else 6.5
-		return (root.CFrame * CFrame.new(side, 0, 5.5)).Position
+		return (root.CFrame * CFrame.new(off)).Position
 	end
 	local slot = BaseService.GetPlayerBaseSlot(owner)
 	if slot then
 		local base = BaseService.GetBaseModel(slot)
 		local sp = if base then base:FindFirstChild("BaseSpawn") else nil
 		if sp and sp:IsA("BasePart") then
-			return sp.Position + Vector3.new(if index == 1 then -6 else 6, 4, 0)
+			return sp.Position + Vector3.new(off.X, 4, off.Z)
 		end
 	end
-	return Vector3.new(0, 5, 20)
+	return Vector3.new(off.X, 5, 20 + off.Z)
 end
 
-local function buildBodyguardModel(owner: Player, index: number, spawnPos: Vector3): BodyguardAgent
-	local slot = BaseService.GetPlayerBaseSlot(owner)
-	local teamCol = if slot and SectorConfig.FactionColors[slot]
-		then SectorConfig.FactionColors[slot]
-		else Color3.fromRGB(48, 162, 232)
+local function buildBodyguardModel(owner: Player, slotIndex: number, classSpec: BodyguardConfig.BodyguardClassSpec, spawnPos: Vector3): BodyguardAgent
+	local stats = computeGuardStats(owner, slotIndex, classSpec)
+	local s = classSpec.Scale
 
-	local model = Instance.new("Model")
-	model.Name = string.format("Bodyguard_%d_%d", owner.UserId, index)
+	local modelName = string.format("Bodyguard_%d_%s_%d", owner.UserId, classSpec.Id, slotIndex)
+	local rig = MafiaVisualBuilder.BuildBodyguardRig(modelName, classSpec.Id, s, CFrame.new(spawnPos), {
+		OutfitColor = stats.OutfitColor,
+		ArmorColor = stats.ArmorColor,
+		HelmetColor = stats.HelmetColor,
+		WeaponColor = stats.WeaponColor,
+		HasRiotPlate = stats.HasRiotPlate,
+		IsRanged = stats.IsRanged,
+	}, false)
 
-	local function gPart(name: string, sz: Vector3, col: Color3, mat: Enum.Material, shape: Enum.PartType?, collide: boolean): Part
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = sz
-		p.Color = col
-		p.Material = mat
-		if shape then p.Shape = shape end
-		p.CanCollide = collide
-		p.CanTouch = collide
-		p.Massless = not collide
-		p.TopSurface = Enum.SurfaceType.Smooth
-		p.BottomSurface = Enum.SurfaceType.Smooth
-		p.Parent = model
-		return p
-	end
+	local model = rig.Model
+	local root = rig.Root
+	local head = rig.Head
 
-	local function weldTo(p0: BasePart, p1: BasePart, rel: CFrame): ()
-		p1.CFrame = p0.CFrame * rel
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = p0
-		w.Part1 = p1
-		w.Parent = p1
-	end
-
-	local function makeJoint(name: string, p0: BasePart, p1: BasePart, c0: CFrame, c1: CFrame): ()
-		p1.CFrame = p0.CFrame * c0 * c1:Inverse()
-		local m = Instance.new("Motor6D")
-		m.Name = name
-		m.Part0 = p0
-		m.Part1 = p1
-		m.C0 = c0
-		m.C1 = c1
-		m.Parent = p0
-	end
-
-	local armorCol = Color3.fromRGB(28, 34, 48)
-	local goldCol = Color3.fromRGB(255, 212, 58)
-	local skin = Color3.fromRGB(244, 208, 176)
-
-	-- 1. Armored Bodyguard Jacket + Team Chest Badge + Shoulder Pads
-	local root = gPart("HumanoidRootPart", Vector3.new(2.65, 2.85, 1.5), armorCol, Enum.Material.SmoothPlastic, nil, true)
-	root.CFrame = CFrame.new(spawnPos)
-
-	local vest = gPart("GuardVest", Vector3.new(2.75, 1.8, 1.62), teamCol, Enum.Material.Metal, nil, false)
-	weldTo(root, vest, CFrame.new(0, 0.15, 0))
-	local badge = gPart("ShieldBadge", Vector3.new(0.85, 0.95, 0.2), goldCol, Enum.Material.Neon, nil, false)
-	weldTo(vest, badge, CFrame.new(-0.6, 0.3, -0.82))
-
-	-- 2. Head + Tactical Sunglasses + Guard Beret
-	local head = gPart("Head", Vector3.new(1.98, 1.98, 1.98), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-	weldTo(root, head, CFrame.new(0, 2.38, 0))
-	local shades = gPart("GuardShades", Vector3.new(1.55, 0.42, 0.35), Color3.fromRGB(16, 20, 30), Enum.Material.Glass, nil, false)
-	weldTo(head, shades, CFrame.new(0, 0.14, -0.88))
-	local beret = gPart("GuardBeret", Vector3.new(2.2, 0.85, 2.2), teamCol, Enum.Material.Fabric, Enum.PartType.Ball, false)
-	weldTo(head, beret, CFrame.new(0.12, 0.85, 0))
-
-	-- 3. Articulated Arms + Left Glowing Shield + Right Golden Cleaver!
-	local leftArm = gPart("LeftArm", Vector3.new(0.98, 2.45, 0.98), armorCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("LeftArmJoint", root, leftArm, CFrame.new(-1.82, 1.05, 0), CFrame.new(0, 1.05, 0))
-	local shield = gPart("GuardShield", Vector3.new(0.35, 2.5, 1.85), teamCol, Enum.Material.Metal, nil, false)
-	weldTo(leftArm, shield, CFrame.new(-0.65, -0.35, -0.25))
-	local shieldRim = gPart("ShieldRim", Vector3.new(0.4, 2.65, 0.25), goldCol, Enum.Material.Neon, nil, false)
-	weldTo(shield, shieldRim, CFrame.new(0, 0, -0.92))
-
-	local rightArm = gPart("RightArm", Vector3.new(0.98, 2.45, 0.98), armorCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("RightArmJoint", root, rightArm, CFrame.new(1.82, 1.05, 0), CFrame.new(0, 1.05, 0))
-	local baton = gPart("GuardCleaver", Vector3.new(0.32, 0.85, 2.6), goldCol, Enum.Material.Neon, nil, false)
-	weldTo(rightArm, baton, CFrame.new(0, -1.25, -1.35))
-
-	-- 4. Articulated Legs + Combat Boots
-	local leftLeg = gPart("LeftLeg", Vector3.new(1.05, 2.5, 1.05), armorCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("LeftLegJoint", root, leftLeg, CFrame.new(-0.62, -1.4, 0), CFrame.new(0, 1.25, 0))
-	local rightLeg = gPart("RightLeg", Vector3.new(1.05, 2.5, 1.05), armorCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("RightLegJoint", root, rightLeg, CFrame.new(0.62, -1.4, 0), CFrame.new(0, 1.25, 0))
-
-	-- 5. Nameplate + Live HP Bar
+	-- Restrained Professional Mafia Security Nameplate + Clean Muted HP Bar (Zero Emojis / Zero Neon)
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(195, 46)
-	bb.StudsOffset = Vector3.new(0, 3.9, 0)
+	bb.Name = "GuardTag"
+	bb.Size = UDim2.fromOffset(186, 40)
+	bb.StudsOffset = Vector3.new(0, 3.0 * s, 0)
 	bb.MaxDistance = 150
 	bb.Parent = head
 
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, 0, 0, 25)
-	lbl.BackgroundColor3 = Color3.fromRGB(20, 32, 54)
-	lbl.BackgroundTransparency = 0.06
+	lbl.Size = UDim2.new(1, 0, 0, 20)
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
+	lbl.BackgroundTransparency = 0.10
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = "🛡️ BODYGUARD #" .. tostring(index)
-	lbl.TextSize = 13
-	lbl.TextColor3 = Color3.fromRGB(134, 242, 255)
+	lbl.Text = string.format("%s  #%d", string.upper(classSpec.DisplayName), slotIndex)
+	lbl.TextSize = 10
+	lbl.TextColor3 = Color3.fromRGB(224, 222, 216)
 	lbl.Parent = bb
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 7)
-	c.Parent = lbl
+	Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 4)
 	local st = Instance.new("UIStroke")
-	st.Color = goldCol
-	st.Thickness = 1.6
+	st.Color = Color3.fromRGB(72, 76, 86)
+	st.Thickness = 1.2
 	st.Parent = lbl
 
 	local hpBg = Instance.new("Frame")
-	hpBg.Position = UDim2.new(0.08, 0, 0, 30)
-	hpBg.Size = UDim2.new(0.84, 0, 0, 10)
-	hpBg.BackgroundColor3 = Color3.fromRGB(22, 24, 34)
+	hpBg.Position = UDim2.new(0.03, 0, 0, 23)
+	hpBg.Size = UDim2.new(0.94, 0, 0, 13)
+	hpBg.BackgroundColor3 = Color3.fromRGB(14, 15, 19)
 	hpBg.Parent = bb
-	local hpc = Instance.new("UICorner")
-	hpc.CornerRadius = UDim.new(0, 5)
-	hpc.Parent = hpBg
+	Instance.new("UICorner", hpBg).CornerRadius = UDim.new(0, 3)
+	local hst = Instance.new("UIStroke")
+	hst.Color = Color3.fromRGB(54, 58, 66)
+	hst.Thickness = 1
+	hst.Parent = hpBg
 
 	local hpFill = Instance.new("Frame")
 	hpFill.Size = UDim2.fromScale(1, 1)
-	hpFill.BackgroundColor3 = Color3.fromRGB(72, 224, 118)
+	hpFill.BackgroundColor3 = Color3.fromRGB(78, 128, 96)
 	hpFill.Parent = hpBg
-	local hpfc = Instance.new("UICorner")
-	hpfc.CornerRadius = UDim.new(0, 5)
-	hpfc.Parent = hpFill
+	Instance.new("UICorner", hpFill).CornerRadius = UDim.new(0, 3)
+
+	local hpTxt = Instance.new("TextLabel")
+	hpTxt.Size = UDim2.fromScale(1, 1)
+	hpTxt.BackgroundTransparency = 1
+	hpTxt.Font = Enum.Font.GothamBold
+	hpTxt.Text = string.format("%d / %d HP", stats.MaxHP, stats.MaxHP)
+	hpTxt.TextSize = 9
+	hpTxt.TextColor3 = Color3.fromRGB(238, 236, 232)
+	hpTxt.ZIndex = 3
+	hpTxt.Parent = hpBg
 
 	local hum = Instance.new("Humanoid")
-	hum.MaxHealth = GUARD_MAX_HP
-	hum.Health = GUARD_MAX_HP
-	hum.WalkSpeed = GUARD_SPEED
-	hum.HipHeight = 2.6
+	hum.MaxHealth = stats.MaxHP
+	hum.Health = stats.MaxHP
+	hum.WalkSpeed = stats.WalkSpeed
+	hum.HipHeight = 2.42 * s
+	hum.BreakJointsOnDeath = false
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.Parent = model
 
+	-- HeavyGuard Passive: Riot Fortress reduces incoming damage by 25%!
+	local prevHp = stats.MaxHP
+	local adjustingHp = false
 	hum.HealthChanged:Connect(function(hp: number)
-		hpFill.Size = UDim2.fromScale(math.clamp(hp / math.max(1, hum.MaxHealth), 0, 1), 1)
+		if adjustingHp then return end
+		if classSpec.Id == "HeavyGuard" and hp < prevHp and hp > 0 then
+			local dmgTaken = prevHp - hp
+			local refunded = math.floor(dmgTaken * 0.25)
+			if refunded > 0 then
+				adjustingHp = true
+				hum.Health = math.min(hum.MaxHealth, hp + refunded)
+				hp = hum.Health
+				adjustingHp = false
+			end
+		end
+		prevHp = hp
+		local cur = math.max(0, math.ceil(hp))
+		local maxH = math.max(1, math.ceil(hum.MaxHealth))
+		hpFill.Size = UDim2.fromScale(math.clamp(hp / maxH, 0, 1), 1)
+		hpTxt.Text = string.format("%d / %d HP", cur, maxH)
 	end)
 
 	model.PrimaryPart = root
 	model:SetAttribute("OwnerUserId", owner.UserId)
+	model:SetAttribute("GuardClassId", classSpec.Id)
 	model:SetAttribute("Faction", "Player_" .. tostring(owner.UserId))
 	CollectionService:AddTag(model, "PlayerBodyguardUnit")
 	CollectionService:AddTag(model, "AnimatedRaiderLimbs")
@@ -243,12 +296,15 @@ local function buildBodyguardModel(owner: Player, index: number, spawnPos: Vecto
 
 	return {
 		Owner = owner,
-		Index = index,
+		SlotIndex = slotIndex,
+		ClassSpec = classSpec,
+		Stats = stats,
 		Model = model,
 		Humanoid = hum,
 		Root = root,
 		StatusLabel = lbl,
 		LastAttackAt = 0,
+		LastHealAt = 0,
 	}
 end
 
@@ -260,13 +316,20 @@ local function clearPlayerGuards(player: Player): ()
 		end
 		guardsByPlayer[player] = nil
 	end
+	slotRespawnUntil[player] = nil
+end
+
+function BodyguardService.RebuildGuardsForPlayer(player: Player): ()
+	clearPlayerGuards(player)
+	BodyguardService.SyncGuardsForPlayer(player)
 end
 
 function BodyguardService.SyncGuardsForPlayer(player: Player): ()
 	if not BaseService.GetPlayerBaseSlot(player) then
 		return
 	end
-	local targetCount = BodyguardService.GetGuardCount(player)
+	local prof = PlayerDataService.GetProfile(player)
+	local activeClasses = prof.ActiveBodyguards
 	local list = guardsByPlayer[player]
 	if not list then
 		list = {}
@@ -279,54 +342,214 @@ function BodyguardService.SyncGuardsForPlayer(player: Player): ()
 		end
 	end
 
-	while #list < targetCount do
-		local idx = #list + 1
-		local sp = getOwnerAnchorPos(player, idx)
-		local agent = buildBodyguardModel(player, idx, sp)
-		agent.Humanoid.Died:Connect(function()
-			task.delay(2.5, function()
-				if agent.Model.Parent then agent.Model:Destroy() end
-			end)
-			task.delay(RESPAWN_DELAY, function()
-				if isRunning and player.Parent then
-					BodyguardService.SyncGuardsForPlayer(player)
+	for slotIdx = 1, math.min(#activeClasses, BodyguardConfig.MAX_ACTIVE_GUARDS) do
+		local classId = activeClasses[slotIdx] :: BodyguardConfig.GuardClassId
+		local spec = BodyguardConfig.CLASSES[classId] or BodyguardConfig.CLASSES.BasicGuard
+		-- Security check: never spawn a Robux-exclusive bodyguard unless the player actually owns its Game Pass
+		if spec.RobuxItemId and not MonetizationService.HasPass(player, spec.RobuxItemId) then
+			continue
+		end
+		local existsForSlot = false
+		for _, ag in ipairs(list) do
+			if ag.SlotIndex == slotIdx then
+				existsForSlot = true
+				break
+			end
+		end
+		if not existsForSlot then
+			local cdMap = slotRespawnUntil[player]
+			if cdMap and (cdMap[slotIdx] or 0) > os.clock() then
+				continue
+			end
+			local sp = getOwnerAnchorPos(player, slotIdx)
+			local agent = buildBodyguardModel(player, slotIdx, spec, sp)
+			agent.Humanoid.Died:Connect(function()
+				local map = slotRespawnUntil[player]
+				if not map then
+					map = {}
+					slotRespawnUntil[player] = map
 				end
+				map[slotIdx] = os.clock() + RESPAWN_DELAY
+				MafiaVisualBuilder.PlayDeathSequence(agent.Model, spec.Id == "BossBodyguard", function(impactPos: Vector3)
+					BlackMarketService.BroadcastSFX("BodyDrop", impactPos)
+				end)
+				task.delay(RESPAWN_DELAY + 0.15, function()
+					if isRunning and player.Parent then
+						BodyguardService.SyncGuardsForPlayer(player)
+					end
+				end)
 			end)
-		end)
-		table.insert(list, agent)
+			table.insert(list, agent)
+		end
 	end
 end
 
-function BodyguardService.TryHireBodyguard(player: Player): (boolean, string)
+-- Recruit any of the 7 Bodyguard Classes (or deploy an already-owned class into your squad)!
+function BodyguardService.TryRecruitClass(player: Player, classId: string, targetSlot: number?): (boolean, string)
 	if not BaseService.GetPlayerBaseSlot(player) then
 		return false, "Claim your Restaurant Plaza first!"
 	end
-	local count = BodyguardService.GetGuardCount(player)
-	local cost = BodyguardService.GetNextCost(player)
-	if not cost then
-		return false, "Max Bodyguards hired (2/2)!"
-	end
-	if not PlayerDataService.SpendCoins(player, cost) then
-		return false, string.format("Need %d Gold to hire Bodyguard #%d!", cost, count + 1)
+	local spec = BodyguardConfig.CLASSES[classId :: BodyguardConfig.GuardClassId]
+	if not spec then
+		return false, "Unknown Bodyguard class!"
 	end
 
-	PlayerDataService.SetBodyguardCount(player, count + 1)
-	BodyguardService.SyncGuardsForPlayer(player)
-	return true, string.format("🛡️ Hired Bodyguard #%d! Follows & protects you from Mafia & Rival Chefs!", count + 1)
+	local prof = PlayerDataService.GetProfile(player)
+	local hasPass = spec.RobuxItemId ~= nil and MonetizationService.HasPass(player, spec.RobuxItemId)
+
+	-- Strict Robux Gate: Robux-exclusive classes (like BossBodyguard) MUST own the Game Pass — never free via Cost == 0!
+	if spec.RobuxItemId and not hasPass then
+		return MonetizationService.TryPromptPurchase(player, spec.RobuxItemId)
+	end
+
+	local alreadyUnlocked = hasPass or (prof.UnlockedGuardClasses[spec.Id] == true)
+
+	if not alreadyUnlocked and prof.Level < spec.RequiredLevel then
+		return false, string.format("Requires Player Lv.%d to recruit %s!", spec.RequiredLevel, spec.DisplayName)
+	end
+
+	-- Unlock class once with Gold (or Robux pass); once unlocked, assign/swap freely across your 4 squad slots!
+	if not alreadyUnlocked then
+		if spec.Cost <= 0 or not PlayerDataService.SpendCoins(player, spec.Cost) then
+			return false, string.format("Need %d Gold to recruit %s!", spec.Cost, spec.DisplayName)
+		end
+	end
+
+	local finalSlotIdx: number
+	if typeof(targetSlot) == "number" and targetSlot >= 1 and targetSlot <= BodyguardConfig.MAX_ACTIVE_GUARDS then
+		finalSlotIdx = math.floor(targetSlot)
+		if finalSlotIdx > #prof.ActiveBodyguards then
+			PlayerDataService.AddBodyguardClass(player, spec.Id)
+			finalSlotIdx = #prof.ActiveBodyguards
+		else
+			PlayerDataService.ReplaceBodyguardSlot(player, finalSlotIdx, spec.Id)
+		end
+	else
+		PlayerDataService.AddBodyguardClass(player, spec.Id)
+		finalSlotIdx = #prof.ActiveBodyguards
+	end
+
+	-- Prune any previously equipped gear in that slot that is incompatible with the new class
+	local slotKey = tostring(finalSlotIdx)
+	local ld = prof.GuardLoadouts[slotKey]
+	if ld then
+		for gearSlot, eqGearId in pairs(ld) do
+			if not BodyguardConfig.IsGearCompatible(spec.Id, eqGearId) then
+				PlayerDataService.SetGuardGearSlot(player, slotKey, gearSlot, nil)
+			end
+		end
+	end
+
+	BodyguardService.RebuildGuardsForPlayer(player)
+	local verb = if alreadyUnlocked then "Assigned" else "Recruited"
+	return true, string.format("%s %s (%s) to Guard Slot #%d", verb, spec.DisplayName, spec.Role, finalSlotIdx)
+end
+
+-- Legacy quick-hire compatibility (called from Empire Upgrades tab)
+function BodyguardService.TryHireBodyguard(player: Player): (boolean, string)
+	local count = BodyguardService.GetGuardCount(player)
+	if count >= BodyguardConfig.MAX_ACTIVE_GUARDS then
+		return false, "Squad full (4/4)! Open Black Market -> Bodyguards to upgrade classes!"
+	end
+	local prof = PlayerDataService.GetProfile(player)
+	local defaultOrder: { BodyguardConfig.GuardClassId } = { "BasicGuard", "HeavyGuard", "AssaultGuard", "TacticalGuard" }
+	local pick = defaultOrder[count + 1] or "BasicGuard"
+	local spec = BodyguardConfig.CLASSES[pick]
+	if prof.Level < spec.RequiredLevel then
+		pick = "BasicGuard"
+	end
+	return BodyguardService.TryRecruitClass(player, pick, nil)
+end
+
+-- Buy a piece of Bodyguard Equipment (Server-Validated)
+function BodyguardService.TryBuyGear(player: Player, gearId: string): (boolean, string)
+	local gSpec = BodyguardConfig.GEAR[gearId]
+	if not gSpec then
+		return false, "Unknown Bodyguard equipment!"
+	end
+	if gSpec.RobuxItemId then
+		return MonetizationService.TryPromptPurchase(player, gSpec.RobuxItemId)
+	end
+
+	local prof = PlayerDataService.GetProfile(player)
+	if prof.OwnedGuardGear[gearId] then
+		return false, gSpec.DisplayName .. " is already owned! Equip it onto a compatible Bodyguard."
+	end
+	if prof.Level < gSpec.RequiredLevel then
+		return false, string.format("Requires Player Lv.%d for %s!", gSpec.RequiredLevel, gSpec.DisplayName)
+	end
+	if not PlayerDataService.SpendCoins(player, gSpec.Price) then
+		return false, string.format("Need %d Gold to buy %s!", gSpec.Price, gSpec.DisplayName)
+	end
+
+	PlayerDataService.UnlockGuardGear(player, gearId)
+
+	-- Auto-equip onto the first compatible active bodyguard if that slot is currently empty!
+	for idx, classId in ipairs(prof.ActiveBodyguards) do
+		if BodyguardConfig.IsGearCompatible(classId :: BodyguardConfig.GuardClassId, gearId) then
+			local sk = tostring(idx)
+			local ld = prof.GuardLoadouts[sk]
+			if not ld or not ld[gSpec.Slot] then
+				PlayerDataService.SetGuardGearSlot(player, sk, gSpec.Slot, gearId)
+				BodyguardService.RebuildGuardsForPlayer(player)
+				return true, string.format("Purchased & equipped %s on Guard #%d", gSpec.DisplayName, idx)
+			end
+		end
+	end
+
+	return true, string.format("Purchased %s — equip onto a compatible Bodyguard", gSpec.DisplayName)
+end
+
+-- Equip Owned Gear onto a Specific Bodyguard Slot (Strict Server Compatibility Check!)
+function BodyguardService.TryEquipGear(player: Player, slotIndex: number, gearId: string): (boolean, string)
+	local gSpec = BodyguardConfig.GEAR[gearId]
+	if not gSpec then
+		return false, "Unknown equipment item!"
+	end
+	local prof = PlayerDataService.GetProfile(player)
+	local ownsViaPass = gSpec.RobuxItemId ~= nil and MonetizationService.HasPass(player, gSpec.RobuxItemId)
+	if not prof.OwnedGuardGear[gearId] and not ownsViaPass then
+		return false, "Buy " .. gSpec.DisplayName .. " first!"
+	end
+	if ownsViaPass and not prof.OwnedGuardGear[gearId] then
+		PlayerDataService.UnlockGuardGear(player, gearId)
+	end
+
+	local idx = math.floor(slotIndex)
+	local classId = prof.ActiveBodyguards[idx]
+	if not classId then
+		return false, "Recruit a Bodyguard into Slot #" .. tostring(idx) .. " first!"
+	end
+
+	if not BodyguardConfig.IsGearCompatible(classId :: BodyguardConfig.GuardClassId, gearId) then
+		local cSpec = BodyguardConfig.CLASSES[classId :: BodyguardConfig.GuardClassId]
+		return false, string.format("%s cannot equip %s (incompatible class)!", if cSpec then cSpec.DisplayName else classId, gSpec.DisplayName)
+	end
+
+	PlayerDataService.SetGuardGearSlot(player, tostring(idx), gSpec.Slot, gearId)
+	BodyguardService.RebuildGuardsForPlayer(player)
+	return true, string.format("Equipped %s onto Guard #%d", gSpec.DisplayName, idx)
+end
+
+function BodyguardService.GetBodyguardPayload(player: Player): { [string]: any }
+	local prof = PlayerDataService.GetProfile(player)
+	return {
+		MaxSlots = BodyguardConfig.MAX_ACTIVE_GUARDS,
+		ActiveSquad = prof.ActiveBodyguards,
+		UnlockedClasses = prof.UnlockedGuardClasses,
+		OwnedGear = prof.OwnedGuardGear,
+		Loadouts = prof.GuardLoadouts,
+	}
 end
 
 local function hookPlayerDamageDefense(player: Player): ()
 	local function attachChar(char: Model)
-		if hpConns[player] then
-			hpConns[player]:Disconnect()
-			hpConns[player] = nil
-		end
+		if hpConns[player] then hpConns[player]:Disconnect(); hpConns[player] = nil end
 		local hum = char:WaitForChild("Humanoid", 10)
 		if hum and hum:IsA("Humanoid") then
 			local lastHp = hum.Health
 			hpConns[player] = hum.HealthChanged:Connect(function(newHp: number)
 				if newHp < lastHp then
-					-- Boss was hit! Trigger heightened Bodyguard defense for 10 seconds!
 					playerUnderAttackUntil[player] = os.clock() + 10
 				end
 				lastHp = newHp
@@ -334,42 +557,72 @@ local function hookPlayerDamageDefense(player: Player): ()
 		end
 	end
 
-	if charConns[player] then
-		charConns[player]:Disconnect()
-	end
+	if charConns[player] then charConns[player]:Disconnect() end
 	charConns[player] = player.CharacterAdded:Connect(attachChar)
 	if player.Character then
 		task.spawn(attachChar, player.Character)
 	end
 end
 
-local function findNearestHostileToPoint(anchor: Vector3, radius: number, ownerFaction: string?): (Humanoid?, BasePart?, Model?)
+local function hasPlayerStolenShipment(player: Player): boolean
+	local untilAttr = player:GetAttribute("StolenShipmentUntil")
+	if typeof(untilAttr) == "number" and untilAttr > os.clock() then
+		return true
+	end
+	return player:GetAttribute("CarryingCrate") ~= nil
+end
+
+local function findBestHostileForGuard(owner: Player, anchor: Vector3, radius: number, prioritizeBoss: boolean): (Humanoid?, BasePart?, Model?)
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
 	local bestModel: Model? = nil
-	local bestDist = radius
+	local bestScore = -math.huge
+	local ownerStoleShipment = hasPlayerStolenShipment(owner)
 
-	for _, tagName in ipairs({ "MafiaUnit", "RivalAIUnit", "TurfGuardUnit" }) do
+	for _, tagName in ipairs({ "MafiaUnit", "RivalAIUnit" }) do
 		for _, unit in ipairs(CollectionService:GetTagged(tagName)) do
 			if unit:IsA("Model") then
-				if tagName == "TurfGuardUnit" and ownerFaction and unit:GetAttribute("Faction") == ownerFaction then
-					continue
-				end
 				local r = unit:FindFirstChild("HumanoidRootPart")
 				local h = unit:FindFirstChildOfClass("Humanoid")
 				if r and r:IsA("BasePart") and h and h.Health > 0 then
-					local d = (r.Position - anchor).Magnitude
-					if d < bestDist then
-						bestDist = d
-						bestHum = h
-						bestRoot = r
-						bestModel = unit
+					local inCentralSpinZone = (math.abs(r.Position.X) <= 175 and math.abs(r.Position.Z) <= 175)
+						or (unit:GetAttribute("RivalFactionId") == "CrimsonDonEmpire")
+					-- Respect Central Park Spin Event peace truce unless owner stole a shipment!
+					if not inCentralSpinZone or ownerStoleShipment then
+						local d = (r.Position - anchor).Magnitude
+						if d <= radius then
+							local isBoss = unit:GetAttribute("IsMafiaBoss") == true or unit:GetAttribute("IsRivalBoss") == true
+							local diff = unit:GetAttribute("RivalDifficulty")
+							local priorityBonus = 0
+							if prioritizeBoss then
+								if isBoss then priorityBonus = 120
+								elseif diff == "Elite" then priorityBonus = 70
+								elseif diff == "Hard" then priorityBonus = 35 end
+							end
+							local score = priorityBonus - d
+							if score > bestScore then
+								bestScore = score; bestHum = h; bestRoot = r; bestModel = unit
+							end
+						end
 					end
 				end
 			end
 		end
 	end
 	return bestHum, bestRoot, bestModel
+end
+
+local function hasBossAuraNearby(owner: Player, guardPos: Vector3): boolean
+	local list = guardsByPlayer[owner]
+	if not list then return false end
+	for _, g in ipairs(list) do
+		if g.ClassSpec.Id == "BossBodyguard" and g.Model.Parent and g.Humanoid.Health > 0 then
+			if (g.Root.Position - guardPos).Magnitude <= 50 then
+				return true
+			end
+		end
+	end
+	return false
 end
 
 local function stepGuard(agent: BodyguardAgent): ()
@@ -379,6 +632,7 @@ local function stepGuard(agent: BodyguardAgent): ()
 	local owner = agent.Owner
 	local char = owner.Character
 	local ownerRoot = if char then char:FindFirstChild("HumanoidRootPart") else nil
+	local ownerHum = if char then char:FindFirstChildOfClass("Humanoid") else nil
 	if not ownerRoot or not ownerRoot:IsA("BasePart") then
 		return
 	end
@@ -386,54 +640,107 @@ local function stepGuard(agent: BodyguardAgent): ()
 	local now = os.clock()
 	local ownerPos = ownerRoot.Position
 	local guardPos = agent.Root.Position
+	local stats = agent.Stats
 
-	-- If owner zoomed far away (e.g. Motorbike or Return Home), regroup smoothly beside them!
-	if (ownerPos - guardPos).Magnitude > 115 then
-		local snap = getOwnerAnchorPos(owner, agent.Index)
+	-- Regroup smoothly if owner sped away on Motorbike / teleported!
+	if (ownerPos - guardPos).Magnitude > 125 then
+		local snap = getOwnerAnchorPos(owner, agent.SlotIndex)
 		agent.Model:PivotTo(CFrame.new(snap))
 		return
 	end
 
-	-- 1. Priority Defense: Protect Boss (expanded 60-stud alert radius if Boss just took damage!)
-	local ownerFaction = "Player_" .. tostring(owner.UserId)
-	local alertRadius = if (playerUnderAttackUntil[owner] or 0) > now then 62 else PROTECT_RADIUS
-	local targetHum, targetRoot, targetModel = findNearestHostileToPoint(ownerPos, alertRadius, ownerFaction)
+	-- Field Medic Aura (TacticalGuard or Squad Trauma Med-Kit): heals owner's Base HP & self every 5s!
+	if stats.HealAura > 0 and (now - agent.LastHealAt) >= 5.0 then
+		agent.LastHealAt = now
+		if ownerHum and ownerHum.Health > 0 and ownerHum.Health < 100 then
+			ownerHum.Health = math.min(100, ownerHum.Health + stats.HealAura)
+		end
+		if agent.Humanoid.Health < agent.Humanoid.MaxHealth then
+			agent.Humanoid.Health = math.min(agent.Humanoid.MaxHealth, agent.Humanoid.Health + stats.HealAura)
+		end
+	end
 
-	-- 2. Also defend your active Stealth Delivery Runner if nearby!
+	-- Intelligent Target Selection (Snipers prioritize Boss/Elite targets up to their long range!)
+	local alertRadius = math.max(stats.Range, if (playerUnderAttackUntil[owner] or 0) > now then 74 else PROTECT_RADIUS)
+	local targetHum, targetRoot, targetModel = findBestHostileForGuard(owner, ownerPos, alertRadius, agent.ClassSpec.CombatStyle == "Sniper")
+
 	if not targetHum then
 		local runnerPos = DeliveryRunnerService.GetActiveRunnerPosition(owner)
 		if runnerPos and (runnerPos - ownerPos).Magnitude < 120 then
-			targetHum, targetRoot, targetModel = findNearestHostileToPoint(runnerPos, 40, ownerFaction)
+			targetHum, targetRoot, targetModel = findBestHostileForGuard(owner, runnerPos, 46, false)
 		end
 	end
 
 	if targetHum and targetRoot and targetModel then
-		agent.StatusLabel.Text = "🛡️ PROTECTING BOSS!"
-		agent.StatusLabel.TextColor3 = Color3.fromRGB(255, 224, 96)
+		agent.StatusLabel.Text = string.format("%s  |  ENGAGING", string.upper(agent.ClassSpec.DisplayName))
+		agent.StatusLabel.TextColor3 = Color3.fromRGB(224, 186, 114)
 		local dist = (targetRoot.Position - guardPos).Magnitude
-		if dist <= GUARD_ATTACK_RANGE then
-			if (now - agent.LastAttackAt) >= GUARD_COOLDOWN then
+		local auraMult = if hasBossAuraNearby(owner, guardPos) then 1.20 else 1.0
+		local finalDmg = math.floor(stats.Damage * auraMult)
+
+		if dist <= stats.Range then
+			if (now - agent.LastAttackAt) >= stats.Cooldown then
 				agent.LastAttackAt = now
-				targetHum:TakeDamage(GUARD_DAMAGE)
-				spawnGuardHitBurst(targetRoot.Position)
-				BlackMarketService.BroadcastSFX("MeleeHit", targetRoot.Position)
+				local hitDir = targetRoot.Position - guardPos
+				if hitDir.Magnitude > 0.05 then
+					targetModel:SetAttribute("LastHitDir", hitDir.Unit)
+				end
+				targetHum:TakeDamage(finalDmg)
+
+				-- Tactical Stun Breacher slow effect
+				if stats.HasStun and targetHum.WalkSpeed > 8 then
+					local origSpd = targetHum.WalkSpeed
+					targetHum.WalkSpeed = math.max(7, origSpd * 0.55)
+					task.delay(1.5, function()
+						if targetHum.Parent and targetHum.Health > 0 then
+							targetHum.WalkSpeed = origSpd
+						end
+					end)
+				end
+
+				if stats.IsRanged then
+					local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
+					local tracerCol = if agent.ClassSpec.Id == "BossBodyguard" then Color3.fromRGB(255, 206, 56) else Color3.fromRGB(92, 228, 255)
+					BlackMarketService.SpawnBulletTracer(fromPos, targetRoot.Position, tracerCol)
+					local sfx = if agent.ClassSpec.CombatStyle == "Shotgun" or agent.ClassSpec.CombatStyle == "Sniper" then "ShotgunBlast" elseif agent.ClassSpec.CombatStyle == "Rifle" then "SMGShot" else "PistolShot"
+					BlackMarketService.BroadcastSFX(sfx, fromPos)
+				else
+					spawnGuardHitBurst(targetRoot.Position, agent.ClassSpec.AccentColor)
+					BlackMarketService.BroadcastSFX("MeleeHit", targetRoot.Position)
+				end
+
 				if targetHum.Health <= 0 then
 					local isMafia = CollectionService:HasTag(targetModel, "MafiaUnit")
-					local isBoss = targetModel:GetAttribute("IsMafiaBoss") == true
-					local rewardGold = if isBoss then 220 elseif isMafia then 90 else 35
-					local rewardRep = if isBoss then 45 elseif isMafia then 20 else 10
-					PlayerDataService.AddRewards(owner, rewardGold, 25, rewardRep)
+					local isMafiaBoss = targetModel:GetAttribute("IsMafiaBoss") == true
+					local bGold = targetModel:GetAttribute("BountyGold")
+					local bExp = targetModel:GetAttribute("BountyExp")
+					local bRep = targetModel:GetAttribute("BountyRep")
+					local rewardGold = if typeof(bGold) == "number" then bGold elseif isMafiaBoss then 220 elseif isMafia then 90 else 45
+					local rewardExp = if typeof(bExp) == "number" then bExp else 28
+					local rewardRep = if typeof(bRep) == "number" then bRep elseif isMafiaBoss then 45 elseif isMafia then 20 else 12
+					PlayerDataService.AddRewards(owner, rewardGold, rewardExp, rewardRep)
 				end
 			end
+
+			-- Ranged/Sniper guards hold tactical standoff range instead of charging into melee!
+			if agent.ClassSpec.CombatStyle == "Sniper" and dist < 55 then
+				local retreatPos = getOwnerAnchorPos(owner, agent.SlotIndex)
+				agent.Humanoid:MoveTo(retreatPos)
+			elseif stats.IsRanged and dist < math.min(28, stats.Range * 0.45) then
+				agent.Humanoid:MoveTo(guardPos)
+			else
+				agent.Humanoid:MoveTo(targetRoot.Position)
+			end
+		else
+			agent.Humanoid:MoveTo(targetRoot.Position)
 		end
-		agent.Humanoid:MoveTo(targetRoot.Position)
 		return
 	end
 
-	-- 3. Calm Escort Mode: Walk loyally alongside the Boss!
-	agent.StatusLabel.Text = "🛡️ BODYGUARD #" .. tostring(agent.Index)
-	agent.StatusLabel.TextColor3 = Color3.fromRGB(134, 242, 255)
-	local escortPos = getOwnerAnchorPos(owner, agent.Index)
+	-- Calm Escort Mode: walk in formation alongside Boss!
+	agent.StatusLabel.Text = string.format("%s  #%d", string.upper(agent.ClassSpec.DisplayName), agent.SlotIndex)
+	agent.StatusLabel.TextColor3 = Color3.fromRGB(224, 222, 216)
+	local escortPos = getOwnerAnchorPos(owner, agent.SlotIndex)
 	if (escortPos - guardPos).Magnitude > 5.5 then
 		agent.Humanoid:MoveTo(escortPos)
 	end
@@ -475,7 +782,7 @@ function BodyguardService.Start(): ()
 
 	aiThread = task.spawn(function()
 		while isRunning do
-			task.wait(0.45)
+			task.wait(0.42)
 			if not isRunning then
 				break
 			end
@@ -493,7 +800,7 @@ function BodyguardService.Start(): ()
 		end
 	end)
 
-	print("[Food Empire] BodyguardService started (Loyal Player Bodyguard Protector NPCs active)!")
+	print("[Food Empire] BodyguardService started (7 Recruitable Classes + Compatible Gear & Smart Combat AI active)!")
 end
 
 function BodyguardService.Stop(): ()

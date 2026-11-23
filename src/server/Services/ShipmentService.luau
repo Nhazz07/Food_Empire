@@ -320,8 +320,20 @@ local function claimShipmentForPlayer(st: ActiveShipmentState, player: Player, b
 	st.NextDispatchAt = os.clock() + st.CycleDuration
 
 	PlayerDataService.AddRewards(player, CLAIM_BONUS_GOLD, CLAIM_BONUS_EXP, 4)
-	local prefix = if byRaider then "Raider Chef claimed " else "Claimed "
-	sendToast(player, string.format("%s %s%s Shipment (%s, +%dG)!", spec.Icon, prefix, spec.ShortLabel, table.concat(parts, ", "), CLAIM_BONUS_GOLD))
+	if not byRaider then
+		player:SetAttribute("StolenShipmentUntil", os.clock() + 35)
+	end
+	local prefix = if byRaider then "Raider Chef claimed " else "Stolen "
+	sendToast(
+		player,
+		string.format(
+			"%s%s Shipment (%s, +%dG)! Central Park Rivals are hostile for 35s!",
+			prefix,
+			spec.ShortLabel,
+			table.concat(parts, ", "),
+			CLAIM_BONUS_GOLD
+		)
+	)
 
 	updateCornerVisuals(st)
 	notifyChanged()

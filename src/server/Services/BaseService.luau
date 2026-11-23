@@ -213,7 +213,7 @@ local function updateGateOwnerSign(slot: BaseSlot, ownerName: string?): ()
 			label = Instance.new("TextLabel")
 			label.Size = UDim2.fromScale(1, 1)
 			label.BackgroundTransparency = 1
-			label.Font = Enum.Font.FredokaOne
+			label.Font = Enum.Font.GothamBlack
 			label.TextScaled = true
 			label.TextColor3 = Color3.new(1, 1, 1)
 			label.TextStrokeTransparency = 0.25
@@ -230,14 +230,422 @@ local function updateGateOwnerSign(slot: BaseSlot, ownerName: string?): ()
 		label = Instance.new("TextLabel")
 		label.Size = UDim2.fromScale(1, 1)
 		label.BackgroundTransparency = 1
-		label.Font = Enum.Font.FredokaOne
+		label.Font = Enum.Font.GothamBlack
 		label.TextScaled = true
 		label.TextColor3 = Color3.new(1, 1, 1)
 		label.TextStrokeTransparency = 0.25
 		label.Parent = newGui
 	end
 
-	label.Text = if ownerName then (string.upper(ownerName) .. "'S EMPIRE") else (string.upper(slot) .. " CASTLE")
+	label.Text = if ownerName then (string.upper(ownerName) .. "'S EMPIRE") else (string.upper(slot) .. " SYNDICATE")
+end
+
+type RestaurantThemeSpec = {
+	BrandTitle: string,
+	BrandSub: string,
+	WainscotColor: Color3,
+	WainscotMat: Enum.Material,
+	UpperWallColor: Color3,
+	UpperWallMat: Enum.Material,
+	WoodTrimColor: Color3,
+	FloorColor: Color3,
+	FloorMat: Enum.Material,
+	KitchenFloorColor: Color3,
+	AwningPrimary: Color3,
+	AwningSecondary: Color3,
+	SeatColor: Color3,
+	TableColor: Color3,
+	BrassAccent: Color3,
+}
+
+local RESTAURANT_THEMES: { [BaseSlot]: RestaurantThemeSpec } = {
+	East = {
+		BrandTitle = "KUROSHIO OMAKASE & IZAKAYA",
+		BrandSub = "HARBOR SEAFOOD GRILL  |  TEPPANYAKI & SASHIMI",
+		WainscotColor = Color3.fromRGB(38, 42, 48),
+		WainscotMat = Enum.Material.Slate,
+		UpperWallColor = Color3.fromRGB(30, 28, 27),
+		UpperWallMat = Enum.Material.WoodPlanks,
+		WoodTrimColor = Color3.fromRGB(132, 94, 58),
+		FloorColor = Color3.fromRGB(118, 84, 54),
+		FloorMat = Enum.Material.WoodPlanks,
+		KitchenFloorColor = Color3.fromRGB(44, 48, 54),
+		AwningPrimary = Color3.fromRGB(28, 52, 76),
+		AwningSecondary = Color3.fromRGB(228, 224, 214),
+		SeatColor = Color3.fromRGB(34, 44, 58),
+		TableColor = Color3.fromRGB(142, 102, 64),
+		BrassAccent = Color3.fromRGB(176, 144, 82),
+	},
+	West = {
+		BrandTitle = "TRATTORIA CORLEONE CHOPHOUSE",
+		BrandSub = "WOOD-AGED STEAKS  |  VINTAGE CELLAR & ESPRESSO",
+		WainscotColor = Color3.fromRGB(92, 34, 32),
+		WainscotMat = Enum.Material.Brick,
+		UpperWallColor = Color3.fromRGB(186, 172, 152),
+		UpperWallMat = Enum.Material.Slate,
+		WoodTrimColor = Color3.fromRGB(58, 34, 24),
+		FloorColor = Color3.fromRGB(72, 44, 30),
+		FloorMat = Enum.Material.WoodPlanks,
+		KitchenFloorColor = Color3.fromRGB(58, 54, 52),
+		AwningPrimary = Color3.fromRGB(116, 26, 32),
+		AwningSecondary = Color3.fromRGB(234, 226, 212),
+		SeatColor = Color3.fromRGB(108, 26, 32),
+		TableColor = Color3.fromRGB(68, 42, 28),
+		BrassAccent = Color3.fromRGB(172, 138, 74),
+	},
+	North = {
+		BrandTitle = "LE NOIR IMPERIAL BRASSERIE",
+		BrandSub = "PARISIENNE FINE DINING  |  RAW BAR & LOUNGE",
+		WainscotColor = Color3.fromRGB(22, 24, 30),
+		WainscotMat = Enum.Material.Marble,
+		UpperWallColor = Color3.fromRGB(24, 44, 38),
+		UpperWallMat = Enum.Material.SmoothPlastic,
+		WoodTrimColor = Color3.fromRGB(158, 128, 72),
+		FloorColor = Color3.fromRGB(82, 60, 42),
+		FloorMat = Enum.Material.Wood,
+		KitchenFloorColor = Color3.fromRGB(36, 40, 46),
+		AwningPrimary = Color3.fromRGB(24, 54, 44),
+		AwningSecondary = Color3.fromRGB(226, 220, 206),
+		SeatColor = Color3.fromRGB(28, 62, 48),
+		TableColor = Color3.fromRGB(218, 214, 206),
+		BrassAccent = Color3.fromRGB(184, 152, 86),
+	},
+	South = {
+		BrandTitle = "EL CARTEL ASADOR & SMOKEHOUSE",
+		BrandSub = "MESQUITE PARILLA GRILL  |  OPEN HEARTH & CANTINA",
+		WainscotColor = Color3.fromRGB(114, 54, 38),
+		WainscotMat = Enum.Material.Brick,
+		UpperWallColor = Color3.fromRGB(172, 148, 122),
+		UpperWallMat = Enum.Material.Cobblestone,
+		WoodTrimColor = Color3.fromRGB(64, 42, 28),
+		FloorColor = Color3.fromRGB(86, 56, 36),
+		FloorMat = Enum.Material.WoodPlanks,
+		KitchenFloorColor = Color3.fromRGB(62, 54, 48),
+		AwningPrimary = Color3.fromRGB(132, 42, 30),
+		AwningSecondary = Color3.fromRGB(228, 218, 202),
+		SeatColor = Color3.fromRGB(84, 46, 30),
+		TableColor = Color3.fromRGB(96, 62, 38),
+		BrassAccent = Color3.fromRGB(164, 126, 68),
+	},
+}
+
+local function applyDistinctRestaurantTheme(slot: BaseSlot): ()
+	local baseModel = BaseService.GetBaseModel(slot)
+	local hq = if baseModel then baseModel:FindFirstChild("RestaurantHQ") else nil
+	if not hq or not hq:IsA("Model") or not hq.PrimaryPart then
+		return
+	end
+
+	local theme = RESTAURANT_THEMES[slot] or RESTAURANT_THEMES.East
+	local hqCF = hq.PrimaryPart.CFrame
+
+	-- 1. Restyle existing BistroArchitecture & InteriorFurniture parts to match this restaurant's unique vibe!
+	local arch = hq:FindFirstChild("BistroArchitecture")
+	if arch then
+		for _, p in ipairs(arch:GetDescendants()) do
+			if p:IsA("BasePart") then
+				local n = p.Name
+				if string.find(n, "Brick") then
+					p.Color = theme.WainscotColor
+					p.Material = theme.WainscotMat
+				elseif string.find(n, "Stucco") or string.find(n, "MidL") or string.find(n, "MidR") or n == "UpperFrontWall" then
+					p.Color = theme.UpperWallColor
+					p.Material = theme.UpperWallMat
+				elseif n == "DiningFloor" then
+					p.Color = theme.FloorColor
+					p.Material = theme.FloorMat
+				elseif n == "KitchenTileFloor" then
+					p.Color = theme.KitchenFloorColor
+					p.Material = Enum.Material.Slate
+				elseif string.find(n, "Pilaster") or n == "StoryBelt" or string.find(n, "DoorPillar") or n == "DoorTransom" or n == "RoofEaves" or n == "RoofRidgeCap" or n == "SignFacadeBox" then
+					p.Color = theme.WoodTrimColor
+					p.Material = Enum.Material.Wood
+				elseif string.find(n, "Shutter") or n == "RoofFascia" or n == "SignTopTrim" then
+					p.Color = theme.AwningPrimary
+					p.Material = Enum.Material.Metal
+				elseif string.find(n, "AwningStripe_") then
+					local idx = tonumber(string.match(n, "_(%d+)$") or "1") or 1
+					p.Color = if idx % 2 == 1 then theme.AwningPrimary else theme.AwningSecondary
+				elseif string.find(n, "AwningValance_") then
+					local idx = tonumber(string.match(n, "_(%d+)$") or "1") or 1
+					p.Color = if idx % 2 == 1 then theme.AwningPrimary else theme.AwningSecondary
+				elseif n == "RestaurantMarquee" then
+					p.Color = Color3.fromRGB(16, 18, 22)
+					for _, gui in ipairs(p:GetChildren()) do
+						if gui:IsA("SurfaceGui") then
+							gui:Destroy()
+						end
+					end
+					for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+						local sgui = Instance.new("SurfaceGui")
+						sgui.Name = "BrandMarqueeGui"
+						sgui.Face = face
+						sgui.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+						sgui.PixelsPerStud = 30
+						sgui.Parent = p
+
+						local bg = Instance.new("Frame")
+						bg.Size = UDim2.fromScale(1, 1)
+						bg.BackgroundColor3 = Color3.fromRGB(14, 16, 20)
+						bg.BorderSizePixel = 0
+						bg.Parent = sgui
+
+						local bar = Instance.new("Frame")
+						bar.Size = UDim2.new(1, 0, 0, 5)
+						bar.BackgroundColor3 = theme.BrassAccent
+						bar.BorderSizePixel = 0
+						bar.Parent = bg
+
+						local t1 = Instance.new("TextLabel")
+						t1.Position = UDim2.new(0.03, 0, 0.12, 0)
+						t1.Size = UDim2.new(0.94, 0, 0.46, 0)
+						t1.BackgroundTransparency = 1
+						t1.Font = Enum.Font.GothamBlack
+						t1.TextScaled = true
+						t1.Text = theme.BrandTitle
+						t1.TextColor3 = Color3.fromRGB(238, 234, 224)
+						t1.Parent = bg
+
+						local t2 = Instance.new("TextLabel")
+						t2.Position = UDim2.new(0.04, 0, 0.60, 0)
+						t2.Size = UDim2.new(0.92, 0, 0.28, 0)
+						t2.BackgroundTransparency = 1
+						t2.Font = Enum.Font.GothamBold
+						t2.TextScaled = true
+						t2.Text = theme.BrandSub
+						t2.TextColor3 = theme.BrassAccent
+						t2.Parent = bg
+					end
+				end
+			end
+		end
+	end
+
+	local furn = hq:FindFirstChild("InteriorFurniture")
+	if furn then
+		for _, p in ipairs(furn:GetDescendants()) do
+			if p:IsA("BasePart") then
+				if p.Name == "Seat" then
+					p.Color = theme.SeatColor
+					p.Material = Enum.Material.Leather
+				elseif string.find(p.Name, "InTable_") then
+					p.Color = theme.TableColor
+					p.Material = if slot == "North" then Enum.Material.Marble else Enum.Material.Wood
+				elseif p.Name == "KitchenBackCounter" or p.Name == "RangeHood" then
+					p.Color = Color3.fromRGB(72, 76, 84)
+					p.Material = Enum.Material.Metal
+				elseif p.Name == "PendantBulb" then
+					p.Color = Color3.fromRGB(255, 218, 158)
+					p.Material = Enum.Material.SmoothPlastic
+				end
+			end
+		end
+	end
+
+	-- 2. Transform the plain orange CookingStation block, ServeCounter & neon UpgradePad into realistic commercial fixtures!
+	local anchors = hq:FindFirstChild("Anchors")
+	if anchors then
+		local cookPart = anchors:FindFirstChild("CookingStation")
+		if cookPart and cookPart:IsA("BasePart") then
+			cookPart.Color = Color3.fromRGB(46, 50, 58)
+			cookPart.Material = Enum.Material.Metal
+			cookPart.Size = Vector3.new(10.2, 3.2, 5.6)
+			cookPart.CFrame = hqCF * CFrame.new(-17.5, 2.2, -17.5)
+		end
+
+		local servePart = anchors:FindFirstChild("ServeCounter")
+		if servePart and servePart:IsA("BasePart") then
+			servePart.Color = theme.WoodTrimColor
+			servePart.Material = Enum.Material.Wood
+		end
+
+		local upgPart = anchors:FindFirstChild("UpgradePad")
+		if upgPart and upgPart:IsA("BasePart") then
+			upgPart.Color = Color3.fromRGB(32, 35, 42)
+			upgPart.Material = Enum.Material.Slate
+			upgPart.Size = Vector3.new(7.2, 0.22, 7.2)
+			upgPart.CFrame = hqCF * CFrame.new(-18.8, 0.72, 27.5)
+		end
+	end
+
+	-- 3. Build detailed Custom Interior Architecture & Commercial Kitchen Range inside CustomVibeDecor
+	local oldDecor = hq:FindFirstChild("CustomVibeDecor")
+	if oldDecor then
+		oldDecor:Destroy()
+	end
+	local decor = Instance.new("Folder")
+	decor.Name = "CustomVibeDecor"
+
+	local function dPart(
+		name: string,
+		sz: Vector3,
+		relCF: CFrame,
+		col: Color3,
+		mat: Enum.Material,
+		shape: Enum.PartType?,
+		collide: boolean?
+	): Part
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = sz
+		p.CFrame = hqCF * relCF
+		p.Color = col
+		p.Material = mat
+		if shape then
+			p.Shape = shape
+		end
+		p.Anchored = true
+		p.CanCollide = if collide == nil then false else collide
+		p.CanTouch = false
+		p.CanQuery = false
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Parent = decor
+		return p
+	end
+
+	local steel = Color3.fromRGB(148, 154, 164)
+	local darkSteel = Color3.fromRGB(36, 40, 46)
+	local castIron = Color3.fromRGB(24, 26, 30)
+	local copper = Color3.fromRGB(184, 108, 64)
+	local marble = Color3.fromRGB(226, 222, 214)
+	local ember = Color3.fromRGB(238, 112, 44)
+
+	-- 3A. Realistic Commercial Chef's Island Range on top of CookingStation (-17.5, 2.2, -17.5)
+	dPart("RangeCounterTop", Vector3.new(10.6, 0.28, 6.0), CFrame.new(-17.5, 3.94, -17.5), steel, Enum.Material.Metal, nil, false)
+	dPart("RangeBacksplash", Vector3.new(10.6, 1.45, 0.35), CFrame.new(-17.5, 4.75, -20.3), steel, Enum.Material.Metal, nil, false)
+	dPart("OvenDoorL", Vector3.new(4.2, 2.1, 0.18), CFrame.new(-20.0, 2.15, -14.65), darkSteel, Enum.Material.Metal, nil, false)
+	dPart("OvenDoorR", Vector3.new(4.2, 2.1, 0.18), CFrame.new(-15.0, 2.15, -14.65), darkSteel, Enum.Material.Metal, nil, false)
+	dPart("OvenHandleL", Vector3.new(3.4, 0.16, 0.24), CFrame.new(-20.0, 2.95, -14.5), steel, Enum.Material.Metal, nil, false)
+	dPart("OvenHandleR", Vector3.new(3.4, 0.16, 0.24), CFrame.new(-15.0, 2.95, -14.5), steel, Enum.Material.Metal, nil, false)
+
+	-- 4 Cast-Iron Gas Burners + Simmering Stockpot & Copper Skillet + Teppanyaki Griddle + Hardwood Cutting Board
+	for bx = -21.2, -18.2, 3.0 do
+		for _, bz in ipairs({ -18.7, -16.3 }) do
+			dPart("BurnerGrate", Vector3.new(2.1, 0.18, 2.1), CFrame.new(bx, 4.15, bz), castIron, Enum.Material.Metal, nil, false)
+			dPart("BurnerFlame", Vector3.new(0.14, 1.25, 1.25), CFrame.new(bx, 4.12, bz) * CFrame.Angles(0, 0, math.rad(90)), ember, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, false)
+		end
+	end
+	-- Stockpot & Sauté Pan on the grates
+	dPart("CopperStockPot", Vector3.new(1.45, 1.55, 1.55), CFrame.new(-21.2, 4.92, -18.7) * CFrame.Angles(0, 0, math.rad(90)), copper, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+	dPart("StockPotLid", Vector3.new(0.18, 1.62, 1.62), CFrame.new(-21.2, 5.72, -18.7) * CFrame.Angles(0, 0, math.rad(90)), steel, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+	dPart("SauteSkillet", Vector3.new(0.32, 1.55, 1.55), CFrame.new(-18.2, 4.38, -16.3) * CFrame.Angles(0, 0, math.rad(90)), castIron, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+	-- Steel Teppanyaki / Plancha Flat Griddle + Hardwood Prep Board
+	dPart("TeppanyakiPlancha", Vector3.new(3.6, 0.22, 3.8), CFrame.new(-14.6, 4.16, -18.0), Color3.fromRGB(82, 88, 98), Enum.Material.Metal, nil, false)
+	dPart("PrepCuttingBoard", Vector3.new(2.6, 0.18, 1.6), CFrame.new(-14.6, 4.16, -15.4), Color3.fromRGB(168, 124, 78), Enum.Material.Wood, nil, false)
+
+	-- Chrome temperature knobs along the front of the range
+	for kx = -21.5, -13.5, 1.3 do
+		dPart("RangeKnob", Vector3.new(0.22, 0.28, 0.28), CFrame.new(kx, 3.55, -14.62) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+	end
+
+	-- Commercial Overhead Island Exhaust Canopy Hood + Twin Flue Ducts
+	local hood = dPart("IslandExhaustHood", Vector3.new(11.0, 2.2, 6.4), CFrame.new(-17.5, 11.2, -17.5), darkSteel, Enum.Material.Metal, nil, false)
+	dPart("HoodBrassTrim", Vector3.new(11.1, 0.24, 6.5), CFrame.new(-17.5, 10.15, -17.5), theme.BrassAccent, Enum.Material.Metal, nil, false)
+	dPart("HoodDuctL", Vector3.new(1.8, 4.2, 1.8), CFrame.new(-20.2, 14.2, -17.5), steel, Enum.Material.Metal, nil, false)
+	dPart("HoodDuctR", Vector3.new(1.8, 4.2, 1.8), CFrame.new(-14.8, 14.2, -17.5), steel, Enum.Material.Metal, nil, false)
+	local hoodLight = Instance.new("PointLight")
+	hoodLight.Color = Color3.fromRGB(255, 224, 172)
+	hoodLight.Brightness = 1.6
+	hoodLight.Range = 24
+	hoodLight.Shadows = false
+	hoodLight.Parent = hood
+
+	-- Commercial Back-Wall Kitchen Pass Shelf, Prep Fridge & Hanging Copper Skillets
+	dPart("BackFridgeUnit", Vector3.new(6.8, 7.8, 3.4), CFrame.new(-29.5, 4.6, -27.5), steel, Enum.Material.Metal, nil, false)
+	dPart("PassShelfLower", Vector3.new(18.0, 0.25, 2.2), CFrame.new(-16.0, 5.8, -27.8), steel, Enum.Material.Metal, nil, false)
+	dPart("PassShelfUpper", Vector3.new(18.0, 0.25, 2.2), CFrame.new(-16.0, 8.2, -27.8), steel, Enum.Material.Metal, nil, false)
+	for px = -22, -10, 3 do
+		dPart("StackedPlates", Vector3.new(0.65, 1.35, 1.35), CFrame.new(px, 6.25, -27.8) * CFrame.Angles(0, 0, math.rad(90)), marble, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, false)
+		dPart("HangingCopperPan", Vector3.new(0.24, 1.3, 1.3), CFrame.new(px, 9.5, -28.4), copper, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+	end
+
+	-- ServeCounter Marble Top Slab & Brass Heat-Lamp Bridge (15.0, 2.9, 26.2)
+	dPart("ServeCounterTop", Vector3.new(15.4, 0.32, 4.9), CFrame.new(15.0, 5.22, 26.2), marble, Enum.Material.Marble, nil, false)
+	dPart("ServeBrassTrim", Vector3.new(15.5, 0.22, 5.0), CFrame.new(15.0, 3.2, 26.2), theme.BrassAccent, Enum.Material.Metal, nil, false)
+	dPart("UpgradePadRim", Vector3.new(7.6, 0.14, 7.6), CFrame.new(-18.8, 0.68, 27.5), theme.BrassAccent, Enum.Material.Metal, nil, false)
+
+	-- 3B. Architectural Ceiling Rafters & Shaded Pendant Lanterns across the Dining Hall
+	for rz = -24, 12, 9 do
+		dPart("CeilingRafter", Vector3.new(72.0, 0.85, 1.1), CFrame.new(0, 14.8, rz), theme.WoodTrimColor, Enum.Material.Wood, nil, false)
+	end
+	for _, lx in ipairs({ -22.0, 0.0, 20.0 }) do
+		for _, lz in ipairs({ -14.0, 4.0 }) do
+			dPart("LanternShade", Vector3.new(2.4, 1.8, 2.4), CFrame.new(lx, 10.9, lz), theme.WoodTrimColor, if slot == "North" then Enum.Material.Metal else Enum.Material.Wood, nil, false)
+		end
+	end
+
+	-- 3C. Theme-Specific Signature Showpiece Zone (Center & Back Dining Hall: X = -4..+8, Z = -14..-29)
+	if slot == "East" then
+		-- EAST: KUROSHIO OMAKASE SUSHI BAR, CHILLED SASHIMI CASE & SAKE BARREL WALL
+		dPart("OmakaseBarBase", Vector3.new(14.5, 3.6, 3.2), CFrame.new(1.5, 2.4, -18.5), theme.WoodTrimColor, Enum.Material.WoodPlanks, nil, true)
+		dPart("OmakaseHinokiTop", Vector3.new(15.0, 0.35, 3.6), CFrame.new(1.5, 4.35, -18.5), Color3.fromRGB(214, 178, 126), Enum.Material.Wood, nil, false)
+		dPart("SashimiGlassCase", Vector3.new(7.5, 1.1, 1.6), CFrame.new(1.5, 5.05, -17.6), Color3.fromRGB(182, 218, 232), Enum.Material.Glass, nil, false)
+		dPart("ToroDisplaySlab", Vector3.new(2.0, 0.35, 0.9), CFrame.new(-0.5, 4.72, -17.6), Color3.fromRGB(212, 62, 68), Enum.Material.SmoothPlastic, nil, false)
+		dPart("SalmonDisplaySlab", Vector3.new(2.0, 0.35, 0.9), CFrame.new(2.2, 4.72, -17.6), Color3.fromRGB(238, 118, 76), Enum.Material.SmoothPlastic, nil, false)
+		-- Back-wall Sake & Cedar Barrel Alcove
+		dPart("SakeWallRack", Vector3.new(14.0, 9.5, 1.6), CFrame.new(1.5, 5.8, -28.6), Color3.fromRGB(28, 24, 22), Enum.Material.Wood, nil, false)
+		for sx = -3.5, 6.5, 3.3 do
+			dPart("SakeCask", Vector3.new(2.1, 2.2, 2.2), CFrame.new(sx, 7.4, -28.2) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(218, 208, 186), Enum.Material.Fabric, Enum.PartType.Cylinder, false)
+			dPart("CaskWrap", Vector3.new(0.8, 2.26, 2.26), CFrame.new(sx, 7.4, -28.2) * CFrame.Angles(0, 0, math.rad(90)), theme.AwningPrimary, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
+		end
+		-- Hanging Japanese Noren Curtain Panels above the Omakase bar
+		for nx = -4.0, 6.5, 3.5 do
+			dPart("NorenPanel", Vector3.new(3.1, 2.6, 0.18), CFrame.new(nx, 11.4, -17.0), theme.AwningPrimary, Enum.Material.Fabric, nil, false)
+		end
+
+	elseif slot == "West" then
+		-- WEST: TRATTORIA CORLEONE MAHOGANY WINE CELLAR, AGING CASKS & BRASS ESPRESSO BAR
+		dPart("TrattoriaBarBase", Vector3.new(14.5, 3.6, 3.2), CFrame.new(1.5, 2.4, -18.5), theme.WoodTrimColor, Enum.Material.Wood, nil, true)
+		dPart("TrattoriaMarbleTop", Vector3.new(15.0, 0.35, 3.6), CFrame.new(1.5, 4.35, -18.5), marble, Enum.Material.Marble, nil, false)
+		dPart("BrassEspressoMachine", Vector3.new(3.2, 2.1, 1.8), CFrame.new(-2.2, 5.4, -18.5), theme.BrassAccent, Enum.Material.Metal, nil, false)
+		dPart("EspressoDome", Vector3.new(0.8, 2.4, 2.4), CFrame.new(-2.2, 6.6, -18.5) * CFrame.Angles(0, 0, math.rad(90)), copper, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+		-- Back-wall Floor-to-Ceiling Mahogany Wine Rack & Oak Barrels
+		dPart("WineCellarCabinet", Vector3.new(15.2, 10.5, 1.8), CFrame.new(1.5, 6.0, -28.6), theme.WoodTrimColor, Enum.Material.Wood, nil, false)
+		for wy = 3.6, 9.2, 1.8 do
+			dPart("WineShelf", Vector3.new(14.4, 0.24, 1.9), CFrame.new(1.5, wy, -28.5), theme.BrassAccent, Enum.Material.Metal, nil, false)
+			for wx = -4.2, 7.0, 1.6 do
+				dPart("VintageWineBottle", Vector3.new(1.3, 0.44, 0.44), CFrame.new(wx, wy + 0.38, -28.3) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(24, 58, 34), Enum.Material.Glass, Enum.PartType.Cylinder, false)
+			end
+		end
+
+	elseif slot == "North" then
+		-- NORTH: LE NOIR IMPERIAL ART-DECO GILDED MIRROR WALL & MARBLE RAW BAR
+		dPart("BrasserieBarBase", Vector3.new(14.5, 3.6, 3.2), CFrame.new(1.5, 2.4, -18.5), Color3.fromRGB(20, 24, 28), Enum.Material.Marble, nil, true)
+		dPart("BrasserieBrassInlay", Vector3.new(14.7, 0.25, 3.3), CFrame.new(1.5, 2.8, -18.5), theme.BrassAccent, Enum.Material.Metal, nil, false)
+		dPart("BrasserieMarbleTop", Vector3.new(15.0, 0.35, 3.6), CFrame.new(1.5, 4.35, -18.5), marble, Enum.Material.Marble, nil, false)
+		dPart("TieredSeafoodStand", Vector3.new(1.8, 2.4, 2.4), CFrame.new(1.5, 5.6, -18.5) * CFrame.Angles(0, 0, math.rad(90)), theme.BrassAccent, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+		-- Back-wall Gilded Art-Deco Mirror Triptych
+		dPart("ArtDecoFrameBack", Vector3.new(15.4, 10.2, 0.8), CFrame.new(1.5, 6.4, -29.0), theme.BrassAccent, Enum.Material.Metal, nil, false)
+		dPart("ArtDecoMirrorGlass", Vector3.new(14.2, 9.0, 0.9), CFrame.new(1.5, 6.4, -28.9), Color3.fromRGB(148, 176, 184), Enum.Material.Glass, nil, false)
+		for mx = -3.0, 6.0, 4.5 do
+			dPart("ArtDecoPillar", Vector3.new(0.45, 9.8, 1.1), CFrame.new(mx, 6.4, -28.8), theme.BrassAccent, Enum.Material.Metal, nil, false)
+		end
+
+	else
+		-- SOUTH: EL CARTEL ASADOR WOOD-FIRED BRICK HEARTH OVEN & BUTCHER CARVING ISLAND
+		dPart("AsadorIslandBase", Vector3.new(14.5, 3.6, 3.2), CFrame.new(1.5, 2.4, -18.5), theme.WainscotColor, Enum.Material.Brick, nil, true)
+		dPart("AsadorButcherTop", Vector3.new(15.0, 0.42, 3.6), CFrame.new(1.5, 4.35, -18.5), Color3.fromRGB(146, 98, 58), Enum.Material.Wood, nil, false)
+		-- Back-wall Brick & Wrought-Iron Wood-Fired Parilla Hearth Oven
+		dPart("ParillaHearthBody", Vector3.new(13.5, 10.4, 3.4), CFrame.new(1.5, 5.8, -28.0), theme.WainscotColor, Enum.Material.Brick, nil, false)
+		dPart("HearthFirebox", Vector3.new(8.2, 3.6, 2.2), CFrame.new(1.5, 4.2, -26.8), castIron, Enum.Material.Slate, nil, false)
+		dPart("HearthEmberBed", Vector3.new(7.2, 0.55, 1.8), CFrame.new(1.5, 2.9, -26.6), ember, Enum.Material.Slate, nil, false)
+		dPart("HearthIronMantel", Vector3.new(14.0, 0.65, 3.8), CFrame.new(1.5, 6.4, -27.9), castIron, Enum.Material.Metal, nil, false)
+	end
+
+	-- 3D Table Centerpiece Lamps & Place Runners on all 4 Indoor Dining Tables
+	for _, tPos in ipairs({
+		Vector3.new(18.0, 4.05, 6.0),
+		Vector3.new(18.0, 4.05, -10.0),
+		Vector3.new(18.0, 4.05, -22.0),
+		Vector3.new(-22.0, 4.05, 6.0),
+	}) do
+		dPart("TableRunner", Vector3.new(2.2, 0.08, 4.3), CFrame.new(tPos), theme.AwningSecondary, Enum.Material.Fabric, nil, false)
+		dPart("TableLampBase", Vector3.new(0.45, 0.55, 0.55), CFrame.new(tPos + Vector3.new(0, 0.25, 0)) * CFrame.Angles(0, 0, math.rad(90)), theme.BrassAccent, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+		dPart("TableLampShade", Vector3.new(0.55, 0.85, 0.85), CFrame.new(tPos + Vector3.new(0, 0.72, 0)) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(246, 224, 178), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, false)
+	end
+
+	decor.Parent = hq
 end
 
 local function teleportToCentralLobby(character: Model): ()
@@ -367,6 +775,7 @@ function BaseService.Start(): ()
 	isRunning = true
 
 	for _, slot in ipairs(SLOT_ORDER) do
+		applyDistinctRestaurantTheme(slot)
 		updateGateOwnerSign(slot, nil)
 	end
 

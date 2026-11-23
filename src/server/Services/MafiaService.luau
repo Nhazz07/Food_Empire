@@ -6,6 +6,9 @@ local CollectionService = game:GetService("CollectionService")
 local PathfindingService = game:GetService("PathfindingService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local ShipmentService = require("./ShipmentService")
@@ -251,8 +254,15 @@ local function buildMafiaModel(index: number, spawnPos: Vector3, isBoss: boolean
 	hum.Health = maxHp
 	hum.WalkSpeed = if isBoss then 15.5 else 18.0
 	hum.HipHeight = 2.65 * scale
+	hum.BreakJointsOnDeath = false
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.Parent = model
+
+	hum.Died:Connect(function()
+		MafiaVisualBuilder.PlayDeathSequence(model, isBoss, function(impactPos: Vector3)
+			BlackMarketService.BroadcastSFX("BodyDrop", impactPos)
+		end)
+	end)
 
 	hum.HealthChanged:Connect(function(hp: number)
 		local cur = math.max(0, math.ceil(hp))
@@ -285,10 +295,9 @@ local function ensureSyndicate(): ()
 	for i = #activeAgents, 1, -1 do
 		local a = activeAgents[i]
 		if not a.Model.Parent or a.Humanoid.Health <= 0 then
-			if a.Model.Parent then
-				local dead = a.Model
-				task.delay(3, function()
-					if dead.Parent then dead:Destroy() end
+			if a.Model.Parent and a.Model:GetAttribute("IsDying") ~= true then
+				MafiaVisualBuilder.PlayDeathSequence(a.Model, a.IsBoss, function(impactPos: Vector3)
+					BlackMarketService.BroadcastSFX("BodyDrop", impactPos)
 				end)
 			end
 			table.remove(activeAgents, i)
@@ -339,15 +348,26 @@ local function tryMafiaAmbush(agent: MafiaAgent): boolean
 	local bestDist = if isNight then 80 else 62
 	local runnerVision = if isNight then 26 else 42
 
-	-- Spot & ambush Stealth Delivery Runners sneaking through Central Park (42-stud vision by day, 26 at night!)
-	for _, runner in ipairs(CollectionService:GetTagged("PlayerDeliveryRunner")) do
-		if runner:IsA("Model") then
-			local rRoot = runner:FindFirstChild("HumanoidRootPart")
-			local rHum = runner:FindFirstChildOfClass("Humanoid")
-			if rRoot and rRoot:IsA("BasePart") and rHum and rHum.Health > 0 and not isInsideAnySafeBase(rRoot.Position) then
-				local d = (rRoot.Position - myPos).Magnitude
-				if d < runnerVision then
-					bestDist = d; bestHum = rHum; bestPos = rRoot.Position
+	-- Spot & ambush Stealth Delivery Runners sneaking through Central Park (only if not in peaceful Spin Plaza, or if owner stole a shipment!)
+	local inCentralSpinZone = math.abs(myPos.X) <= 175 and math.abs(myPos.Z) <= 175
+	local function hasPlayerStolenShipment(p: Player): boolean
+		local untilAttr = p:GetAttribute("StolenShipmentUntil")
+		if typeof(untilAttr) == "number" and untilAttr > os.clock() then
+			return true
+		end
+		return p:GetAttribute("CarryingCrate") ~= nil
+	end
+
+	if not inCentralSpinZone then
+		for _, runner in ipairs(CollectionService:GetTagged("PlayerDeliveryRunner")) do
+			if runner:IsA("Model") then
+				local rRoot = runner:FindFirstChild("HumanoidRootPart")
+				local rHum = runner:FindFirstChildOfClass("Humanoid")
+				if rRoot and rRoot:IsA("BasePart") and rHum and rHum.Health > 0 and not isInsideAnySafeBase(rRoot.Position) then
+					local d = (rRoot.Position - myPos).Magnitude
+					if d < runnerVision then
+						bestDist = d; bestHum = rHum; bestPos = rRoot.Position
+					end
 				end
 			end
 		end
@@ -356,12 +376,20 @@ local function tryMafiaAmbush(agent: MafiaAgent): boolean
 	for _, tagName in ipairs({ "PlayerBodyguardUnit", "PlayerRaiderUnit" }) do
 		for _, raider in ipairs(CollectionService:GetTagged(tagName)) do
 			if raider:IsA("Model") then
-				local rRoot = raider:FindFirstChild("HumanoidRootPart")
-				local rHum = raider:FindFirstChildOfClass("Humanoid")
-				if rRoot and rRoot:IsA("BasePart") and rHum and rHum.Health > 0 and not isInsideAnySafeBase(rRoot.Position) then
-					local d = (rRoot.Position - myPos).Magnitude
-					if d < bestDist then
-						bestDist = d; bestHum = rHum; bestPos = rRoot.Position
+				local allowAggro = true
+				if inCentralSpinZone then
+					local ownerId = raider:GetAttribute("OwnerUserId")
+					local ownerPlayer = if typeof(ownerId) == "number" then Players:GetPlayerByUserId(ownerId) else nil
+					allowAggro = (ownerPlayer ~= nil and hasPlayerStolenShipment(ownerPlayer))
+				end
+				if allowAggro then
+					local rRoot = raider:FindFirstChild("HumanoidRootPart")
+					local rHum = raider:FindFirstChildOfClass("Humanoid")
+					if rRoot and rRoot:IsA("BasePart") and rHum and rHum.Health > 0 and not isInsideAnySafeBase(rRoot.Position) then
+						local d = (rRoot.Position - myPos).Magnitude
+						if d < bestDist then
+							bestDist = d; bestHum = rHum; bestPos = rRoot.Position
+						end
 					end
 				end
 			end
@@ -369,13 +397,16 @@ local function tryMafiaAmbush(agent: MafiaAgent): boolean
 	end
 
 	for _, player in ipairs(Players:GetPlayers()) do
-		local char = player.Character
-		local pRoot = if char then char:FindFirstChild("HumanoidRootPart") else nil
-		local pHum = if char then char:FindFirstChildOfClass("Humanoid") else nil
-		if pRoot and pRoot:IsA("BasePart") and pHum and pHum.Health > 0 and not isInsideAnySafeBase(pRoot.Position) then
-			local d = (pRoot.Position - myPos).Magnitude
-			if d < bestDist then
-				bestDist = d; bestHum = pHum; bestPos = pRoot.Position
+		local allowPlayerAggro = if inCentralSpinZone then hasPlayerStolenShipment(player) else true
+		if allowPlayerAggro then
+			local char = player.Character
+			local pRoot = if char then char:FindFirstChild("HumanoidRootPart") else nil
+			local pHum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+			if pRoot and pRoot:IsA("BasePart") and pHum and pHum.Health > 0 and not isInsideAnySafeBase(pRoot.Position) then
+				local d = (pRoot.Position - myPos).Magnitude
+				if d < bestDist then
+					bestDist = d; bestHum = pHum; bestPos = pRoot.Position
+				end
 			end
 		end
 	end

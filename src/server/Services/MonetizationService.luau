@@ -12,6 +12,9 @@ local MonetizationConfig = require(
 local WarehouseConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WarehouseConfig")
 )
+local WeaponConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WeaponConfig")
+)
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local WarehouseService = require("./WarehouseService")
@@ -284,6 +287,49 @@ function MonetizationService.SyncProStaffVisuals(player: Player): ()
 	proVisuals[player] = spawned
 end
 
+local function applyPassBenefitsToProfile(player: Player, itemId: string, isNewPurchase: boolean): ()
+	local prof = PlayerDataService.GetProfile(player)
+	if itemId == "GoldenEmperorPistolPass" then
+		if not prof.OwnedWeapons.GoldenEmperorPistol then
+			PlayerDataService.UnlockWeapon(player, "GoldenEmperorPistol")
+		end
+		if isNewPurchase then
+			local ammoSpec = WeaponConfig.AMMO_TYPES.Pistol9mm
+			if ammoSpec and PlayerDataService.GetAmmo(player, "Pistol9mm") < ammoSpec.StarterReserve then
+				PlayerDataService.SetAmmo(player, "Pistol9mm", ammoSpec.StarterReserve, ammoSpec.MaxReserve)
+			end
+		end
+	elseif itemId == "CrimsonDragonARPass" then
+		if not prof.OwnedWeapons.CrimsonDragonAR then
+			PlayerDataService.UnlockWeapon(player, "CrimsonDragonAR")
+		end
+		if isNewPurchase then
+			local ammoSpec = WeaponConfig.AMMO_TYPES.Rifle556
+			if ammoSpec and PlayerDataService.GetAmmo(player, "Rifle556") < ammoSpec.StarterReserve then
+				PlayerDataService.SetAmmo(player, "Rifle556", ammoSpec.StarterReserve, ammoSpec.MaxReserve)
+			end
+		end
+	elseif itemId == "BossBodyguardPass" then
+		prof.UnlockedGuardClasses.BossBodyguard = true
+		if isNewPurchase then
+			local hasBoss = false
+			for _, cls in ipairs(prof.ActiveBodyguards) do
+				if cls == "BossBodyguard" then
+					hasBoss = true
+					break
+				end
+			end
+			if not hasBoss and #prof.ActiveBodyguards < 4 then
+				PlayerDataService.AddBodyguardClass(player, "BossBodyguard")
+			end
+		end
+	elseif itemId == "GoldenEmperorSuitPass" then
+		if not prof.OwnedGuardGear.GoldenEmperorSuit then
+			PlayerDataService.UnlockGuardGear(player, "GoldenEmperorSuit")
+		end
+	end
+end
+
 local function grantItemReward(player: Player, itemId: string, studioPreview: boolean): (boolean, string)
 	local spec = MonetizationConfig.Items[itemId]
 	if not spec then
@@ -297,6 +343,7 @@ local function grantItemReward(player: Player, itemId: string, studioPreview: bo
 			return false, spec.DisplayName .. " is already unlocked!"
 		end
 		map[itemId] = true
+		applyPassBenefitsToProfile(player, itemId, true)
 		MonetizationService.SyncProStaffVisuals(player)
 		local msg = prefix .. "Unlocked " .. spec.DisplayName .. "!"
 		print("[MonetizationService]", player.Name, msg)
@@ -305,12 +352,41 @@ local function grantItemReward(player: Player, itemId: string, studioPreview: bo
 		end
 		return true, msg
 	else
-		-- Instant Empire Supply & Coin Crate (repeatable DevProduct)
-		PlayerDataService.AddRewards(player, 600, 30, 15)
-		for ingredient in pairs(WarehouseConfig.IngredientToCategory) do
-			WarehouseService.AddIngredient(player, ingredient, 10)
+		local msg: string
+		if itemId == "TacticalAmmoCrate" then
+			-- Refill ALL 5 Black Market ammunition calibers to 100% Max Reserve!
+			for _, ammoId in ipairs(WeaponConfig.AMMO_ORDER) do
+				local aSpec = WeaponConfig.AMMO_TYPES[ammoId]
+				if aSpec then
+					PlayerDataService.SetAmmo(player, ammoId, aSpec.MaxReserve, aSpec.MaxReserve)
+				end
+			end
+			msg = prefix .. "Full Ammo Resupply Crate: ALL 5 calibers refilled to 100%!"
+		elseif itemId == "SyndicateArmorBundle" then
+			-- 100/100 Kevlar Armor + Full Base HP + +750 Gold + Ammo Bonus!
+			PlayerDataService.SetArmor(player, 100)
+			PlayerDataService.AddRewards(player, 750, 25, 15)
+			local char = player.Character
+			local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+			if hum and hum.Health > 0 then
+				hum.MaxHealth = 200
+				hum.Health = 200
+			end
+			PlayerDataService.AddAmmo(player, "Pistol9mm", 60, WeaponConfig.AMMO_TYPES.Pistol9mm.MaxReserve)
+			PlayerDataService.AddAmmo(player, "Shotgun12G", 24, WeaponConfig.AMMO_TYPES.Shotgun12G.MaxReserve)
+			PlayerDataService.AddAmmo(player, "SMG45", 60, WeaponConfig.AMMO_TYPES.SMG45.MaxReserve)
+			PlayerDataService.AddAmmo(player, "Rifle556", 60, WeaponConfig.AMMO_TYPES.Rifle556.MaxReserve)
+			PlayerDataService.AddAmmo(player, "Sniper308", 15, WeaponConfig.AMMO_TYPES.Sniper308.MaxReserve)
+			msg = prefix .. "Syndicate War Chest: 100 Armor, Full HP, +750 Gold & Ammo Pack!"
+		else
+			-- Instant Empire Supply & Coin Crate (repeatable DevProduct)
+			PlayerDataService.AddRewards(player, 600, 30, 15)
+			for ingredient in pairs(WarehouseConfig.IngredientToCategory) do
+				WarehouseService.AddIngredient(player, ingredient, 10)
+			end
+			msg = prefix .. "Instant Empire Crate: +600 Coins & +10 ALL Ingredients!"
 		end
-		local msg = prefix .. "Instant Empire Crate: +600 Coins & +10 ALL Ingredients!"
+
 		print("[MonetizationService]", player.Name, msg)
 		if purchaseChangedHandler then
 			purchaseChangedHandler(player, msg)
@@ -362,6 +438,7 @@ local function loadPlayerPasses(player: Player): ()
 			end)
 			if ok and owns then
 				map[itemId] = true
+				applyPassBenefitsToProfile(player, itemId, false)
 			end
 		end
 	end

@@ -139,18 +139,20 @@ function MotorbikeController.Start(): ()
 
 			local accel = math.clamp((forwardSpeed - st.LastSpeed) / math.max(0.01, clampedDt), -60, 60)
 			st.LastSpeed = forwardSpeed
-			local pitchRad = math.clamp(accel * 0.0012, math.rad(-3.5), math.rad(4.5))
+			local isTurbo = char:GetAttribute("BikeTurboActive") == true
+			local turboPitch = if isTurbo then math.rad(3.2) else 0
+			local pitchRad = math.clamp(accel * 0.0012 + turboPitch, math.rad(-3.5), math.rad(6.0))
 
 			local tiltJoint = chassis:FindFirstChild("BikeTiltJoint")
 			if tiltJoint and tiltJoint:IsA("Motor6D") then
 				tiltJoint.Transform = CFrame.Angles(pitchRad, 0, st.CurrentBank)
 			end
 
-			-- 3. Scale exhaust smoke dynamically with throttle
+			-- 3. Scale exhaust smoke dynamically with throttle & Nitro Overdrive
 			local exhaust = bike:FindFirstChild("ExhaustPipeR")
 			local smoke = if exhaust then exhaust:FindFirstChild("ExhaustSmoke") else nil
 			if smoke and smoke:IsA("ParticleEmitter") then
-				smoke.Rate = 4 + speedFactor * 16
+				smoke.Rate = if isTurbo then 38 else (4 + speedFactor * 16)
 			end
 
 			-- 4. Lock rider into realistic leaning seated motorcycle posture!

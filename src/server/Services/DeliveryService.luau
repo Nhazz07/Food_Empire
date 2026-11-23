@@ -107,6 +107,7 @@ local function attachCrateVisual(player: Player, category: DeliveryCategory): ()
 	carriedCategory[player] = category
 	carriedCrates[player] = crate
 	player:SetAttribute("CarryingCrate", category)
+	player:SetAttribute("StolenShipmentUntil", os.clock() + 35)
 end
 
 local function wireTerritoryPickupCrates(): ()

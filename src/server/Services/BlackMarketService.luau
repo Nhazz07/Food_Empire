@@ -5,21 +5,33 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
 
+local WeaponConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WeaponConfig")
+)
 local PlayerDataService = require("./PlayerDataService")
 local BaseService = require("./BaseService")
+local MonetizationService = require("./MonetizationService")
+local SyndicateContractService = require("./SyndicateContractService")
 
 export type BlackMarketItemSpec = {
 	Id: string,
 	DisplayName: string,
 	Icon: string,
 	Price: number,
+	RobuxItemId: string?,
+	RobuxPrice: number?,
+	RequiredLevel: number?,
+	Category: string?,
+	Rarity: string?,
 	Description: string,
 	Kind: "Weapon" | "Armor" | "Consumable",
 	Damage: number?,
 	Range: number?,
 	Cooldown: number?,
 	Pellets: number?,
-	AmmoType: string?,
+	Spread: number?,
+	AmmoType: WeaponConfig.AmmoTypeId?,
+	AmmoLabel: string?,
 	ReloadStyle: ("Magazine" | "ShellByShell")?,
 	MagSize: number?,
 	ReserveMax: number?,
@@ -27,95 +39,83 @@ export type BlackMarketItemSpec = {
 	ShellStartTime: number?,
 	ShellLoadTime: number?,
 	ShellFinishTime: number?,
+	AudioKey: ("PistolShot" | "ShotgunBlast" | "SMGShot")?,
+	ModelStyle: string?,
 	AccentColor: Color3,
 }
 
 local BlackMarketService = {}
 
-BlackMarketService.ORDER = {
-	"StreetPistol",
-	"PepperShotgun",
-	"TacticalSMG",
-	"KevlarVest",
-	"Medkit",
+BlackMarketService.ORDER = {} :: { string }
+BlackMarketService.ITEMS = {} :: { [string]: BlackMarketItemSpec }
+
+-- Populate all weapons from shared WeaponConfig so server & client never drift
+for _, weaponId in ipairs(WeaponConfig.WEAPON_ORDER) do
+	local w = WeaponConfig.WEAPONS[weaponId]
+	if w then
+		local ammoSpec = WeaponConfig.AMMO_TYPES[w.AmmoType]
+		table.insert(BlackMarketService.ORDER, weaponId)
+		BlackMarketService.ITEMS[weaponId] = {
+			Id = w.Id,
+			DisplayName = w.DisplayName,
+			Icon = w.Icon,
+			Price = w.Price,
+			RobuxItemId = w.RobuxItemId,
+			RobuxPrice = w.RobuxPrice,
+			RequiredLevel = w.RequiredLevel,
+			Category = w.Category,
+			Rarity = w.Rarity,
+			Description = w.Description,
+			Kind = "Weapon",
+			Damage = w.Damage,
+			Range = w.Range,
+			Cooldown = w.Cooldown,
+			Pellets = w.Pellets,
+			Spread = w.Spread,
+			AmmoType = w.AmmoType,
+			AmmoLabel = if ammoSpec then ammoSpec.ShortName else w.AmmoType,
+			ReloadStyle = w.ReloadType,
+			MagSize = w.MagSize,
+			ReserveMax = if ammoSpec then ammoSpec.MaxReserve else 96,
+			ReloadTime = w.ReloadTime,
+			ShellStartTime = 0.20,
+			ShellLoadTime = w.ReloadTime,
+			ShellFinishTime = w.ShellFinishTime or 0.24,
+			AudioKey = w.AudioKey,
+			ModelStyle = w.ModelStyle,
+			AccentColor = w.AccentColor,
+		}
+	end
+end
+
+-- Add Player Tactical Protection & Healing Items
+table.insert(BlackMarketService.ORDER, "KevlarVest")
+BlackMarketService.ITEMS.KevlarVest = {
+	Id = "KevlarVest",
+	DisplayName = "Kevlar Chef Armor",
+	Icon = "ARMOR",
+	Price = 420,
+	RequiredLevel = 1,
+	Category = "Armor",
+	Rarity = "Rare",
+	Description = "+100 Breakable Tactical Armor Shield. Absorbs bullet and melee damage before HP until depleted.",
+	Kind = "Armor",
+	AccentColor = Color3.fromRGB(68, 108, 148),
 }
 
-BlackMarketService.ITEMS = {
-	StreetPistol = {
-		Id = "StreetPistol",
-		DisplayName = "Street Pistol",
-		Icon = "🔫",
-		Price = 250,
-		Description = "Reliable semi-auto pistol (32 DMG, 12-rd mag, 95 range). Press R to reload!",
-		Kind = "Weapon",
-		Damage = 32,
-		Range = 95,
-		Cooldown = 0.36,
-		Pellets = 1,
-		AmmoType = "9mm Mag",
-		ReloadStyle = "Magazine",
-		MagSize = 12,
-		ReserveMax = 96,
-		ReloadTime = 1.45,
-		AccentColor = Color3.fromRGB(142, 152, 174),
-	},
-	PepperShotgun = {
-		Id = "PepperShotgun",
-		DisplayName = "Pepper Shotgun",
-		Icon = "💥",
-		Price = 550,
-		Description = "Heavy 4-pellet pump shotgun (96 burst DMG, 6-shell tube). Loads shells individually with R!",
-		Kind = "Weapon",
-		Damage = 24,
-		Range = 58,
-		Cooldown = 0.85,
-		Pellets = 4,
-		AmmoType = "12G Shells",
-		ReloadStyle = "ShellByShell",
-		MagSize = 6,
-		ReserveMax = 36,
-		ShellStartTime = 0.22,
-		ShellLoadTime = 0.44,
-		ShellFinishTime = 0.28,
-		AccentColor = Color3.fromRGB(238, 92, 48),
-	},
-	TacticalSMG = {
-		Id = "TacticalSMG",
-		DisplayName = "Tactical SMG",
-		Icon = "🔥",
-		Price = 950,
-		Description = "High-rate automatic SMG (22 DMG, 30-rd extended mag, 100 range). Press R to reload!",
-		Kind = "Weapon",
-		Damage = 22,
-		Range = 100,
-		Cooldown = 0.17,
-		Pellets = 1,
-		AmmoType = "SMG Mag",
-		ReloadStyle = "Magazine",
-		MagSize = 30,
-		ReserveMax = 180,
-		ReloadTime = 1.85,
-		AccentColor = Color3.fromRGB(238, 174, 38),
-	},
-	KevlarVest = {
-		Id = "KevlarVest",
-		DisplayName = "Kevlar Chef Armor",
-		Icon = "🛡️",
-		Price = 420,
-		Description = "+100 Breakable Tactical Armor Shield! Absorbs bullet & melee damage before your HP until it breaks.",
-		Kind = "Armor",
-		AccentColor = Color3.fromRGB(48, 158, 232),
-	},
-	Medkit = {
-		Id = "Medkit",
-		DisplayName = "Flash-Spice Medkit",
-		Icon = "💊",
-		Price = 150,
-		Description = "Instant 100% Full Heal + 6-second adrenaline speed boost! Buy anytime you're low HP.",
-		Kind = "Consumable",
-		AccentColor = Color3.fromRGB(54, 196, 108),
-	},
-} :: { [string]: BlackMarketItemSpec }
+table.insert(BlackMarketService.ORDER, "Medkit")
+BlackMarketService.ITEMS.Medkit = {
+	Id = "Medkit",
+	DisplayName = "Flash-Spice Medkit",
+	Icon = "MED",
+	Price = 150,
+	RequiredLevel = 1,
+	Category = "Consumable",
+	Rarity = "Common",
+	Description = "Instant 100% Full Heal + 6-second adrenaline speed boost. Available anytime at low HP.",
+	Kind = "Consumable",
+	AccentColor = Color3.fromRGB(68, 128, 86),
+}
 
 local BLACK_MARKET_WARP_POS = Vector3.new(-264, 5.5, 130)
 local BLACK_MARKET_LOOK_POS = Vector3.new(-295, 5.5, 130)
@@ -132,14 +132,22 @@ local conns: { RBXScriptConnection } = {}
 local charConns: { [Player]: RBXScriptConnection } = {}
 local charRemoveConns: { [Player]: RBXScriptConnection } = {}
 
-type WeaponAmmoState = {
+type WeaponMagState = {
 	Mag: number,
-	Reserve: number,
 	Reloading: boolean,
 	ReloadToken: number,
 }
 
-local playerAmmo: { [Player]: { [string]: WeaponAmmoState } } = {}
+-- Loaded magazine state per weapon; shared caliber reserves live authoritatively in PlayerDataService.AmmoInventory!
+local playerMagState: { [Player]: { [string]: WeaponMagState } } = {}
+
+local KILL_SCAVENGE_AMMO: { [WeaponConfig.AmmoTypeId]: number } = {
+	Pistol9mm = 6,
+	Shotgun12G = 2,
+	SMG45 = 12,
+	Rifle556 = 10,
+	Sniper308 = 2,
+}
 
 local function emitCombatSFX(sfxName: string, origin: Vector3, excludePlayer: Player?): ()
 	if not sfxEv then
@@ -160,21 +168,44 @@ function BlackMarketService.BroadcastSFX(sfxName: string, origin: Vector3): ()
 	emitCombatSFX(sfxName, origin, nil)
 end
 
-local function ensureWeaponAmmo(player: Player, weaponId: string): WeaponAmmoState?
+local function playerOwnsWeapon(player: Player, weaponId: string): boolean
+	local spec = BlackMarketService.ITEMS[weaponId]
+	if not spec or spec.Kind ~= "Weapon" then
+		return false
+	end
+	local profile = PlayerDataService.GetProfile(player)
+	if profile.OwnedWeapons and profile.OwnedWeapons[weaponId] then
+		return true
+	end
+	if spec.RobuxItemId and MonetizationService.HasPass(player, spec.RobuxItemId) then
+		PlayerDataService.UnlockWeapon(player, weaponId)
+		return true
+	end
+	return false
+end
+
+local function getReserveForWeapon(player: Player, spec: BlackMarketItemSpec): (number, number)
+	local ammoType = spec.AmmoType or "Pistol9mm"
+	local ammoSpec = WeaponConfig.AMMO_TYPES[ammoType]
+	local maxRes = if ammoSpec then ammoSpec.MaxReserve else (spec.ReserveMax or 96)
+	local cur = math.clamp(PlayerDataService.GetAmmo(player, ammoType), 0, maxRes)
+	return cur, maxRes
+end
+
+local function ensureWeaponMag(player: Player, weaponId: string): WeaponMagState?
 	local spec = BlackMarketService.ITEMS[weaponId]
 	if not spec or spec.Kind ~= "Weapon" then
 		return nil
 	end
-	local byWeapon = playerAmmo[player]
+	local byWeapon = playerMagState[player]
 	if not byWeapon then
 		byWeapon = {}
-		playerAmmo[player] = byWeapon
+		playerMagState[player] = byWeapon
 	end
 	local st = byWeapon[weaponId]
 	if not st then
 		st = {
 			Mag = spec.MagSize or 12,
-			Reserve = spec.ReserveMax or 96,
 			Reloading = false,
 			ReloadToken = 0,
 		}
@@ -221,16 +252,18 @@ end
 
 local function syncToolAmmoAttributes(player: Player, weaponId: string): ()
 	local spec = BlackMarketService.ITEMS[weaponId]
-	local st = ensureWeaponAmmo(player, weaponId)
+	local st = ensureWeaponMag(player, weaponId)
 	local tool = findPlayerWeaponTool(player, weaponId)
 	if not spec or not st or not tool then
 		return
 	end
+	local reserve, reserveMax = getReserveForWeapon(player, spec)
 	tool:SetAttribute("AmmoMag", st.Mag)
 	tool:SetAttribute("AmmoMaxMag", spec.MagSize or 12)
-	tool:SetAttribute("AmmoReserve", st.Reserve)
-	tool:SetAttribute("AmmoReserveMax", spec.ReserveMax or 96)
-	tool:SetAttribute("AmmoType", spec.AmmoType or "Mag")
+	tool:SetAttribute("AmmoReserve", reserve)
+	tool:SetAttribute("AmmoReserveMax", reserveMax)
+	tool:SetAttribute("AmmoType", spec.AmmoType or "Pistol9mm")
+	tool:SetAttribute("AmmoLabel", spec.AmmoLabel or "9mm")
 	tool:SetAttribute("ReloadStyle", spec.ReloadStyle or "Magazine")
 	tool:SetAttribute("IsReloading", st.Reloading)
 end
@@ -242,18 +275,20 @@ local function sendWeaponAmmoSync(
 	extra: { [string]: any }?
 ): ()
 	local spec = BlackMarketService.ITEMS[weaponId]
-	local st = ensureWeaponAmmo(player, weaponId)
+	local st = ensureWeaponMag(player, weaponId)
 	if not ammoSyncEv or not spec or not st or not player.Parent then
 		return
 	end
+	local reserve, reserveMax = getReserveForWeapon(player, spec)
 	local payload: { [string]: any } = {
 		Type = eventType,
 		WeaponId = weaponId,
 		Mag = st.Mag,
 		MaxMag = spec.MagSize or 12,
-		Reserve = st.Reserve,
-		ReserveMax = spec.ReserveMax or 96,
-		AmmoType = spec.AmmoType or "Mag",
+		Reserve = reserve,
+		ReserveMax = reserveMax,
+		AmmoType = spec.AmmoType or "Pistol9mm",
+		AmmoLabel = spec.AmmoLabel or "9mm",
 		ReloadStyle = spec.ReloadStyle or "Magazine",
 		IsReloading = st.Reloading,
 	}
@@ -265,24 +300,37 @@ local function sendWeaponAmmoSync(
 	ammoSyncEv:FireClient(player, payload)
 end
 
+local function syncAllWeaponsForAmmoType(player: Player, ammoType: WeaponConfig.AmmoTypeId, skipWeaponId: string?): ()
+	for _, weaponId in ipairs(WeaponConfig.WEAPON_ORDER) do
+		local spec = BlackMarketService.ITEMS[weaponId]
+		if spec and spec.AmmoType == ammoType and playerOwnsWeapon(player, weaponId) then
+			syncToolAmmoAttributes(player, weaponId)
+			if weaponId ~= skipWeaponId then
+				sendWeaponAmmoSync(player, "Update", weaponId, nil)
+			end
+		end
+	end
+end
+
 local function sendFullAmmoSync(player: Player): ()
 	if not ammoSyncEv or not player.Parent then
 		return
 	end
-	local profile = PlayerDataService.GetProfile(player)
 	local weaponsPayload: { [string]: any } = {}
-	for weaponId, owned in pairs(profile.OwnedWeapons or {}) do
+	for _, weaponId in ipairs(WeaponConfig.WEAPON_ORDER) do
 		local spec = BlackMarketService.ITEMS[weaponId]
-		if owned and spec and spec.Kind == "Weapon" then
-			local st = ensureWeaponAmmo(player, weaponId)
+		if spec and playerOwnsWeapon(player, weaponId) then
+			local st = ensureWeaponMag(player, weaponId)
 			if st then
 				syncToolAmmoAttributes(player, weaponId)
+				local reserve, reserveMax = getReserveForWeapon(player, spec)
 				weaponsPayload[weaponId] = {
 					Mag = st.Mag,
 					MaxMag = spec.MagSize or 12,
-					Reserve = st.Reserve,
-					ReserveMax = spec.ReserveMax or 96,
-					AmmoType = spec.AmmoType or "Mag",
+					Reserve = reserve,
+					ReserveMax = reserveMax,
+					AmmoType = spec.AmmoType or "Pistol9mm",
+					AmmoLabel = spec.AmmoLabel or "9mm",
 					ReloadStyle = spec.ReloadStyle or "Magazine",
 					IsReloading = st.Reloading,
 				}
@@ -296,7 +344,7 @@ local function sendFullAmmoSync(player: Player): ()
 end
 
 local function cancelReload(player: Player, weaponId: string, notifyClient: boolean): ()
-	local byWeapon = playerAmmo[player]
+	local byWeapon = playerMagState[player]
 	if not byWeapon then
 		return
 	end
@@ -313,7 +361,7 @@ local function cancelReload(player: Player, weaponId: string, notifyClient: bool
 end
 
 local function cancelAllReloads(player: Player, notifyClient: boolean): ()
-	local byWeapon = playerAmmo[player]
+	local byWeapon = playerMagState[player]
 	if not byWeapon then
 		return
 	end
@@ -329,62 +377,23 @@ local function cancelAllReloads(player: Player, notifyClient: boolean): ()
 	end
 end
 
-local function refillWeaponAmmo(player: Player, weaponId: string, fillMag: boolean): boolean
-	local spec = BlackMarketService.ITEMS[weaponId]
-	if not spec or spec.Kind ~= "Weapon" then
-		return false
-	end
-	local st = ensureWeaponAmmo(player, weaponId)
-	if not st then
-		return false
-	end
-	local magSize = spec.MagSize or 12
-	local reserveMax = spec.ReserveMax or 96
-	local changed = false
-	if fillMag and not st.Reloading and st.Mag < magSize then
-		st.Mag = magSize
-		changed = true
-	end
-	if st.Reserve < reserveMax then
-		st.Reserve = reserveMax
-		changed = true
-	end
-	syncToolAmmoAttributes(player, weaponId)
-	if changed then
-		sendWeaponAmmoSync(player, "Update", weaponId, nil)
-	end
-	return changed
-end
-
-local function refillAllOwnedAmmo(player: Player, fillMag: boolean): boolean
-	local profile = PlayerDataService.GetProfile(player)
-	local anyChanged = false
-	for weaponId, owned in pairs(profile.OwnedWeapons or {}) do
-		if owned and BlackMarketService.ITEMS[weaponId] and BlackMarketService.ITEMS[weaponId].Kind == "Weapon" then
-			if refillWeaponAmmo(player, weaponId, fillMag) then
-				anyChanged = true
-			end
+local function grantKillAmmoBonus(player: Player, usedWeaponId: string?): ()
+	local ammoType: WeaponConfig.AmmoTypeId = "Pistol9mm"
+	if usedWeaponId then
+		local spec = BlackMarketService.ITEMS[usedWeaponId]
+		if spec and spec.AmmoType then
+			ammoType = spec.AmmoType
 		end
 	end
-	return anyChanged
-end
-
-local function grantKillAmmoBonus(player: Player): ()
-	local profile = PlayerDataService.GetProfile(player)
-	for weaponId, owned in pairs(profile.OwnedWeapons or {}) do
-		local spec = BlackMarketService.ITEMS[weaponId]
-		if owned and spec and spec.Kind == "Weapon" then
-			local st = ensureWeaponAmmo(player, weaponId)
-			if st then
-				local reserveMax = spec.ReserveMax or 96
-				local bonus = spec.MagSize or 12
-				if st.Reserve < reserveMax then
-					st.Reserve = math.min(reserveMax, st.Reserve + bonus)
-					syncToolAmmoAttributes(player, weaponId)
-					sendWeaponAmmoSync(player, "Update", weaponId, nil)
-				end
-			end
-		end
+	local ammoSpec = WeaponConfig.AMMO_TYPES[ammoType]
+	if not ammoSpec then
+		return
+	end
+	local bonus = KILL_SCAVENGE_AMMO[ammoType] or 6
+	local before = PlayerDataService.GetAmmo(player, ammoType)
+	if before < ammoSpec.MaxReserve then
+		PlayerDataService.AddAmmo(player, ammoType, bonus, ammoSpec.MaxReserve)
+		syncAllWeaponsForAmmoType(player, ammoType, nil)
 	end
 end
 
@@ -404,7 +413,7 @@ function BlackMarketService.SpawnBulletTracer(fromPos: Vector3, toPos: Vector3, 
 
 	local beam = Instance.new("Part")
 	beam.Name = "BulletTracer"
-	beam.Size = Vector3.new(0.22, 0.22, len)
+	beam.Size = Vector3.new(0.20, 0.20, len)
 	beam.CFrame = CFrame.lookAt((fromPos + toPos) * 0.5, toPos)
 	beam.Color = color
 	beam.Material = Enum.Material.Neon
@@ -415,13 +424,15 @@ function BlackMarketService.SpawnBulletTracer(fromPos: Vector3, toPos: Vector3, 
 	beam.CastShadow = false
 	beam.Parent = Workspace
 
-	task.delay(0.09, function()
+	task.delay(0.085, function()
 		if beam.Parent then
 			beam:Destroy()
 		end
 	end)
 end
 
+-- Preserves existing StreetPistol, PepperShotgun & TacticalSMG models intact,
+-- and builds distinct sculpted realistic models for the 6 new expansion weapons!
 local function buildGunTool(weaponId: string): Tool
 	local spec = BlackMarketService.ITEMS[weaponId]
 	local tool = Instance.new("Tool")
@@ -434,14 +445,17 @@ local function buildGunTool(weaponId: string): Tool
 
 	local darkSteel = Color3.fromRGB(38, 42, 50)
 	local brushedSteel = Color3.fromRGB(116, 124, 138)
+	local chromeSilver = Color3.fromRGB(196, 204, 216)
 	local polymerGrip = Color3.fromRGB(24, 26, 32)
 	local woodStock = Color3.fromRGB(122, 68, 36)
 	local goldTrim = Color3.fromRGB(228, 176, 48)
+	local crimsonAccent = Color3.fromRGB(218, 38, 56)
+	local oliveTactical = Color3.fromRGB(58, 68, 56)
 
 	local handle = Instance.new("Part")
 	handle.Name = "Handle"
 	handle.Size = Vector3.new(0.28, 0.92, 0.42)
-	handle.Color = polymerGrip
+	handle.Color = if weaponId == "GoldenEmperorPistol" then Color3.fromRGB(242, 236, 224) else polymerGrip
 	handle.Material = Enum.Material.SmoothPlastic
 	handle.CanCollide = false
 	handle.Massless = true
@@ -473,39 +487,98 @@ local function buildGunTool(weaponId: string): Tool
 	gPart("Trigger", Vector3.new(0.08, 0.22, 0.10), CFrame.new(0, 0.28, -0.32) * CFrame.Angles(math.rad(22), 0, 0), brushedSteel, Enum.Material.Metal, nil)
 
 	if weaponId == "PepperShotgun" then
-		-- Realistic Pump-Action Tactical Combat Shotgun: wooden stock, receiver, twin barrel + mag tube, ribbed pump fore-end & iron sights!
+		-- Preserved Existing Pepper Shotgun Model
 		gPart("WoodStock", Vector3.new(0.32, 0.56, 1.35), CFrame.new(0, 0.28, 0.78) * CFrame.Angles(math.rad(-10), 0, 0), woodStock, Enum.Material.Wood, nil)
 		gPart("ButtPad", Vector3.new(0.34, 0.62, 0.14), CFrame.new(0, 0.18, 1.44) * CFrame.Angles(math.rad(-10), 0, 0), polymerGrip, Enum.Material.SmoothPlastic, nil)
 		gPart("Receiver", Vector3.new(0.36, 0.48, 1.25), CFrame.new(0, 0.52, -0.38), darkSteel, Enum.Material.Metal, nil)
 		gPart("EjectionPort", Vector3.new(0.38, 0.18, 0.45), CFrame.new(0.01, 0.56, -0.45), brushedSteel, Enum.Material.Metal, nil)
-		-- Upper steel barrel (Cylinder along Z via 90-deg Y rotation)
 		gPart("UpperBarrel", Vector3.new(2.45, 0.24, 0.24), CFrame.new(0, 0.62, -2.15) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		-- Under-barrel shell magazine tube
 		gPart("MagTube", Vector3.new(1.95, 0.22, 0.22), CFrame.new(0, 0.39, -1.90) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		-- Ribbed Wooden Pump Fore-end Grip
 		gPart("PumpForeGrip", Vector3.new(0.42, 0.36, 0.92), CFrame.new(0, 0.38, -1.78), woodStock, Enum.Material.Wood, nil)
 		gPart("FrontBeadSight", Vector3.new(0.08, 0.14, 0.08), CFrame.new(0, 0.78, -3.25), goldTrim, Enum.Material.Metal, nil)
 		gPart("MuzzleTip", Vector3.new(0.22, 0.22, 0.12), CFrame.new(0, 0.62, -3.38), Color3.fromRGB(18, 20, 24), Enum.Material.Metal, nil)
 	elseif weaponId == "TacticalSMG" then
-		-- Realistic Submachine Gun: compact receiver, curved 30-rd extended magazine, holographic optic, barrel shroud, folding stock & suppressor!
+		-- Preserved Existing Tactical SMG Model
 		gPart("UpperReceiver", Vector3.new(0.34, 0.46, 1.35), CFrame.new(0, 0.56, -0.42), darkSteel, Enum.Material.Metal, nil)
 		gPart("GoldTrimRail", Vector3.new(0.26, 0.10, 1.28), CFrame.new(0, 0.82, -0.42), goldTrim, Enum.Material.Metal, nil)
-		-- Curved Extended 30-Round Magazine
 		gPart("ExtendedMag", Vector3.new(0.24, 1.05, 0.34), CFrame.new(0, -0.14, -0.78) * CFrame.Angles(math.rad(-14), 0, 0), darkSteel, Enum.Material.Metal, nil)
 		gPart("MagBase", Vector3.new(0.26, 0.12, 0.38), CFrame.new(0, -0.66, -0.91) * CFrame.Angles(math.rad(-14), 0, 0), goldTrim, Enum.Material.Metal, nil)
-		-- Holographic Red-Dot Sight on Top Rail
 		gPart("HoloHousing", Vector3.new(0.28, 0.30, 0.42), CFrame.new(0, 0.98, -0.35), polymerGrip, Enum.Material.Metal, nil)
 		gPart("HoloRedDot", Vector3.new(0.18, 0.18, 0.06), CFrame.new(0, 0.99, -0.35), Color3.fromRGB(255, 58, 58), Enum.Material.SmoothPlastic, nil)
-		-- Vented Fore-end Handguard & Tactical Suppressor Barrel
 		gPart("Handguard", Vector3.new(0.36, 0.38, 0.85), CFrame.new(0, 0.52, -1.48), polymerGrip, Enum.Material.Metal, nil)
 		gPart("VerticalForeGrip", Vector3.new(0.22, 0.55, 0.24), CFrame.new(0, 0.12, -1.48), polymerGrip, Enum.Material.SmoothPlastic, nil)
 		gPart("SuppressorBarrel", Vector3.new(1.05, 0.28, 0.28), CFrame.new(0, 0.54, -2.35) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		-- Folding Rear Tactical Stock
 		gPart("StockStrut", Vector3.new(0.16, 0.18, 0.95), CFrame.new(0, 0.52, 0.72), darkSteel, Enum.Material.Metal, nil)
 		gPart("StockButt", Vector3.new(0.28, 0.62, 0.16), CFrame.new(0, 0.42, 1.18), polymerGrip, Enum.Material.SmoothPlastic, nil)
 		gPart("MuzzleTip", Vector3.new(0.22, 0.22, 0.12), CFrame.new(0, 0.54, -2.88), Color3.fromRGB(18, 20, 24), Enum.Material.Metal, nil)
+	elseif weaponId == "SilencedDeagle" then
+		-- Enforcer Heavy Pistol: Brushed chrome heavy slide, ventilated rail, tactical suppressor & laser unit
+		gPart("MagBasePlate", Vector3.new(0.32, 0.12, 0.48), CFrame.new(0, -0.49, 0.02), chromeSilver, Enum.Material.Metal, nil)
+		gPart("LowerFrame", Vector3.new(0.30, 0.25, 1.62), CFrame.new(0, 0.43, -0.56), darkSteel, Enum.Material.Metal, nil)
+		gPart("HeavySlide", Vector3.new(0.34, 0.36, 1.72), CFrame.new(0, 0.68, -0.58), chromeSilver, Enum.Material.Metal, nil)
+		gPart("EjectionPort", Vector3.new(0.35, 0.16, 0.42), CFrame.new(0.01, 0.72, -0.35), darkSteel, Enum.Material.Metal, nil)
+		gPart("UnderLaser", Vector3.new(0.24, 0.16, 0.54), CFrame.new(0, 0.26, -1.04), polymerGrip, Enum.Material.Metal, nil)
+		gPart("Suppressor", Vector3.new(0.95, 0.24, 0.24), CFrame.new(0, 0.66, -1.88) * CFrame.Angles(0, math.rad(90), 0), polymerGrip, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("FrontSight", Vector3.new(0.08, 0.11, 0.10), CFrame.new(0, 0.90, -1.34), Color3.fromRGB(58, 178, 255), Enum.Material.Neon, nil)
+		gPart("MuzzleTip", Vector3.new(0.20, 0.20, 0.10), CFrame.new(0, 0.66, -2.38), Color3.fromRGB(16, 18, 22), Enum.Material.Metal, nil)
+	elseif weaponId == "AutoCombatShotgun" then
+		-- Breacher Combat Shotgun: Matte black tactical frame, heat-shield barrel, extended 8-shell tube & rail optic
+		gPart("TacStock", Vector3.new(0.34, 0.60, 1.30), CFrame.new(0, 0.34, 0.80), polymerGrip, Enum.Material.SmoothPlastic, nil)
+		gPart("Receiver", Vector3.new(0.40, 0.54, 1.40), CFrame.new(0, 0.54, -0.42), darkSteel, Enum.Material.Metal, nil)
+		gPart("TopRail", Vector3.new(0.24, 0.08, 1.35), CFrame.new(0, 0.84, -0.48), brushedSteel, Enum.Material.Metal, nil)
+		gPart("ReflexOptic", Vector3.new(0.28, 0.26, 0.40), CFrame.new(0, 0.99, -0.32), polymerGrip, Enum.Material.Metal, nil)
+		gPart("HeatShield", Vector3.new(0.34, 0.28, 1.95), CFrame.new(0, 0.64, -2.02), darkSteel, Enum.Material.Metal, nil)
+		gPart("ExtendedTube", Vector3.new(2.25, 0.26, 0.26), CFrame.new(0, 0.38, -2.05) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("RibbedPump", Vector3.new(0.46, 0.38, 1.05), CFrame.new(0, 0.38, -1.78), polymerGrip, Enum.Material.SmoothPlastic, nil)
+		gPart("VioletStripe", Vector3.new(0.42, 0.10, 0.85), CFrame.new(0, 0.56, -0.45), Color3.fromRGB(168, 74, 236), Enum.Material.Metal, nil)
+		gPart("MuzzleTip", Vector3.new(0.28, 0.28, 0.14), CFrame.new(0, 0.64, -3.22), Color3.fromRGB(18, 20, 24), Enum.Material.Metal, nil)
+	elseif weaponId == "SyndicateCarbine" then
+		-- Syndicate 5.56 Carbine: Full tactical AR receiver, rail handguard, curved 5.56 mag, buffer stock & red-dot
+		gPart("BufferTube", Vector3.new(0.95, 0.24, 0.24), CFrame.new(0, 0.56, 0.68) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("CarbineStock", Vector3.new(0.32, 0.72, 0.56), CFrame.new(0, 0.44, 1.18), oliveTactical, Enum.Material.SmoothPlastic, nil)
+		gPart("UpperReceiver", Vector3.new(0.36, 0.50, 1.48), CFrame.new(0, 0.56, -0.46), darkSteel, Enum.Material.Metal, nil)
+		gPart("RifleMag", Vector3.new(0.24, 1.10, 0.42), CFrame.new(0, -0.18, -0.84) * CFrame.Angles(math.rad(-16), 0, 0), polymerGrip, Enum.Material.Metal, nil)
+		gPart("RailHandguard", Vector3.new(0.38, 0.42, 1.38), CFrame.new(0, 0.56, -1.84), oliveTactical, Enum.Material.Metal, nil)
+		gPart("AngledGrip", Vector3.new(0.22, 0.42, 0.34), CFrame.new(0, 0.22, -1.78) * CFrame.Angles(math.rad(24), 0, 0), polymerGrip, Enum.Material.SmoothPlastic, nil)
+		gPart("AcogScope", Vector3.new(0.68, 0.30, 0.30), CFrame.new(0, 0.96, -0.42) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("Barrel", Vector3.new(1.15, 0.20, 0.20), CFrame.new(0, 0.58, -3.02) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("MuzzleTip", Vector3.new(0.24, 0.24, 0.16), CFrame.new(0, 0.58, -3.62), darkSteel, Enum.Material.Metal, nil)
+	elseif weaponId == "ShadowSniper" then
+		-- Shadow .308 Sniper: Long precision chassis, high-magnification scope, bolt handle, fluted barrel & muzzle brake
+		gPart("SniperStock", Vector3.new(0.34, 0.68, 1.45), CFrame.new(0, 0.40, 0.92), polymerGrip, Enum.Material.SmoothPlastic, nil)
+		gPart("CheekRiser", Vector3.new(0.36, 0.22, 0.72), CFrame.new(0, 0.78, 0.84), darkSteel, Enum.Material.SmoothPlastic, nil)
+		gPart("ChassisBody", Vector3.new(0.38, 0.48, 2.25), CFrame.new(0, 0.54, -0.82), darkSteel, Enum.Material.Metal, nil)
+		gPart("BoxMag", Vector3.new(0.26, 0.65, 0.48), CFrame.new(0, 0.04, -0.78), brushedSteel, Enum.Material.Metal, nil)
+		gPart("BoltKnob", Vector3.new(0.36, 0.12, 0.12), CFrame.new(0.28, 0.62, -0.18), chromeSilver, Enum.Material.Metal, nil)
+		gPart("ScopeTube", Vector3.new(1.48, 0.26, 0.26), CFrame.new(0, 1.02, -0.62) * CFrame.Angles(0, math.rad(90), 0), polymerGrip, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("ScopeLens", Vector3.new(0.32, 0.34, 0.34), CFrame.new(0, 1.02, -1.40) * CFrame.Angles(0, math.rad(90), 0), goldTrim, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("LongBarrel", Vector3.new(2.25, 0.22, 0.22), CFrame.new(0, 0.60, -2.98) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("MuzzleBrake", Vector3.new(0.32, 0.28, 0.38), CFrame.new(0, 0.60, -4.18), darkSteel, Enum.Material.Metal, nil)
+		gPart("MuzzleTip", Vector3.new(0.22, 0.22, 0.12), CFrame.new(0, 0.60, -4.40), Color3.fromRGB(16, 18, 22), Enum.Material.Metal, nil)
+	elseif weaponId == "GoldenEmperorPistol" then
+		-- Mythic 24K Gold Precision Pistol with Ivory Grip & Gold Compensator
+		gPart("MagBasePlate", Vector3.new(0.32, 0.12, 0.48), CFrame.new(0, -0.49, 0.02), goldTrim, Enum.Material.Metal, nil)
+		gPart("LowerFrame", Vector3.new(0.30, 0.24, 1.48), CFrame.new(0, 0.42, -0.50), darkSteel, Enum.Material.Metal, nil)
+		gPart("GoldSlide", Vector3.new(0.32, 0.34, 1.58), CFrame.new(0, 0.66, -0.52), goldTrim, Enum.Material.Metal, nil)
+		gPart("Compensator", Vector3.new(0.32, 0.32, 0.38), CFrame.new(0, 0.66, -1.46), goldTrim, Enum.Material.Metal, nil)
+		gPart("FrontSight", Vector3.new(0.09, 0.11, 0.11), CFrame.new(0, 0.88, -1.48), Color3.fromRGB(255, 226, 94), Enum.Material.Neon, nil)
+		gPart("MuzzleTip", Vector3.new(0.18, 0.18, 0.10), CFrame.new(0, 0.66, -1.68), Color3.fromRGB(22, 20, 18), Enum.Material.Metal, nil)
+	elseif weaponId == "CrimsonDragonAR" then
+		-- Mythic Crimson-Gold 5.56mm Custom Assault Rifle
+		gPart("BufferTube", Vector3.new(0.95, 0.24, 0.24), CFrame.new(0, 0.56, 0.68) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("DragonStock", Vector3.new(0.34, 0.72, 0.58), CFrame.new(0, 0.44, 1.18), crimsonAccent, Enum.Material.Metal, nil)
+		gPart("UpperReceiver", Vector3.new(0.38, 0.52, 1.52), CFrame.new(0, 0.56, -0.46), darkSteel, Enum.Material.Metal, nil)
+		gPart("CrimsonAccent", Vector3.new(0.40, 0.16, 1.42), CFrame.new(0, 0.68, -0.48), crimsonAccent, Enum.Material.Metal, nil)
+		gPart("ExtendedDragonMag", Vector3.new(0.24, 1.24, 0.44), CFrame.new(0, -0.22, -0.84) * CFrame.Angles(math.rad(-16), 0, 0), crimsonAccent, Enum.Material.Metal, nil)
+		gPart("GoldMagBase", Vector3.new(0.28, 0.14, 0.48), CFrame.new(0, -0.84, -1.02) * CFrame.Angles(math.rad(-16), 0, 0), goldTrim, Enum.Material.Metal, nil)
+		gPart("RailHandguard", Vector3.new(0.40, 0.44, 1.45), CFrame.new(0, 0.56, -1.86), darkSteel, Enum.Material.Metal, nil)
+		gPart("GoldTrimRail", Vector3.new(0.26, 0.10, 2.55), CFrame.new(0, 0.84, -1.16), goldTrim, Enum.Material.Metal, nil)
+		gPart("HoloOptic", Vector3.new(0.30, 0.30, 0.46), CFrame.new(0, 1.00, -0.38), polymerGrip, Enum.Material.Metal, nil)
+		gPart("CrimsonDot", Vector3.new(0.16, 0.16, 0.08), CFrame.new(0, 1.01, -0.38), Color3.fromRGB(255, 68, 86), Enum.Material.Neon, nil)
+		gPart("Barrel", Vector3.new(1.22, 0.22, 0.22), CFrame.new(0, 0.58, -3.08) * CFrame.Angles(0, math.rad(90), 0), goldTrim, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("MuzzleTip", Vector3.new(0.26, 0.26, 0.16), CFrame.new(0, 0.58, -3.72), Color3.fromRGB(18, 20, 24), Enum.Material.Metal, nil)
 	else
-		-- Realistic Semi-Auto Street Pistol: polymer frame, brushed steel slide, ejection port, iron sights, under-rail & magazine baseplate!
+		-- Preserved Existing Street Pistol Model
 		gPart("MagBasePlate", Vector3.new(0.30, 0.10, 0.46), CFrame.new(0, -0.48, 0.02), darkSteel, Enum.Material.Metal, nil)
 		gPart("LowerFrame", Vector3.new(0.28, 0.22, 1.38), CFrame.new(0, 0.42, -0.45), polymerGrip, Enum.Material.SmoothPlastic, nil)
 		gPart("Slide", Vector3.new(0.30, 0.30, 1.46), CFrame.new(0, 0.64, -0.46), brushedSteel, Enum.Material.Metal, nil)
@@ -604,7 +677,6 @@ local function syncCharacterArmor(player: Player): ()
 				return
 			end
 
-			-- Any health above 100 is finite Armor; once chipped away, clamp MaxHealth down so Armor never auto-regenerates!
 			local remainingArmor = math.clamp(math.ceil(newHealth) - 100, 0, curArmor)
 			if remainingArmor < curArmor then
 				updating = true
@@ -616,7 +688,7 @@ local function syncCharacterArmor(player: Player): ()
 					local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 					local toastEv = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
 					if toastEv and toastEv:IsA("RemoteEvent") then
-						toastEv:FireClient(player, "🛡️ Your Kevlar Armor broke! Visit the Black Market to buy new armor!")
+						toastEv:FireClient(player, "Kevlar Armor depleted. Visit the Black Market to replace it.")
 					end
 				end
 				updating = false
@@ -625,8 +697,7 @@ local function syncCharacterArmor(player: Player): ()
 	end
 end
 
-local function grantOwnedGearToPlayer(player: Player, refillOnGrant: boolean?): ()
-	local profile = PlayerDataService.GetProfile(player)
+local function grantOwnedGearToPlayer(player: Player, fillMagsOnGrant: boolean?): ()
 	local char = player.Character
 	if char then
 		syncCharacterArmor(player)
@@ -634,28 +705,30 @@ local function grantOwnedGearToPlayer(player: Player, refillOnGrant: boolean?): 
 
 	local bp = player:FindFirstChild("Backpack")
 	if not bp then return end
-	for weaponId, owned in pairs(profile.OwnedWeapons or {}) do
+
+	for _, weaponId in ipairs(WeaponConfig.WEAPON_ORDER) do
 		local spec = BlackMarketService.ITEMS[weaponId]
-		if owned and spec and spec.Kind == "Weapon" then
-			local displayName = spec.DisplayName
-			local hasInBp = bp:FindFirstChild(displayName) ~= nil
-			local hasInChar = char ~= nil and char:FindFirstChild(displayName) ~= nil
-			if not hasInBp and not hasInChar then
+		if spec and spec.Kind == "Weapon" and playerOwnsWeapon(player, weaponId) then
+			local existingTool = findPlayerWeaponTool(player, weaponId)
+			if not existingTool then
 				local tool = buildGunTool(weaponId)
 				tool.Parent = bp
 			end
-			if refillOnGrant then
-				refillWeaponAmmo(player, weaponId, true)
-			else
-				ensureWeaponAmmo(player, weaponId)
-				syncToolAmmoAttributes(player, weaponId)
+			local st = ensureWeaponMag(player, weaponId)
+			if st and fillMagsOnGrant and not st.Reloading then
+				st.Mag = spec.MagSize or 12
 			end
+			syncToolAmmoAttributes(player, weaponId)
 		end
 	end
 	sendFullAmmoSync(player)
 end
 
-local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, hitPos: Vector3, dmg: number): boolean
+function BlackMarketService.SyncPlayerAmmoAndGear(player: Player): ()
+	grantOwnedGearToPlayer(player, false)
+end
+
+local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, hitPos: Vector3, dmg: number, usedWeaponId: string): boolean
 	local targetHum = hitModel:FindFirstChildOfClass("Humanoid")
 	if not targetHum or targetHum.Health <= 0 then
 		return false
@@ -666,22 +739,45 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 	local isEnemyTurfGuard = CollectionService:HasTag(hitModel, "TurfGuardUnit")
 		and hitModel:GetAttribute("Faction") ~= ("Player_" .. tostring(player.UserId))
 	if isRival or isMafia or isEnemyTurfGuard then
+		local hitDir = hitPos - root.Position
+		if hitDir.Magnitude > 0.05 then
+			hitModel:SetAttribute("LastHitDir", hitDir.Unit)
+		end
 		targetHum:TakeDamage(dmg)
 		emitCombatSFX("MeleeHit", hitPos, nil)
 		if targetHum.Health <= 0 then
-			local isBoss = hitModel:GetAttribute("IsMafiaBoss") == true
-			if isBoss then
+			local isMafiaBoss = hitModel:GetAttribute("IsMafiaBoss") == true
+			local isRivalBoss = hitModel:GetAttribute("IsRivalBoss") == true
+			if isRivalBoss then
+				local goldAttr = hitModel:GetAttribute("BountyGold")
+				local expAttr = hitModel:GetAttribute("BountyExp")
+				local repAttr = hitModel:GetAttribute("BountyRep")
+				local g = if typeof(goldAttr) == "number" then goldAttr else 480
+				local e = if typeof(expAttr) == "number" then expAttr else 185
+				local r = if typeof(repAttr) == "number" then repAttr else 110
+				PlayerDataService.AddRewards(player, g, e, r)
+				local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+				local toastEv = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
+				if toastEv and toastEv:IsA("RemoteEvent") then
+					toastEv:FireAllClients(string.format("%s eliminated THE CRIMSON DON (+%dG, +%d Rep).", player.DisplayName, g, r))
+				end
+			elseif isMafiaBoss then
 				PlayerDataService.AddRewards(player, 220, 80, 45)
 			elseif isMafia then
 				PlayerDataService.AddRewards(player, 90, 35, 20)
 			elseif isEnemyTurfGuard then
 				PlayerDataService.AddRewards(player, 65, 25, 15)
 			else
-				local bountyAttr = hitModel:GetAttribute("BountyGold")
-				local bounty = if typeof(bountyAttr) == "number" then bountyAttr else 45
-				PlayerDataService.AddRewards(player, bounty, math.floor(bounty * 0.55), math.floor(bounty * 0.28))
+				local goldAttr = hitModel:GetAttribute("BountyGold")
+				local expAttr = hitModel:GetAttribute("BountyExp")
+				local repAttr = hitModel:GetAttribute("BountyRep")
+				local g = if typeof(goldAttr) == "number" then goldAttr else 50
+				local e = if typeof(expAttr) == "number" then expAttr else math.floor(g * 0.55)
+				local r = if typeof(repAttr) == "number" then repAttr else math.floor(g * 0.28)
+				PlayerDataService.AddRewards(player, g, e, r)
 			end
-			grantKillAmmoBonus(player)
+			grantKillAmmoBonus(player, usedWeaponId)
+			SyndicateContractService.RecordProgress(player, "EliminateHostiles", 1)
 		end
 		return true
 	end
@@ -694,65 +790,12 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 			emitCombatSFX("MeleeHit", hitPos, nil)
 			if targetHum.Health <= 0 then
 				PlayerDataService.AddRewards(player, 50, 25, 15)
-				grantKillAmmoBonus(player)
+				grantKillAmmoBonus(player, usedWeaponId)
 			end
 			return true
 		end
 	end
 	return false
-end
-
-local function findMagneticTargetAlongRay(
-	shooter: Player,
-	shooterRoot: BasePart,
-	origin: Vector3,
-	dir: Vector3,
-	range: number,
-	magnetRadius: number
-): (Model?, Vector3?)
-	local bestModel: Model? = nil
-	local bestPos: Vector3? = nil
-	local bestScore = math.huge
-
-	local function consider(model: Model): ()
-		local hum = model:FindFirstChildOfClass("Humanoid")
-		local r = model:FindFirstChild("HumanoidRootPart") or model.PrimaryPart
-		if not hum or hum.Health <= 0 or not r or not r:IsA("BasePart") then
-			return
-		end
-		local toTarget = r.Position - origin
-		local proj = toTarget:Dot(dir)
-		if proj < -2 or proj > (range + 6) then
-			return
-		end
-		local closestPoint = origin + dir * math.clamp(proj, 0, range)
-		local perpDist = (r.Position - closestPoint).Magnitude
-		if perpDist <= magnetRadius then
-			local score = perpDist * 3 + math.max(0, proj) * 0.12
-			if score < bestScore then
-				bestScore = score
-				bestModel = model
-				bestPos = r.Position
-			end
-		end
-	end
-
-	for _, m in ipairs(CollectionService:GetTagged("MafiaUnit")) do
-		if m:IsA("Model") then consider(m) end
-	end
-	for _, m in ipairs(CollectionService:GetTagged("RivalAIUnit")) do
-		if m:IsA("Model") then consider(m) end
-	end
-	for _, other in ipairs(Players:GetPlayers()) do
-		if other ~= shooter and other.Character then
-			local oRoot = other.Character:FindFirstChild("HumanoidRootPart")
-			if oRoot and oRoot:IsA("BasePart") and not isInsideOwnBase(other, oRoot.Position) and not isInsideOwnBase(shooter, shooterRoot.Position) then
-				consider(other.Character)
-			end
-		end
-	end
-
-	return bestModel, bestPos
 end
 
 local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, shotSeq: any): ()
@@ -763,8 +806,7 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 	if not spec or spec.Kind ~= "Weapon" then
 		return
 	end
-	local profile = PlayerDataService.GetProfile(player)
-	if not (profile.OwnedWeapons and profile.OwnedWeapons[weaponId]) then
+	if not playerOwnsWeapon(player, weaponId) then
 		return
 	end
 
@@ -775,19 +817,18 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 		return
 	end
 
-	-- Verify player actually has this weapon equipped
 	if getEquippedWeaponIdForPlayer(player) ~= weaponId then
 		return
 	end
 
-	local st = ensureWeaponAmmo(player, weaponId)
+	local st = ensureWeaponMag(player, weaponId)
 	if not st then
 		return
 	end
 
 	local ackSeq = if typeof(shotSeq) == "number" then shotSeq else nil
 
-	-- If reloading: allow interrupting shell-by-shell shotgun reload when at least 1 shell is chambered
+	-- If reloading: allow interrupting shell-by-shell shotgun reload when >= 1 shell is chambered
 	if st.Reloading then
 		if spec.ReloadStyle == "ShellByShell" and st.Mag >= 1 then
 			cancelReload(player, weaponId, true)
@@ -797,7 +838,7 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 		end
 	end
 
-	-- Prevent firing when magazine/tube is empty
+	-- Authoritatively block firing when magazine/tube is empty
 	if st.Mag <= 0 then
 		sendWeaponAmmoSync(player, "DryFire", weaponId, { AckSeq = ackSeq })
 		return
@@ -805,7 +846,7 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 
 	local now = os.clock()
 	local cd = spec.Cooldown or 0.35
-	if lastFireAt[player] and (now - lastFireAt[player]) < (cd * 0.80) then
+	if lastFireAt[player] and (now - lastFireAt[player]) < (cd * 0.78) then
 		return
 	end
 	lastFireAt[player] = now
@@ -820,6 +861,7 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 	local range = spec.Range or 95
 	local pellets = spec.Pellets or 1
 	local dmg = spec.Damage or 25
+	local spread = spec.Spread or (if pellets > 1 then 0.072 else 0.014)
 
 	local rawDir = aimPoint - origin
 	if rawDir.Magnitude < 0.2 then
@@ -827,14 +869,13 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 	end
 	local baseDir = rawDir.Unit
 
-	-- Broadcast gunshot audio to OTHER nearby players only (shooter plays 0ms local audio immediately!)
-	local sfxType = if weaponId == "PepperShotgun" then "ShotgunBlast" elseif weaponId == "TacticalSMG" then "SMGShot" else "PistolShot"
+	-- Broadcast gunshot audio to OTHER players only (local shooter plays 0ms audio instantly on trigger!)
+	local sfxType = spec.AudioKey or "PistolShot"
 	emitCombatSFX(sfxType, origin, player)
 
-	-- Exclude player character + player's own motorbike so shooting while riding never hits your own bike!
 	local ignoreList: { Instance } = { char }
 	for _, ch in ipairs(Workspace:GetChildren()) do
-		if ch.Name == "SportMotorbike_" .. player.Name or ch.Name == "FoodEmpireGuideArrow" then
+		if ch.Name == "SportMotorbike_" .. player.Name or ch.Name == "FoodEmpireGuideArrow" or ch.Name == "BulletTracer" then
 			table.insert(ignoreList, ch)
 		end
 	end
@@ -843,8 +884,7 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 	rayParams.FilterType = Enum.RaycastFilterType.Exclude
 	rayParams.FilterDescendantsInstances = ignoreList
 
-	for p = 1, pellets do
-		local spread = if pellets > 1 then 0.075 else 0.014
+	for _ = 1, pellets do
 		local dir = (baseDir + Vector3.new((math.random() - 0.5) * spread, (math.random() - 0.5) * spread, (math.random() - 0.5) * spread)).Unit
 		local result = Workspace:Raycast(origin, dir * range, rayParams)
 		local hitPos = if result then result.Position else (origin + dir * range)
@@ -853,11 +893,17 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 		if result and result.Instance then
 			local hitModel = result.Instance:FindFirstAncestorOfClass("Model")
 			if hitModel then
-				didHit = applyBulletHit(player, root, hitModel, hitPos, dmg)
+				didHit = applyBulletHit(player, root, hitModel, hitPos, dmg, weaponId)
 			end
 		end
 
-		BlackMarketService.SpawnBulletTracer(origin, hitPos, if didHit then Color3.fromRGB(255, 118, 62) else Color3.fromRGB(255, 224, 92))
+		local tracerCol = if didHit
+			then Color3.fromRGB(255, 108, 56)
+			elseif weaponId == "GoldenEmperorPistol" then Color3.fromRGB(255, 224, 96)
+			elseif weaponId == "CrimsonDragonAR" then Color3.fromRGB(255, 86, 104)
+			elseif weaponId == "ShadowSniper" then Color3.fromRGB(196, 138, 255)
+			else Color3.fromRGB(255, 224, 92)
+		BlackMarketService.SpawnBulletTracer(origin, hitPos, tracerCol)
 	end
 end
 
@@ -869,8 +915,7 @@ local function handleWeaponReload(player: Player, weaponId: any, action: any): (
 	if not spec or spec.Kind ~= "Weapon" then
 		return
 	end
-	local profile = PlayerDataService.GetProfile(player)
-	if not (profile.OwnedWeapons and profile.OwnedWeapons[weaponId]) then
+	if not playerOwnsWeapon(player, weaponId) then
 		return
 	end
 
@@ -890,22 +935,23 @@ local function handleWeaponReload(player: Player, weaponId: any, action: any): (
 		return
 	end
 
-	local st = ensureWeaponAmmo(player, weaponId)
+	local st = ensureWeaponMag(player, weaponId)
 	if not st or st.Reloading then
 		return
 	end
 
+	local ammoType = spec.AmmoType or "Pistol9mm"
+	local ammoSpec = WeaponConfig.AMMO_TYPES[ammoType]
+	local reserveMax = if ammoSpec then ammoSpec.MaxReserve else 96
 	local magSize = spec.MagSize or 12
-	local reserveMax = spec.ReserveMax or 96
+	local curReserve = PlayerDataService.GetAmmo(player, ammoType)
 
-	-- Free ammo restock if player reloads while standing inside their own Castle Base safe-zone
-	if st.Reserve < reserveMax and isInsideOwnBase(player, root.Position) then
-		st.Reserve = reserveMax
-		syncToolAmmoAttributes(player, weaponId)
-	end
-
-	if st.Mag >= magSize or st.Reserve <= 0 then
+	if st.Mag >= magSize then
 		sendWeaponAmmoSync(player, "Update", weaponId, nil)
+		return
+	end
+	if curReserve <= 0 then
+		sendWeaponAmmoSync(player, "NoReserve", weaponId, nil)
 		return
 	end
 
@@ -915,9 +961,9 @@ local function handleWeaponReload(player: Player, weaponId: any, action: any): (
 	syncToolAmmoAttributes(player, weaponId)
 
 	if spec.ReloadStyle == "ShellByShell" then
-		local startTime = spec.ShellStartTime or 0.22
-		local shellTime = spec.ShellLoadTime or 0.44
-		local finishTime = spec.ShellFinishTime or 0.28
+		local startTime = spec.ShellStartTime or 0.20
+		local shellTime = spec.ShellLoadTime or 0.48
+		local finishTime = spec.ShellFinishTime or 0.24
 
 		sendWeaponAmmoSync(player, "ReloadStart", weaponId, {
 			ReloadStyle = "ShellByShell",
@@ -928,7 +974,11 @@ local function handleWeaponReload(player: Player, weaponId: any, action: any): (
 
 		task.spawn(function()
 			task.wait(startTime)
-			while st.Reloading and st.ReloadToken == token and st.Mag < magSize and st.Reserve > 0 do
+			while st.Reloading and st.ReloadToken == token and st.Mag < magSize do
+				local liveRes = PlayerDataService.GetAmmo(player, ammoType)
+				if liveRes <= 0 then
+					break
+				end
 				local curChar = player.Character
 				local curHum = if curChar then curChar:FindFirstChildOfClass("Humanoid") else nil
 				if not player.Parent or not curHum or curHum.Health <= 0 or getEquippedWeaponIdForPlayer(player) ~= weaponId then
@@ -948,11 +998,18 @@ local function handleWeaponReload(player: Player, weaponId: any, action: any): (
 					return
 				end
 
-				st.Mag = math.min(magSize, st.Mag + 1)
-				st.Reserve = math.max(0, st.Reserve - 1)
-				syncToolAmmoAttributes(player, weaponId)
+				liveRes = PlayerDataService.GetAmmo(player, ammoType)
+				if liveRes <= 0 then
+					break
+				end
 
-				local hasMore = (st.Mag < magSize and st.Reserve > 0)
+				st.Mag = math.min(magSize, st.Mag + 1)
+				PlayerDataService.SetAmmo(player, ammoType, liveRes - 1, reserveMax)
+				syncToolAmmoAttributes(player, weaponId)
+				syncAllWeaponsForAmmoType(player, ammoType, weaponId)
+
+				local nextRes = PlayerDataService.GetAmmo(player, ammoType)
+				local hasMore = (st.Mag < magSize and nextRes > 0)
 				sendWeaponAmmoSync(player, "ShellLoaded", weaponId, {
 					ReloadStyle = "ShellByShell",
 					HasMore = hasMore,
@@ -994,17 +1051,47 @@ local function handleWeaponReload(player: Player, weaponId: any, action: any): (
 				return
 			end
 
+			local liveRes = PlayerDataService.GetAmmo(player, ammoType)
 			local needed = magSize - st.Mag
-			local loaded = math.min(needed, st.Reserve)
+			local loaded = math.min(needed, liveRes)
 			st.Mag += loaded
-			st.Reserve -= loaded
+			PlayerDataService.SetAmmo(player, ammoType, liveRes - loaded, reserveMax)
 			st.Reloading = false
 			syncToolAmmoAttributes(player, weaponId)
+			syncAllWeaponsForAmmoType(player, ammoType, weaponId)
 			sendWeaponAmmoSync(player, "ReloadComplete", weaponId, {
 				ReloadStyle = "Magazine",
 			})
 		end)
 	end
+end
+
+-- Dedicated Server-Authoritative Ammunition Purchasing (3 Pack Quantities per Caliber!)
+function BlackMarketService.BuyAmmo(player: Player, ammoTypeRaw: string, packIndex: number): (boolean, string)
+	local ammoSpec = WeaponConfig.AMMO_TYPES[ammoTypeRaw :: WeaponConfig.AmmoTypeId]
+	if not ammoSpec then
+		return false, "Unknown ammunition caliber!"
+	end
+	local idx = math.floor(packIndex)
+	local pack = ammoSpec.Packs[idx]
+	if not pack then
+		return false, "Invalid ammunition pack quantity!"
+	end
+
+	local cur = PlayerDataService.GetAmmo(player, ammoSpec.Id)
+	if cur >= ammoSpec.MaxReserve then
+		return false, string.format("%s reserve is already full (%d / %d)!", ammoSpec.ShortName, cur, ammoSpec.MaxReserve)
+	end
+
+	if not PlayerDataService.SpendCoins(player, pack.Price) then
+		return false, string.format("Need %d Gold for +%d %s!", pack.Price, pack.Quantity, ammoSpec.ShortName)
+	end
+
+	local newVal = PlayerDataService.AddAmmo(player, ammoSpec.Id, pack.Quantity, ammoSpec.MaxReserve)
+	local added = newVal - cur
+	syncAllWeaponsForAmmoType(player, ammoSpec.Id, nil)
+
+	return true, string.format("Bought +%d %s (%d / %d reserve).", added, ammoSpec.ShortName, newVal, ammoSpec.MaxReserve)
 end
 
 function BlackMarketService.BuyItem(player: Player, itemId: string): (boolean, string)
@@ -1014,15 +1101,28 @@ function BlackMarketService.BuyItem(player: Player, itemId: string): (boolean, s
 	end
 
 	local profile = PlayerDataService.GetProfile(player)
-	if spec.Kind == "Weapon" and profile.OwnedWeapons and profile.OwnedWeapons[itemId] then
-		grantOwnedGearToPlayer(player, false)
-		local refilled = refillWeaponAmmo(player, itemId, true)
-		return true, if refilled
-			then (spec.DisplayName .. " ready & ammo refilled to full!")
-			else (spec.DisplayName .. " equipped to your hotbar!")
+
+	-- Optional Robux Weapons -> verify duplicate prevention & delegate securely to MonetizationService
+	if spec.RobuxItemId then
+		if playerOwnsWeapon(player, itemId) then
+			grantOwnedGearToPlayer(player, false)
+			return true, spec.DisplayName .. " is already unlocked and ready in your hotbar!"
+		end
+		return MonetizationService.TryPromptPurchase(player, spec.RobuxItemId)
 	end
+
+	if spec.Kind == "Weapon" and playerOwnsWeapon(player, itemId) then
+		grantOwnedGearToPlayer(player, false)
+		return true, spec.DisplayName .. " is already owned and ready in your hotbar!"
+	end
+
 	if spec.Kind == "Armor" and (profile.Armor or 0) >= 100 then
 		return false, "Your Kevlar Armor is already full (100 / 100)!"
+	end
+
+	local reqLv = spec.RequiredLevel or 1
+	if profile.Level < reqLv then
+		return false, string.format("Requires Player Lv.%d to unlock %s!", reqLv, spec.DisplayName)
 	end
 
 	if not PlayerDataService.SpendCoins(player, spec.Price) then
@@ -1031,14 +1131,27 @@ function BlackMarketService.BuyItem(player: Player, itemId: string): (boolean, s
 
 	if spec.Kind == "Weapon" then
 		PlayerDataService.UnlockWeapon(player, itemId)
-		grantOwnedGearToPlayer(player, true)
-		return true, string.format("%s %s bought with full ammo! Equip & press R to reload!", spec.Icon, spec.DisplayName)
+		-- Ensure first-time buyer has at least starter reserve of that caliber
+		local ammoType = spec.AmmoType or "Pistol9mm"
+		local ammoSpec = WeaponConfig.AMMO_TYPES[ammoType]
+		if ammoSpec then
+			local curRes = PlayerDataService.GetAmmo(player, ammoType)
+			if curRes < ammoSpec.StarterReserve then
+				PlayerDataService.SetAmmo(player, ammoType, ammoSpec.StarterReserve, ammoSpec.MaxReserve)
+			end
+		end
+		local st = ensureWeaponMag(player, itemId)
+		if st then
+			st.Mag = spec.MagSize or 12
+		end
+		grantOwnedGearToPlayer(player, false)
+		return true, string.format("%s unlocked with full magazine. Press [R] to reload.", spec.DisplayName)
 	elseif spec.Kind == "Armor" then
 		PlayerDataService.SetArmor(player, 100)
 		syncCharacterArmor(player)
-		return true, "🛡️ Kevlar Chef Armor equipped (100 / 100 Armor)! Absorbs damage until broken!"
+		return true, "Kevlar Chef Armor equipped (100 / 100 Armor). Absorbs damage until broken."
 	else
-		-- Medkit consumable (heals Base 100 HP + speed boost without giving free armor!)
+		-- Medkit consumable (heals Base 100 HP + 6s speed boost without granting free armor)
 		local char = player.Character
 		local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
 		if hum and hum.Health > 0 then
@@ -1053,7 +1166,7 @@ function BlackMarketService.BuyItem(player: Player, itemId: string): (boolean, s
 				end
 			end)
 		end
-		return true, "💊 Flash-Spice Medkit used! Full HP + Speed Boost!"
+		return true, "Flash-Spice Medkit used. Full HP restored + 6s speed boost."
 	end
 end
 
@@ -1075,15 +1188,25 @@ function BlackMarketService.TeleportToBlackMarket(player: Player): (boolean, str
 		player:RequestStreamAroundAsync(warpPos)
 	end)
 	char:PivotTo(CFrame.lookAt(warpPos, lookPos))
-	refillAllOwnedAmmo(player, false)
-	return true, "🕶️ Arrived at the Underground Black Market! Ammo reserves topped up!"
+	return true, "Arrived at the Underground Black Market."
 end
 
 function BlackMarketService.GetCatalogPayload(player: Player): { [string]: any }
 	local profile = PlayerDataService.GetProfile(player)
 	local armor = math.clamp(math.floor(profile.Armor or 0), 0, 100)
+	local ownedMap: { [string]: boolean } = {}
+	for _, wid in ipairs(WeaponConfig.WEAPON_ORDER) do
+		if playerOwnsWeapon(player, wid) then
+			ownedMap[wid] = true
+		end
+	end
+	local ammoCopy: { [string]: number } = {}
+	for _, aid in ipairs(WeaponConfig.AMMO_ORDER) do
+		ammoCopy[aid] = PlayerDataService.GetAmmo(player, aid)
+	end
 	return {
-		OwnedWeapons = profile.OwnedWeapons or {},
+		OwnedWeapons = ownedMap,
+		AmmoInventory = ammoCopy,
 		HasKevlarVest = armor > 0,
 		Armor = armor,
 	}
@@ -1131,7 +1254,6 @@ function BlackMarketService.Start(): ()
 		table.insert(
 			conns,
 			prompt.Triggered:Connect(function(player)
-				refillAllOwnedAmmo(player, false)
 				if openUiEv then
 					openUiEv:FireClient(player)
 				end
@@ -1182,7 +1304,7 @@ function BlackMarketService.Start(): ()
 		conns,
 		Players.PlayerRemoving:Connect(function(p)
 			lastFireAt[p] = nil
-			playerAmmo[p] = nil
+			playerMagState[p] = nil
 			if charConns[p] then charConns[p]:Disconnect(); charConns[p] = nil end
 			if charRemoveConns[p] then charRemoveConns[p]:Disconnect(); charRemoveConns[p] = nil end
 		end)
@@ -1191,22 +1313,7 @@ function BlackMarketService.Start(): ()
 		hookPlayer(p)
 	end
 
-	-- Gentle periodic base-safezone reserve ammo restock (every 3s)
-	task.spawn(function()
-		while isRunning do
-			task.wait(3)
-			if not isRunning then break end
-			for _, p in ipairs(Players:GetPlayers()) do
-				local char = p.Character
-				local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
-				if root and root:IsA("BasePart") and isInsideOwnBase(p, root.Position) then
-					refillAllOwnedAmmo(p, false)
-				end
-			end
-		end
-	end)
-
-	print("[Food Empire] BlackMarketService started (Guns, Authoritative Ammo & Reload, Kevlar Vest, Medkit & CombatSFX ready)!")
+	print("[Food Empire] BlackMarketService started (9 Weapons, 5 Ammo Calibers, Server Reload, Kevlar Armor & CombatSFX ready)!")
 end
 
 function BlackMarketService.Stop(): ()
@@ -1215,7 +1322,7 @@ function BlackMarketService.Stop(): ()
 	table.clear(conns)
 	for p, c in pairs(charConns) do c:Disconnect(); charConns[p] = nil end
 	for p, c in pairs(charRemoveConns) do c:Disconnect(); charRemoveConns[p] = nil end
-	table.clear(playerAmmo)
+	table.clear(playerMagState)
 end
 
 return BlackMarketService

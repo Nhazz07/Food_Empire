@@ -8,6 +8,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local TurfConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("TurfConfig")
 )
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local BlackMarketService = require("./BlackMarketService")
@@ -422,15 +425,27 @@ local function buildTurfAgentModel(
 	hum.Health = maxHp
 	hum.WalkSpeed = if isBoss then 15.5 elseif kind == "MafiaRaider" then 18.5 else 16.0
 	hum.HipHeight = 2.55 * scale
+	hum.BreakJointsOnDeath = false
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	configureLightweightHumanoid(hum)
 	hum.Parent = model
+
+	hum.Died:Connect(function()
+		MafiaVisualBuilder.PlayDeathSequence(model, isBoss, function(impactPos: Vector3)
+			BlackMarketService.BroadcastSFX("BodyDrop", impactPos)
+		end)
+	end)
 
 	hum.HealthChanged:Connect(function(hp: number)
 		local cur = math.max(0, math.ceil(hp))
 		local maxH = math.max(1, math.ceil(hum.MaxHealth))
 		hpFill.Size = UDim2.fromScale(math.clamp(hp / maxH, 0, 1), 1)
-		hpText.Text = string.format("❤️ %d / %d", cur, maxH)
+		hpText.Text = string.format("%d / %d", cur, maxH)
+		if hp <= 0 then
+			MafiaVisualBuilder.PlayDeathSequence(model, isBoss, function(impactPos: Vector3)
+				BlackMarketService.BroadcastSFX("BodyDrop", impactPos)
+			end)
+		end
 	end)
 
 	local ownerUidStr = string.match(factionId, "^Player_(%d+)$")
@@ -1403,10 +1418,9 @@ function TurfService.Start(): ()
 				local a = activeAgents[i]
 				if not a.Model.Parent or a.Humanoid.Health <= 0 then
 					lastGuardDiedAt[a.HomeBlockId] = t
-					if a.Model.Parent then
-						local dying = a.Model
-						task.delay(2.5, function()
-							if dying.Parent then dying:Destroy() end
+					if a.Model.Parent and a.Model:GetAttribute("IsDying") ~= true then
+						MafiaVisualBuilder.PlayDeathSequence(a.Model, a.IsBoss, function(impactPos: Vector3)
+							BlackMarketService.BroadcastSFX("BodyDrop", impactPos)
 						end)
 					end
 					table.remove(activeAgents, i)

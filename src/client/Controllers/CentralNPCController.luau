@@ -32,35 +32,36 @@ local npcFolder: Folder? = nil
 local rigs: { LimbRig } = {}
 
 local SKIN_TONES = {
-	Color3.fromRGB(246, 212, 178),
-	Color3.fromRGB(224, 178, 138),
-	Color3.fromRGB(178, 128, 92),
-	Color3.fromRGB(252, 224, 198),
+	Color3.fromRGB(224, 188, 156),
+	Color3.fromRGB(204, 166, 134),
+	Color3.fromRGB(168, 124, 92),
+	Color3.fromRGB(234, 202, 174),
 }
 
 local OUTFIT_COLORS = {
-	Color3.fromRGB(238, 92, 78),
-	Color3.fromRGB(58, 152, 224),
-	Color3.fromRGB(246, 178, 48),
-	Color3.fromRGB(84, 178, 86),
-	Color3.fromRGB(164, 94, 224),
-	Color3.fromRGB(244, 126, 168),
-	Color3.fromRGB(246, 246, 250), -- Chef white
-	Color3.fromRGB(48, 178, 174),
+	Color3.fromRGB(48, 52, 62),
+	Color3.fromRGB(92, 42, 46),
+	Color3.fromRGB(78, 62, 48),
+	Color3.fromRGB(46, 62, 54),
+	Color3.fromRGB(62, 56, 72),
+	Color3.fromRGB(116, 88, 64),
+	Color3.fromRGB(228, 226, 220), -- Tailored Chef
+	Color3.fromRGB(42, 58, 72),
 }
 
 local PANTS_COLORS = {
-	Color3.fromRGB(48, 56, 74),
-	Color3.fromRGB(72, 64, 56),
-	Color3.fromRGB(42, 74, 108),
-	Color3.fromRGB(62, 68, 78),
+	Color3.fromRGB(32, 36, 44),
+	Color3.fromRGB(48, 42, 38),
+	Color3.fromRGB(30, 44, 62),
+	Color3.fromRGB(40, 42, 48),
 }
 
 local HAIR_COLORS = {
-	Color3.fromRGB(58, 38, 26),
-	Color3.fromRGB(184, 128, 56),
-	Color3.fromRGB(34, 34, 40),
-	Color3.fromRGB(142, 66, 38),
+	Color3.fromRGB(46, 30, 20),
+	Color3.fromRGB(132, 92, 44),
+	Color3.fromRGB(24, 24, 28),
+	Color3.fromRGB(98, 52, 32),
+	Color3.fromRGB(124, 126, 132),
 }
 
 local CHAT_LINES = {
@@ -108,55 +109,67 @@ local function buildNPCModel(parent: Instance, index: number, rng: Random, start
 	local hair = HAIR_COLORS[rng:NextInteger(1, #HAIR_COLORS)]
 	local isChef = (index % 4 == 0)
 
-	-- Charming stylized 1.25x proportion NPC
+	-- Realistic human-proportioned citizen with SpecialMesh Head, face, tailored coat, collar, belt & footwear
 	local root = makePart(m, "Root", Vector3.new(1, 1, 1), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic, nil)
 	root.Transparency = 1
-	local torso = makePart(m, "Torso", Vector3.new(2.2, 2.5, 1.2), if isChef then Color3.fromRGB(248, 248, 252) else shirt, Enum.Material.SmoothPlastic, nil)
-	local head = makePart(m, "Head", Vector3.new(1.75, 1.75, 1.75), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	local leftArm = makePart(m, "LeftArm", Vector3.new(0.85, 2.2, 0.85), if isChef then Color3.fromRGB(248, 248, 252) else shirt, Enum.Material.SmoothPlastic, nil)
-	local rightArm = makePart(m, "RightArm", Vector3.new(0.85, 2.2, 0.85), if isChef then Color3.fromRGB(248, 248, 252) else shirt, Enum.Material.SmoothPlastic, nil)
-	local leftLeg = makePart(m, "LeftLeg", Vector3.new(0.95, 2.3, 0.95), pants, Enum.Material.SmoothPlastic, nil)
-	local rightLeg = makePart(m, "RightLeg", Vector3.new(0.95, 2.3, 0.95), pants, Enum.Material.SmoothPlastic, nil)
+	local coatCol = if isChef then Color3.fromRGB(232, 230, 224) else shirt
+	local torso = makePart(m, "Torso", Vector3.new(2.05, 2.35, 1.12), coatCol, Enum.Material.Fabric, nil)
+	local collar = makePart(m, "Collar", Vector3.new(1.55, 0.42, 1.16), if isChef then Color3.fromRGB(122, 28, 34) else Color3.fromRGB(214, 210, 202), Enum.Material.Fabric, nil)
+	local belt = makePart(m, "Belt", Vector3.new(2.10, 0.24, 1.18), Color3.fromRGB(22, 22, 26), Enum.Material.Leather, nil)
 
-	-- Hat or Hair accessory welded logically via head CFrame each step? Easier: WeldConstraint to Head (unanchored? No, keep Anchored = false? Wait: Anchored parts don't move with WeldConstraints! So attach accessories using a tiny table or just weld? Even cleaner: position hat directly or put a tiny Face + Hat inside a local update! Actually: make Hair/Hat a Decal + SpecialMesh or simple hat part updated from headCF — super cheap for 16 NPCs!)
-	-- Even simpler & super crisp: cute eyes on Head via SurfaceGui/Decal? No, let's attach Hat directly as a child part positioned from headCF!
-	local hat: Part? = nil
+	local head = makePart(m, "Head", Vector3.new(1.26, 1.28, 1.26), skin, Enum.Material.SmoothPlastic, nil)
+	local hm = Instance.new("SpecialMesh")
+	hm.MeshType = Enum.MeshType.Head
+	hm.Scale = Vector3.new(1.18, 1.16, 1.18)
+	hm.Parent = head
+	local faceBand = makePart(m, "FaceEyes", Vector3.new(0.76, 0.14, 0.08), Color3.fromRGB(24, 24, 28), Enum.Material.SmoothPlastic, nil)
+
+	local leftArm = makePart(m, "LeftArm", Vector3.new(0.78, 2.15, 0.78), coatCol, Enum.Material.Fabric, nil)
+	local rightArm = makePart(m, "RightArm", Vector3.new(0.78, 2.15, 0.78), coatCol, Enum.Material.Fabric, nil)
+	local leftLeg = makePart(m, "LeftLeg", Vector3.new(0.86, 2.28, 0.88), pants, Enum.Material.Fabric, nil)
+	local rightLeg = makePart(m, "RightLeg", Vector3.new(0.86, 2.28, 0.88), pants, Enum.Material.Fabric, nil)
+
+	local hat: Part
 	if isChef then
-		hat = makePart(m, "ChefHat", Vector3.new(1.5, 1.35, 1.5), Color3.fromRGB(252, 252, 255), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		hat = makePart(m, "ChefHat", Vector3.new(0.82, 1.38, 1.38), Color3.fromRGB(238, 236, 232), Enum.Material.Fabric, Enum.PartType.Cylinder)
+		hat:SetAttribute("IsChefHat", true)
+	elseif index % 5 == 0 then
+		hat = makePart(m, "FedoraHat", Vector3.new(0.45, 1.86, 1.86), Color3.fromRGB(32, 34, 40), Enum.Material.Fabric, Enum.PartType.Cylinder)
+		hat:SetAttribute("IsFedora", true)
 	else
-		hat = makePart(m, "HairCap", Vector3.new(1.85, 0.85, 1.85), hair, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		hat = makePart(m, "HairCap", Vector3.new(1.34, 0.44, 1.38), hair, Enum.Material.SmoothPlastic, nil)
 	end
-	if hat then
-		hat:SetAttribute("IsChefHat", isChef)
-	end
+	collar:SetAttribute("IsAccessory", true)
+	belt:SetAttribute("IsAccessory", true)
+	faceBand:SetAttribute("IsAccessory", true)
 
-	-- Friendly floating foodie chat bubble (shown briefly when pausing at shops!)
+	-- Dark-noir refined citizen chat bubble
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "CitizenChat"
-	bb.Size = UDim2.fromOffset(185, 34)
-	bb.StudsOffset = Vector3.new(0, 2.6, 0)
-	bb.MaxDistance = 72
+	bb.Size = UDim2.fromOffset(188, 32)
+	bb.StudsOffset = Vector3.new(0, 2.2, 0)
+	bb.MaxDistance = 68
 	bb.Enabled = false
 	bb.Parent = head
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(255, 250, 236)
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
 	lbl.BackgroundTransparency = 0.08
-	lbl.Font = Enum.Font.GothamBold
+	lbl.Font = Enum.Font.GothamMedium
 	lbl.Text = ""
-	lbl.TextColor3 = Color3.fromRGB(40, 36, 48)
-	lbl.TextSize = 13
+	lbl.TextColor3 = Color3.fromRGB(228, 224, 216)
+	lbl.TextSize = 11
 	lbl.TextWrapped = true
 	lbl.Parent = bb
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 10)
+	corner.CornerRadius = UDim.new(0, 5)
 	corner.Parent = lbl
 
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(230, 196, 128)
-	stroke.Thickness = 2
+	stroke.Color = Color3.fromRGB(64, 68, 78)
+	stroke.Thickness = 1.2
 	stroke.Parent = lbl
 
 	m.PrimaryPart = root
@@ -190,25 +203,34 @@ local function updateRigPose(rig: LimbRig, isWalking: boolean)
 
 	local baseCF = CFrame.new(rig.CurrentPos.X, PLATFORM_Y + bob, rig.CurrentPos.Z) * CFrame.Angles(0, rig.FacingYaw, 0)
 	rig.RootPart.CFrame = baseCF * CFrame.new(0, 3.4, 0)
-	rig.Torso.CFrame = baseCF * CFrame.new(0, 3.55, 0)
+	rig.Torso.CFrame = baseCF * CFrame.new(0, 3.48, 0)
 
-	local headCF = baseCF * CFrame.new(0, 5.65, 0)
+	local collar = rig.Model:FindFirstChild("Collar")
+	if collar and collar:IsA("BasePart") then collar.CFrame = baseCF * CFrame.new(0, 4.46, -0.02) end
+	local belt = rig.Model:FindFirstChild("Belt")
+	if belt and belt:IsA("BasePart") then belt.CFrame = baseCF * CFrame.new(0, 2.42, 0) end
+
+	local headCF = baseCF * CFrame.new(0, 5.42, 0)
 	rig.Head.CFrame = headCF
+	local faceEyes = rig.Model:FindFirstChild("FaceEyes")
+	if faceEyes and faceEyes:IsA("BasePart") then faceEyes.CFrame = headCF * CFrame.new(0, 0.12, -0.60) end
 
-	local hat = rig.Model:FindFirstChild("ChefHat") or rig.Model:FindFirstChild("HairCap")
+	local hat = rig.Model:FindFirstChild("ChefHat") or rig.Model:FindFirstChild("FedoraHat") or rig.Model:FindFirstChild("HairCap")
 	if hat and hat:IsA("BasePart") then
 		if hat:GetAttribute("IsChefHat") then
-			hat.CFrame = headCF * CFrame.new(0, 1.05, 0) * CFrame.Angles(0, 0, math.rad(90))
+			hat.CFrame = headCF * CFrame.new(0, 0.92, 0) * CFrame.Angles(0, 0, math.rad(90))
+		elseif hat:GetAttribute("IsFedora") then
+			hat.CFrame = headCF * CFrame.new(0, 0.66, 0) * CFrame.Angles(0, 0, math.rad(90))
 		else
-			hat.CFrame = headCF * CFrame.new(0, 0.52, 0.12)
+			hat.CFrame = headCF * CFrame.new(0, 0.54, 0.06)
 		end
 	end
 
 	-- Pivot arms from shoulder & legs from hip for crisp natural walking swing
-	rig.LeftArm.CFrame = baseCF * CFrame.new(-1.55, 4.45, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -0.95, 0)
-	rig.RightArm.CFrame = baseCF * CFrame.new(1.55, 4.45, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -0.95, 0)
-	rig.LeftLeg.CFrame = baseCF * CFrame.new(-0.55, 2.3, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -1.15, 0)
-	rig.RightLeg.CFrame = baseCF * CFrame.new(0.55, 2.3, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -1.15, 0)
+	rig.LeftArm.CFrame = baseCF * CFrame.new(-1.42, 4.38, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -0.92, 0)
+	rig.RightArm.CFrame = baseCF * CFrame.new(1.42, 4.38, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -0.92, 0)
+	rig.LeftLeg.CFrame = baseCF * CFrame.new(-0.52, 2.28, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -1.14, 0)
+	rig.RightLeg.CFrame = baseCF * CFrame.new(0.52, 2.28, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -1.14, 0)
 end
 
 local function makeCircleWaypoints(radius: number, count: number, reverse: boolean): { Vector3 }

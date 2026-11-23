@@ -7,6 +7,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local WarehouseConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WarehouseConfig")
 )
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
 local WarehouseService = require("./WarehouseService")
 local PlayerDataService = require("./PlayerDataService")
 
@@ -168,62 +171,36 @@ local function spawnCentralMarketTrader(): ()
 	local old = plaza:FindFirstChild("CentralMarketTrader")
 	if old then old:Destroy() end
 
-	local npc = Instance.new("Model")
-	npc.Name = "CentralMarketTrader"
-
 	-- Positioned right in front of the Grand FOOD EMPIRE Royal Hall overlooking the Fountain
-	local pos = Vector3.new(0, 1.5, -42)
-	local body = Instance.new("Part")
-	body.Name = "Torso"
-	body.Size = Vector3.new(2.4, 3.0, 1.4)
-	body.CFrame = CFrame.new(pos + Vector3.new(0, 2.2, 0))
-	body.Color = Color3.fromRGB(234, 168, 28)
-	body.Material = Enum.Material.SmoothPlastic
-	body.Anchored = true
-	body.CanCollide = true
-	body.Parent = npc
-
-	local head = Instance.new("Part")
-	head.Name = "Head"
-	head.Shape = Enum.PartType.Ball
-	head.Size = Vector3.new(2.0, 2.0, 2.0)
-	head.CFrame = body.CFrame * CFrame.new(0, 2.4, 0)
-	head.Color = Color3.fromRGB(246, 212, 178)
-	head.Material = Enum.Material.SmoothPlastic
-	head.Anchored = true
-	head.CanCollide = false
-	head.Parent = npc
-
-	local hat = Instance.new("Part")
-	hat.Name = "MerchantHat"
-	hat.Shape = Enum.PartType.Cylinder
-	hat.Size = Vector3.new(1.5, 2.5, 2.5)
-	hat.CFrame = head.CFrame * CFrame.new(0, 1.5, 0) * CFrame.Angles(0, 0, math.rad(90))
-	hat.Color = Color3.fromRGB(142, 68, 212)
-	hat.Material = Enum.Material.SmoothPlastic
-	hat.Anchored = true
-	hat.CanCollide = false
-	hat.Parent = npc
+	local pos = Vector3.new(0, 4.2, -42)
+	local rig = MafiaVisualBuilder.BuildMarketBrokerRig("CentralMarketTrader", CFrame.new(pos) * CFrame.Angles(0, math.pi, 0))
+	local npc = rig.Model
+	local body = rig.Root
+	local head = rig.Head
 
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(180, 38)
-	bb.StudsOffset = Vector3.new(0, 3.2, 0)
+	bb.Size = UDim2.fromOffset(186, 34)
+	bb.StudsOffset = Vector3.new(0, 3.0, 0)
 	bb.MaxDistance = 120
 	bb.Parent = head
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(48, 32, 18)
-	lbl.BackgroundTransparency = 0.1
-	lbl.Font = Enum.Font.FredokaOne
-	lbl.Text = "CENTRAL MARKET TRADER"
-	lbl.TextScaled = true
-	lbl.TextColor3 = Color3.fromRGB(255, 224, 96)
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
+	lbl.BackgroundTransparency = 0.08
+	lbl.Font = Enum.Font.GothamBlack
+	lbl.Text = "MARKET SYNDICATE BROKER"
+	lbl.TextSize = 10
+	lbl.TextColor3 = Color3.fromRGB(214, 186, 118)
 	lbl.Parent = bb
 
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 8)
+	c.CornerRadius = UDim.new(0, 5)
 	c.Parent = lbl
+	local bst = Instance.new("UIStroke")
+	bst.Color = Color3.fromRGB(68, 72, 82)
+	bst.Thickness = 1.2
+	bst.Parent = lbl
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "BuySupplyPackPrompt"

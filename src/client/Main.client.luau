@@ -20,7 +20,9 @@ local MotorbikeController = require(controllersFolder:WaitForChild("MotorbikeCon
 local BaseSelectController = require(controllersFolder:WaitForChild("BaseSelectController"))
 local FishingController = require(controllersFolder:WaitForChild("FishingController"))
 local WeaponController = require(controllersFolder:WaitForChild("WeaponController"))
+local HotbarController = require(controllersFolder:WaitForChild("HotbarController"))
 local NightController = require(controllersFolder:WaitForChild("NightController"))
+local SpinWheelController = require(controllersFolder:WaitForChild("SpinWheelController"))
 
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local stateSync = remotes:WaitForChild("StateSync") :: RemoteEvent
@@ -41,6 +43,7 @@ local function applyState(state: { [string]: any }): ()
 	WaypointController.Update(state)
 	BaseSelectController.Update(state)
 	UrbanNPCController.Update(state)
+	SpinWheelController.Update(state)
 end
 
 local function sendAction(action: string, arg: any?): ()
@@ -66,11 +69,11 @@ local function sendAction(action: string, arg: any?): ()
 	end
 	if not response.Success then
 		AudioController.PlayError()
-	elseif action == "ServeFood" then
+	elseif action == "ServeFood" or action == "BuyAmmo" then
 		AudioController.PlayCoins()
 	elseif action == "CookRecipe" or action == "ServeCustomerOrder" then
 		AudioController.PlayCook()
-	elseif action == "BuyRobuxItem" or action == "BuyMotorbikeCoins" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireRaider" or action == "HireBodyguard" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
+	elseif action == "BuyRobuxItem" or action == "BuyMotorbikeCoins" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireWaiter" or action == "HireCourier" or action == "BuyCentralParkBranch" or action == "ToggleCentralParkStaff" or action == "DefendCentralParkBranch" or action == "StartSmugglerConvoy" or action == "StartGangWarDrop" or action == "TriggerBikeTurbo" or action == "ClaimSyndicateContract" or action == "HireRaider" or action == "HireBodyguard" or action == "RecruitBodyguard" or action == "BuyGuardGear" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
 		AudioController.PlayFanfare()
 	elseif action ~= "GetState" and action ~= "SetSprint" then
 		AudioController.PlayClick()
@@ -78,6 +81,7 @@ local function sendAction(action: string, arg: any?): ()
 end
 
 local function openAndVisitBlackMarket(): ()
+	WeaponController.ExitScope()
 	AudioController.PlayClick()
 	task.spawn(sendAction, "TeleportBlackMarket", nil)
 	EmpireMenuController.ToggleTab("BlackMarket")
@@ -85,6 +89,7 @@ end
 
 -- Initialize HUD, Tabbed Empire Menu, Minimap, Feedback VFX, Guide Arrow & Ambient Windmill/Boats
 local hudGui = HUDController.Init(function(tab)
+	WeaponController.ExitScope()
 	if tab == "BlackMarket" then
 		openAndVisitBlackMarket()
 		return
@@ -102,6 +107,7 @@ end, function()
 end)
 
 EmpireMenuController.Init(hudGui, sendAction)
+SpinWheelController.Init(hudGui, applyState)
 BaseSelectController.Init(hudGui, function(slot)
 	sendAction("ChooseBase", slot)
 end)
@@ -119,6 +125,7 @@ MotorbikeController.Start()
 WeaponController.Start(function()
 	EmpireMenuController.ToggleTab("BlackMarket")
 end)
+HotbarController.Init()
 
 -- Keyboard shortcuts (C = Kitchen, B = Warehouses, U = Upgrades, H = Base, G = Guide Arrow, LeftShift = Sprint)
 UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
@@ -126,13 +133,17 @@ UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: 
 		return
 	end
 	if input.KeyCode == Enum.KeyCode.C then
+		WeaponController.ExitScope()
 		EmpireMenuController.ToggleTab("Kitchen")
 	elseif input.KeyCode == Enum.KeyCode.B then
+		WeaponController.ExitScope()
 		EmpireMenuController.ToggleTab("Warehouses")
 	elseif input.KeyCode == Enum.KeyCode.U then
+		WeaponController.ExitScope()
 		AudioController.PlayClick()
 		EmpireMenuController.ToggleTab("Upgrades")
 	elseif input.KeyCode == Enum.KeyCode.P then
+		WeaponController.ExitScope()
 		AudioController.PlayClick()
 		EmpireMenuController.ToggleTab("Shop")
 	elseif input.KeyCode == Enum.KeyCode.M then

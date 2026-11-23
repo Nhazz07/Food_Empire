@@ -6,6 +6,7 @@ local CollectionService = game:GetService("CollectionService")
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local BlackMarketService = require("./BlackMarketService")
+local SyndicateContractService = require("./SyndicateContractService")
 
 local CombatService = {}
 
@@ -141,17 +142,21 @@ local function createGoldenSpatulaTool(owner: Player): Tool
 				local enemyRoot = unit:FindFirstChild("HumanoidRootPart")
 				if enemyHum and enemyHum.Health > 0 and enemyRoot and enemyRoot:IsA("BasePart") then
 					if (enemyRoot.Position - root.Position).Magnitude <= ATTACK_RANGE then
+						local pushDir = enemyRoot.Position - root.Position
+						if pushDir.Magnitude > 0.01 then
+							unit:SetAttribute("LastHitDir", pushDir.Unit)
+						end
 						enemyHum:TakeDamage(ATTACK_DAMAGE)
 						spawnHitBurst(enemyRoot.Position)
 						BlackMarketService.BroadcastSFX("MeleeHit", enemyRoot.Position)
 
-						local pushDir = enemyRoot.Position - root.Position
-						if pushDir.Magnitude > 0.01 then
+						if enemyHum.Health > 0 and pushDir.Magnitude > 0.01 then
 							enemyRoot.AssemblyLinearVelocity = pushDir.Unit * 28 + Vector3.new(0, 12, 0)
 						end
 
 						if enemyHum.Health <= 0 then
 							PlayerDataService.AddRewards(owner, RIVAL_KILL_COINS, RIVAL_KILL_EXP, RIVAL_KILL_REP)
+							SyndicateContractService.RecordProgress(owner, "EliminateHostiles", 1)
 						end
 					end
 				end
@@ -181,6 +186,7 @@ local function createGoldenSpatulaTool(owner: Player): Tool
 							else
 								PlayerDataService.AddRewards(owner, MAFIA_KILL_COINS, MAFIA_KILL_EXP, MAFIA_KILL_REP)
 							end
+							SyndicateContractService.RecordProgress(owner, "EliminateHostiles", 1)
 						end
 					end
 				end

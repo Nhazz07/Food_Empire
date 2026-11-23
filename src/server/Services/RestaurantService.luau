@@ -10,6 +10,9 @@ local RecipeConfig = require(
 local WarehouseConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WarehouseConfig")
 )
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
 local BaseService = require("./BaseService")
 local WarehouseService = require("./WarehouseService")
 local PlayerDataService = require("./PlayerDataService")
@@ -26,6 +29,9 @@ local BodyguardService = require("./BodyguardService")
 local BlackMarketService = require("./BlackMarketService")
 local DayNightService = require("./DayNightService")
 local TurfService = require("./TurfService")
+local CentralParkBranchService = require("./CentralParkBranchService")
+local SpinEventService = require("./SpinEventService")
+local SyndicateContractService = require("./SyndicateContractService")
 
 type KitchenState = {
 	IsCooking: boolean,
@@ -60,6 +66,23 @@ local DEFENSE_UPGRADE_COSTS: { [number]: number } = {
 }
 
 local CUSTOMER_NAMES = { "Alex", "Mia", "Leo", "Chloe", "Kai", "Zoe", "Noah", "Lily", "Sam", "Nora" }
+local VIP_CRITIC_NAMES = { "[VIP] Don Vittore", "[CRITIC] M. Laurent", "[VIP] Capo Sterling", "[CRITIC] Chef Vane" }
+local SPECIALTY_RECIPE_IDS: { [string]: boolean } = {
+	FreshSushi = true,
+	SizzlingSteak = true,
+	CrabFeast = true,
+	EmperorPlatter = true,
+	GoldenTunaSashimi = true,
+	KingCrabPlatter = true,
+}
+local STAR_TITLES: { [number]: string } = {
+	[1] = "1-STAR STREET DINER",
+	[2] = "2-STAR NEIGHBORHOOD BISTRO",
+	[3] = "3-STAR SYNDICATE GRILL",
+	[4] = "4-STAR GRAND BRASSERIE",
+	[5] = "5-STAR IMPERIAL PALACE",
+}
+local specialtyCookCounts: { [Player]: number } = {}
 local HOUSE_SPECIALS: { { Name: string, Gold: number, Rep: number, Color: Color3 } } = {
 	{ Name = "Crispy Fish Skewers", Gold = 14, Rep = 3, Color = Color3.fromRGB(78, 192, 234) },
 	{ Name = "Chef's Island Soup", Gold = 12, Rep = 3, Color = Color3.fromRGB(246, 178, 62) },
@@ -71,6 +94,35 @@ local kitchens: { [Player]: KitchenState } = {}
 local waitingOrders: { [Player]: WaitingOrder } = {}
 local orderCounters: { [Player]: number } = {}
 local receiptHistory: { [Player]: { ReceiptEntry } } = {}
+
+function RestaurantService.GetRestaurantStarInfo(player: Player): { [string]: any }
+	local prof = PlayerDataService.GetProfile(player)
+	local served = orderCounters[player] or 0
+	local specCount = specialtyCookCounts[player] or 0
+	local stars = 1
+	if prof.RestaurantLevel >= 2 or served >= 2 then
+		stars += 1
+	end
+	if CrewService.GetCrewCount(player) >= 1 and CrewService.GetWaiterCount(player) >= 1 then
+		stars += 1
+	end
+	if prof.OwnsCentralParkBranch or specCount >= 2 or served >= 5 then
+		stars += 1
+	end
+	if prof.RestaurantLevel >= 3 or prof.Reputation >= 200 or specCount >= 4 then
+		stars += 1
+	end
+	stars = math.clamp(stars, 1, 5)
+	local mult = 1.0 + (stars - 1) * 0.125
+	return {
+		Stars = stars,
+		Title = STAR_TITLES[stars] or "1-STAR STREET DINER",
+		BonusPct = math.floor((mult - 1.0) * 100 + 0.5),
+		Multiplier = mult,
+		DishesServed = served,
+		SpecialtyCount = specCount,
+	}
+end
 local customerModels: { [Player]: { Model } } = {}
 local platterModels: { [Player]: { Model } } = {}
 local isRunning = false
@@ -343,105 +395,46 @@ local function buildWalkingCustomerModel(
 	parent: Instance,
 	custName: string,
 	spawnPos: Vector3,
-	shirtColor: Color3,
-	hairColor: Color3
+	styleIdx: number
 ): (Model, Humanoid, BasePart, TextLabel)
-	local cust = Instance.new("Model")
-	cust.Name = "CityCustomer_" .. custName
-
-	local function cPart(name: string, sz: Vector3, col: Color3, shape: Enum.PartType?, collide: boolean): Part
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = sz
-		p.Color = col
-		p.Material = Enum.Material.SmoothPlastic
-		if shape then p.Shape = shape end
-		p.CanCollide = collide
-		p.CanTouch = false
-		p.CanQuery = false
-		p.Massless = not collide
-		p.TopSurface = Enum.SurfaceType.Smooth
-		p.BottomSurface = Enum.SurfaceType.Smooth
-		p.Parent = cust
-		return p
-	end
-
-	local function weldTo(p0: BasePart, p1: BasePart, rel: CFrame): ()
-		p1.CFrame = p0.CFrame * rel
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = p0
-		w.Part1 = p1
-		w.Parent = p1
-	end
-
-	local function makeJoint(name: string, p0: BasePart, p1: BasePart, c0: CFrame, c1: CFrame): ()
-		p1.CFrame = p0.CFrame * c0 * c1:Inverse()
-		local m = Instance.new("Motor6D")
-		m.Name = name
-		m.Part0 = p0
-		m.Part1 = p1
-		m.C0 = c0
-		m.C1 = c1
-		m.Parent = p0
-	end
-
-	local skin = Color3.fromRGB(246, 212, 178)
-	local root = cPart("HumanoidRootPart", Vector3.new(2.2, 2.6, 1.3), shirtColor, nil, true)
-	root.CFrame = CFrame.new(spawnPos)
-
-	local head = cPart("Head", Vector3.new(1.85, 1.85, 1.85), skin, Enum.PartType.Ball, false)
-	weldTo(root, head, CFrame.new(0, 2.2, 0))
-	local hair = cPart("Hair", Vector3.new(1.95, 0.9, 1.95), hairColor, Enum.PartType.Ball, false)
-	weldTo(head, hair, CFrame.new(0, 0.55, 0.1))
-	local eyeL = cPart("EyeL", Vector3.new(0.22, 0.24, 0.12), Color3.fromRGB(24, 24, 30), Enum.PartType.Ball, false)
-	weldTo(head, eyeL, CFrame.new(-0.32, 0.08, -0.88))
-	local eyeR = cPart("EyeR", Vector3.new(0.22, 0.24, 0.12), Color3.fromRGB(24, 24, 30), Enum.PartType.Ball, false)
-	weldTo(head, eyeR, CFrame.new(0.32, 0.08, -0.88))
-
-	local leftArm = cPart("LeftArm", Vector3.new(0.85, 2.3, 0.85), shirtColor, nil, false)
-	makeJoint("LeftArmJoint", root, leftArm, CFrame.new(-1.55, 1.0, 0), CFrame.new(0, 1.0, 0))
-	local rightArm = cPart("RightArm", Vector3.new(0.85, 2.3, 0.85), shirtColor, nil, false)
-	makeJoint("RightArmJoint", root, rightArm, CFrame.new(1.55, 1.0, 0), CFrame.new(0, 1.0, 0))
-
-	local leftLeg = cPart("LeftLeg", Vector3.new(0.95, 2.35, 0.95), Color3.fromRGB(52, 60, 78), nil, false)
-	makeJoint("LeftLegJoint", root, leftLeg, CFrame.new(-0.55, -1.3, 0), CFrame.new(0, 1.15, 0))
-	local leftShoe = cPart("LeftShoe", Vector3.new(1.02, 0.55, 1.3), Color3.fromRGB(30, 32, 40), nil, false)
-	weldTo(leftLeg, leftShoe, CFrame.new(0, -1.12, -0.15))
-
-	local rightLeg = cPart("RightLeg", Vector3.new(0.95, 2.35, 0.95), Color3.fromRGB(52, 60, 78), nil, false)
-	makeJoint("RightLegJoint", root, rightLeg, CFrame.new(0.55, -1.3, 0), CFrame.new(0, 1.15, 0))
-	local rightShoe = cPart("RightShoe", Vector3.new(1.02, 0.55, 1.3), Color3.fromRGB(30, 32, 40), nil, false)
-	weldTo(rightLeg, rightShoe, CFrame.new(0, -1.12, -0.15))
+	local rig = MafiaVisualBuilder.BuildCustomerRig("CityCustomer_" .. custName, styleIdx, 1.0, CFrame.new(spawnPos))
+	local cust = rig.Model
+	local root = rig.Root
+	local head = rig.Head
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "CustomerBubble"
-	bb.Size = UDim2.fromOffset(210, 36)
-	bb.StudsOffset = Vector3.new(0, 3.2, 0)
-	bb.MaxDistance = 140
+	bb.Size = UDim2.fromOffset(214, 32)
+	bb.StudsOffset = Vector3.new(0, 2.35, 0)
+	bb.MaxDistance = 135
 	bb.Parent = head
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Name = "BubbleText"
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(255, 246, 214)
-	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = custName .. ": Heading in from the city!"
-	lbl.TextSize = 12
-	lbl.TextColor3 = Color3.fromRGB(54, 38, 22)
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 17, 21)
+	lbl.BackgroundTransparency = 0.08
+	lbl.Font = Enum.Font.GothamBold
+	lbl.Text = custName .. "  |  Arriving for dining"
+	lbl.TextSize = 11
+	lbl.TextColor3 = Color3.fromRGB(232, 228, 218)
 	lbl.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 8)
+	c.CornerRadius = UDim.new(0, 5)
 	c.Parent = lbl
+	local st = Instance.new("UIStroke")
+	st.Color = Color3.fromRGB(152, 126, 74)
+	st.Thickness = 1
+	st.Parent = lbl
 
 	local hum = Instance.new("Humanoid")
 	hum.MaxHealth = 100
 	hum.Health = 100
-	hum.WalkSpeed = 14 + math.random() * 2.5
-	hum.HipHeight = 2.45
+	hum.WalkSpeed = 14 + math.random() * 2.2
+	hum.HipHeight = 2.42
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.Parent = cust
 
-	cust.PrimaryPart = root
 	CollectionService:AddTag(cust, "AnimatedCustomerLimbs")
 	cust.Parent = parent
 	return cust, hum, root, lbl
@@ -466,32 +459,32 @@ local function setCustomerSeated(wc: WalkingCustomer, seated: boolean, seatWorld
 			wc.Root.CFrame = CFrame.lookAt(seatWorldPos, flatLook)
 		end
 		if leftLegJoint and leftLegJoint:IsA("Motor6D") then
-			leftLegJoint.C0 = CFrame.new(-0.55, -1.25, -0.15) * CFrame.Angles(math.rad(82), 0, 0)
+			leftLegJoint.C0 = CFrame.new(-0.51, -1.16, -0.15) * CFrame.Angles(math.rad(82), 0, 0)
 		end
 		if rightLegJoint and rightLegJoint:IsA("Motor6D") then
-			rightLegJoint.C0 = CFrame.new(0.55, -1.25, -0.15) * CFrame.Angles(math.rad(82), 0, 0)
+			rightLegJoint.C0 = CFrame.new(0.51, -1.16, -0.15) * CFrame.Angles(math.rad(82), 0, 0)
 		end
 		if leftArmJoint and leftArmJoint:IsA("Motor6D") then
-			leftArmJoint.C0 = CFrame.new(-1.55, 1.0, 0) * CFrame.Angles(math.rad(38), 0, 0)
+			leftArmJoint.C0 = CFrame.new(-1.41, 0.96, 0) * CFrame.Angles(math.rad(38), 0, 0)
 		end
 		if rightArmJoint and rightArmJoint:IsA("Motor6D") then
-			rightArmJoint.C0 = CFrame.new(1.55, 1.0, 0) * CFrame.Angles(math.rad(38), 0, 0)
+			rightArmJoint.C0 = CFrame.new(1.41, 0.96, 0) * CFrame.Angles(math.rad(38), 0, 0)
 		end
 	else
 		wc.Root.Anchored = false
-		wc.Humanoid.HipHeight = 2.45
+		wc.Humanoid.HipHeight = 2.42
 		wc.Humanoid.WalkSpeed = 15
 		if leftLegJoint and leftLegJoint:IsA("Motor6D") then
-			leftLegJoint.C0 = CFrame.new(-0.55, -1.3, 0)
+			leftLegJoint.C0 = CFrame.new(-0.51, -1.18, 0)
 		end
 		if rightLegJoint and rightLegJoint:IsA("Motor6D") then
-			rightLegJoint.C0 = CFrame.new(0.55, -1.3, 0)
+			rightLegJoint.C0 = CFrame.new(0.51, -1.18, 0)
 		end
 		if leftArmJoint and leftArmJoint:IsA("Motor6D") then
-			leftArmJoint.C0 = CFrame.new(-1.55, 1.0, 0)
+			leftArmJoint.C0 = CFrame.new(-1.41, 0.96, 0)
 		end
 		if rightArmJoint and rightArmJoint:IsA("Motor6D") then
-			rightArmJoint.C0 = CFrame.new(1.55, 1.0, 0)
+			rightArmJoint.C0 = CFrame.new(1.41, 0.96, 0)
 		end
 	end
 end
@@ -540,114 +533,36 @@ local function buildWaiterModel(
 	isFemale: boolean,
 	spawnPos: Vector3
 ): (Model, Humanoid, BasePart, TextLabel)
-	local npc = Instance.new("Model")
-	npc.Name = if isFemale then "RestaurantWaitress" else "RestaurantWaiter"
-
-	local function wPart(name: string, sz: Vector3, col: Color3, mat: Enum.Material?, shape: Enum.PartType?, collide: boolean): Part
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = sz
-		p.Color = col
-		p.Material = mat or Enum.Material.SmoothPlastic
-		if shape then p.Shape = shape end
-		p.CanCollide = collide
-		p.CanTouch = false
-		p.CanQuery = false
-		p.Massless = not collide
-		p.TopSurface = Enum.SurfaceType.Smooth
-		p.BottomSurface = Enum.SurfaceType.Smooth
-		p.Parent = npc
-		return p
-	end
-
-	local function weldTo(p0: BasePart, p1: BasePart, rel: CFrame): ()
-		p1.CFrame = p0.CFrame * rel
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = p0
-		w.Part1 = p1
-		w.Parent = p1
-	end
-
-	local function makeJoint(name: string, p0: BasePart, p1: BasePart, c0: CFrame, c1: CFrame): ()
-		p1.CFrame = p0.CFrame * c0 * c1:Inverse()
-		local m = Instance.new("Motor6D")
-		m.Name = name
-		m.Part0 = p0
-		m.Part1 = p1
-		m.C0 = c0
-		m.C1 = c1
-		m.Parent = p0
-	end
-
-	local skin = Color3.fromRGB(246, 212, 178)
-	local vestCol = Color3.fromRGB(32, 34, 42)
-	local shirtCol = Color3.fromRGB(250, 250, 255)
-	local tieCol = if isFemale then Color3.fromRGB(224, 58, 86) else Color3.fromRGB(218, 46, 46)
-	local hairCol = if isFemale then Color3.fromRGB(116, 62, 34) else Color3.fromRGB(34, 34, 42)
-
-	local root = wPart("HumanoidRootPart", Vector3.new(2.15, 2.55, 1.25), vestCol, nil, nil, true)
-	root.CFrame = CFrame.new(spawnPos)
-
-	-- Crisp white shirt collar, bow tie & bistro waist apron
-	local shirtV = wPart("ShirtFront", Vector3.new(0.85, 1.35, 1.32), shirtCol, nil, nil, false)
-	weldTo(root, shirtV, CFrame.new(0, 0.55, -0.02))
-	local bowTie = wPart("BowTie", Vector3.new(0.75, 0.28, 0.25), tieCol, nil, nil, false)
-	weldTo(root, bowTie, CFrame.new(0, 1.08, -0.68))
-	local apron = wPart("BistroApron", Vector3.new(2.26, 1.25, 1.36), shirtCol, Enum.Material.Fabric, nil, false)
-	weldTo(root, apron, CFrame.new(0, -0.82, 0))
-
-	-- Head & Hair
-	local head = wPart("Head", Vector3.new(1.82, 1.82, 1.82), skin, nil, Enum.PartType.Ball, false)
-	weldTo(root, head, CFrame.new(0, 2.18, 0))
-	local hair = wPart("Hair", Vector3.new(1.94, 0.92, 1.94), hairCol, nil, Enum.PartType.Ball, false)
-	weldTo(head, hair, CFrame.new(0, 0.55, 0.1))
-	if isFemale then
-		local bun = wPart("HairBun", Vector3.new(0.95, 0.95, 0.95), hairCol, nil, Enum.PartType.Ball, false)
-		weldTo(head, bun, CFrame.new(0, 0.62, 0.92))
-	end
-	local eyeL = wPart("EyeL", Vector3.new(0.22, 0.24, 0.12), Color3.fromRGB(24, 24, 30), nil, Enum.PartType.Ball, false)
-	weldTo(head, eyeL, CFrame.new(-0.32, 0.08, -0.88))
-	local eyeR = wPart("EyeR", Vector3.new(0.22, 0.24, 0.12), Color3.fromRGB(24, 24, 30), nil, Enum.PartType.Ball, false)
-	weldTo(head, eyeR, CFrame.new(0.32, 0.08, -0.88))
-
-	-- White shirt sleeves & articulated arms + silver serving tray!
-	local leftArm = wPart("LeftArm", Vector3.new(0.82, 2.25, 0.82), shirtCol, nil, nil, false)
-	makeJoint("LeftArmJoint", root, leftArm, CFrame.new(-1.52, 0.98, 0), CFrame.new(0, 0.98, 0))
-	local rightArm = wPart("RightArm", Vector3.new(0.82, 2.25, 0.82), shirtCol, nil, nil, false)
-	makeJoint("RightArmJoint", root, rightArm, CFrame.new(1.52, 0.98, 0), CFrame.new(0, 0.98, 0))
-
-	local silverTray = wPart("SilverTray", Vector3.new(0.14, 2.35, 2.35), Color3.fromRGB(214, 222, 232), Enum.Material.Metal, Enum.PartType.Cylinder, false)
-	weldTo(root, silverTray, CFrame.new(0, 0.32, -1.85) * CFrame.Angles(0, 0, math.rad(90)))
-
-	local leftLeg = wPart("LeftLeg", Vector3.new(0.92, 2.32, 0.92), vestCol, nil, nil, false)
-	makeJoint("LeftLegJoint", root, leftLeg, CFrame.new(-0.54, -1.28, 0), CFrame.new(0, 1.14, 0))
-	local leftShoe = wPart("LeftShoe", Vector3.new(0.98, 0.52, 1.26), Color3.fromRGB(20, 22, 28), nil, nil, false)
-	weldTo(leftLeg, leftShoe, CFrame.new(0, -1.1, -0.14))
-
-	local rightLeg = wPart("RightLeg", Vector3.new(0.92, 2.32, 0.92), vestCol, nil, nil, false)
-	makeJoint("RightLegJoint", root, rightLeg, CFrame.new(0.54, -1.28, 0), CFrame.new(0, 1.14, 0))
-	local rightShoe = wPart("RightShoe", Vector3.new(0.98, 0.52, 1.26), Color3.fromRGB(20, 22, 28), nil, nil, false)
-	weldTo(rightLeg, rightShoe, CFrame.new(0, -1.1, -0.14))
+	local modelName = if isFemale then "RestaurantWaitress" else "RestaurantWaiter"
+	local rig = MafiaVisualBuilder.BuildWaiterRig(modelName, isFemale, 1.02, CFrame.new(spawnPos))
+	local npc = rig.Model
+	local root = rig.Root
+	local head = rig.Head
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "StaffBadge"
-	bb.Size = UDim2.fromOffset(220, 34)
-	bb.StudsOffset = Vector3.new(0, 3.25, 0)
+	bb.Size = UDim2.fromOffset(214, 32)
+	bb.StudsOffset = Vector3.new(0, 2.4, 0)
 	bb.MaxDistance = 135
 	bb.Parent = head
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Name = "BubbleText"
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(22, 28, 42)
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 17, 21)
+	lbl.BackgroundTransparency = 0.08
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = roleTitle .. " " .. staffName .. " • Ready"
-	lbl.TextSize = 11
-	lbl.TextColor3 = Color3.fromRGB(255, 226, 118)
+	lbl.Text = roleTitle .. " " .. staffName .. "  |  READY"
+	lbl.TextSize = 10
+	lbl.TextColor3 = Color3.fromRGB(224, 198, 128)
 	lbl.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 8)
+	c.CornerRadius = UDim.new(0, 5)
 	c.Parent = lbl
+	local st = Instance.new("UIStroke")
+	st.Color = Color3.fromRGB(152, 126, 74)
+	st.Thickness = 1
+	st.Parent = lbl
 
 	local hum = Instance.new("Humanoid")
 	hum.MaxHealth = 120
@@ -657,7 +572,6 @@ local function buildWaiterModel(
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.Parent = npc
 
-	npc.PrimaryPart = root
 	CollectionService:AddTag(npc, "AnimatedCustomerLimbs")
 	npc.Parent = parent
 	return npc, hum, root, lbl
@@ -676,12 +590,21 @@ local function spawnWaitStaffForPlayer(player: Player): ()
 		end
 	end
 
+	-- Players start with 0 waiters and must hire them with Gold!
+	local hiredCount = CrewService.GetWaiterCount(player)
+	if hiredCount <= 0 then
+		activeWaitStaff[player] = {}
+		return
+	end
+
 	local staffDefs = {
-		{ Name = "Marco", Title = "🤵 Waiter", IsFemale = false, Home = Vector3.new(-6.0, 4.2, 12.0) },
-		{ Name = "Sofia", Title = "💁‍♀️ Waitress", IsFemale = true, Home = Vector3.new(6.0, 4.2, 12.0) },
+		{ Name = "Marco", Title = "WAITER", IsFemale = false, Home = Vector3.new(-6.0, 4.2, 12.0) },
+		{ Name = "Sofia", Title = "WAITRESS", IsFemale = true, Home = Vector3.new(6.0, 4.2, 12.0) },
+		{ Name = "Luca", Title = "HEAD WAITER", IsFemale = false, Home = Vector3.new(0.0, 4.2, 14.5) },
 	}
 	local list: { WaiterNPC } = {}
-	for _, def in ipairs(staffDefs) do
+	for i = 1, math.min(hiredCount, #staffDefs) do
+		local def = staffDefs[i]
 		local worldHome = (hq.PrimaryPart.CFrame * CFrame.new(def.Home)).Position
 		local model, hum, root, lbl = buildWaiterModel(baseModel, def.Name, def.Title, def.IsFemale, worldHome)
 		table.insert(list, {
@@ -736,11 +659,10 @@ local function spawnSingleCityCustomer(player: Player, startDistanceZ: number): 
 
 	local bCF = bp.CFrame
 	local custName = CUSTOMER_NAMES[math.random(1, #CUSTOMER_NAMES)]
-	local shirt = CUSTOMER_COLORS[math.random(1, #CUSTOMER_COLORS)]
-	local hair = HAIR_COLORS[math.random(1, #HAIR_COLORS)]
+	local styleIdx = math.random(1, 6)
 	local tableIdx = pickAvailableTableIndex(player)
 	local spot = FRONT_DINING_SPOTS[tableIdx] or FRONT_DINING_SPOTS[1]
-	local preferBenchWait = (#list % 2 == 1) -- Half sit directly at a dining bench waiting for Waiter/Waitress; half walk up to front counter!
+	local preferBenchWait = (#list % 2 == 1) -- Half sit directly at a dining bench waiting for service; half walk up to front counter!
 
 	-- Spawn out on the Central Market / City Boulevard approaching your Restaurant Plaza!
 	local spawnPos = (bCF * CFrame.new(math.random(-10, 10), 4.2, startDistanceZ)).Position
@@ -749,7 +671,7 @@ local function spawnSingleCityCustomer(player: Player, startDistanceZ: number): 
 	local seatPos = (bCF * CFrame.new(spot.SeatOffset)).Position
 	local tableLookPos = (bCF * CFrame.new(spot.TableOffset)).Position
 
-	local custModel, hum, root, bubble = buildWalkingCustomerModel(baseModel, custName, spawnPos, shirt, hair)
+	local custModel, hum, root, bubble = buildWalkingCustomerModel(baseModel, custName, spawnPos, styleIdx)
 	local wc: WalkingCustomer = {
 		Name = custName,
 		Model = custModel,
@@ -768,8 +690,9 @@ local function spawnSingleCityCustomer(player: Player, startDistanceZ: number): 
 		moveCustomerTo(wc, gatePos, 16)
 		if not wc.Model.Parent or not player.Parent or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 
+		local hasWaiter = CrewService.GetWaiterCount(player) > 0
 		if preferBenchWait then
-			wc.BubbleText.Text = custName .. ": Grabbing a dining seat!"
+			wc.BubbleText.Text = custName .. ": Taking a dining seat."
 			moveCustomerTo(wc, seatPos, 15)
 			if not wc.Model.Parent or not player.Parent or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			setCustomerSeated(wc, true, seatPos, tableLookPos)
@@ -779,10 +702,10 @@ local function spawnSingleCityCustomer(player: Player, startDistanceZ: number): 
 				ord.CustomerName = wc.Name
 				wc.BubbleText.Text = string.format("%s (Seated): 1x %s please!", wc.Name, ord.DishName)
 			else
-				wc.BubbleText.Text = custName .. ": Seated! Waiting for waiter!"
+				wc.BubbleText.Text = if hasWaiter then (custName .. ": Seated! Waiting for waiter.") else (custName .. ": Ready! Press [SERVE] or [E]!")
 			end
 		else
-			wc.BubbleText.Text = custName .. ": Entering the restaurant!"
+			wc.BubbleText.Text = custName .. ": Stepping into the restaurant."
 			moveCustomerTo(wc, counterPos, 14)
 			if not wc.Model.Parent or not player.Parent or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			wc.Phase = "Ordering"
@@ -791,7 +714,7 @@ local function spawnSingleCityCustomer(player: Player, startDistanceZ: number): 
 				ord.CustomerName = wc.Name
 				wc.BubbleText.Text = string.format("%s: 1x %s please!", wc.Name, ord.DishName)
 			else
-				wc.BubbleText.Text = custName .. ": Ready to order!"
+				wc.BubbleText.Text = if hasWaiter then (custName .. ": Ready to order!") else (custName .. ": Ready! Press [SERVE] or [E]!")
 			end
 		end
 		RestaurantService.PushStateToClient(player)
@@ -799,8 +722,12 @@ local function spawnSingleCityCustomer(player: Player, startDistanceZ: number): 
 end
 
 local function pickWaiterForPlayer(player: Player): WaiterNPC?
+	local hiredCount = CrewService.GetWaiterCount(player)
+	if hiredCount <= 0 then
+		return nil
+	end
 	local staff = activeWaitStaff[player]
-	if not staff or #staff == 0 then
+	if not staff or #staff ~= hiredCount then
 		spawnWaitStaffForPlayer(player)
 		staff = activeWaitStaff[player]
 	end
@@ -879,12 +806,12 @@ local function dispatchCustomerToEatAndLeave(player: Player, earnedGold: number,
 		customerSeatedReady = true
 	end)
 
-	-- Step 2: Dedicated Waiter or Waitress walks INSIDE Kitchen -> picks up distinct 3D plated dish -> serves it right onto the customer's table!
+	-- Step 2: Dedicated Hired Waiter or Waitress walks INSIDE Kitchen -> picks up distinct 3D plated dish -> serves it right onto the customer's table!
 	local waiter = pickWaiterForPlayer(player)
 	task.spawn(function()
 		if waiter and waiter.Model.Parent then
 			waiter.IsBusy = true
-			waiter.BubbleText.Text = string.format("🍽️ Picking up %s from Kitchen!", resolvedLabel)
+			waiter.BubbleText.Text = string.format("PICKING UP %s FROM KITCHEN", string.upper(resolvedLabel))
 			moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, kitchenPickupPos, 9, 4.5)
 
 			-- Attach the distinct 3D plated food right onto the Waiter's silver tray!
@@ -892,9 +819,9 @@ local function dispatchCustomerToEatAndLeave(player: Player, earnedGold: number,
 				if waiter.CarriedPlate and waiter.CarriedPlate.Parent then
 					waiter.CarriedPlate:Destroy()
 				end
-				local trayCF = waiter.Root.CFrame * CFrame.new(0, 0.42, -1.85)
+				local trayCF = waiter.Root.CFrame * CFrame.new(0, 0.38, -1.68)
 				waiter.CarriedPlate = buildDistinctFoodOnPlate(waiter.Model, trayCF, resolvedHint, waiter.Root)
-				waiter.BubbleText.Text = string.format("%s: Delivering %s to %s!", waiter.RoleTitle, resolvedLabel, servedCust.Name)
+				waiter.BubbleText.Text = string.format("%s  |  SERVING %s", waiter.Name, servedCust.Name)
 			end
 
 			-- Walk out to the customer's Front Dining Table!
@@ -914,17 +841,17 @@ local function dispatchCustomerToEatAndLeave(player: Player, earnedGold: number,
 			if servedCust.Model.Parent and baseModel.Parent then
 				local plateCF = CFrame.new(tablePos) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
 				servedCust.TableMeal = buildDistinctFoodOnPlate(baseModel, plateCF, resolvedHint, nil)
-				servedCust.BubbleText.Text = string.format("%s: Yum! %s (+%dG) ⭐", servedCust.Name, resolvedLabel, earnedGold)
+				servedCust.BubbleText.Text = string.format("%s: Excellent %s (+%dG)", servedCust.Name, resolvedLabel, earnedGold)
 			end
 
 			if waiter.Model.Parent then
-				waiter.BubbleText.Text = "✨ Enjoy your " .. resolvedLabel .. "!"
+				waiter.BubbleText.Text = "SERVED  |  " .. resolvedLabel
 				task.delay(0.8, function()
 					if waiter.Model.Parent and hq.PrimaryPart then
 						local homePos = (hq.PrimaryPart.CFrame * CFrame.new(waiter.HomeOffset)).Position
 						moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, homePos, 10, 3.8)
 						if waiter.Model.Parent then
-							waiter.BubbleText.Text = waiter.RoleTitle .. " " .. waiter.Name .. " • Ready"
+							waiter.BubbleText.Text = waiter.RoleTitle .. " " .. waiter.Name .. "  |  READY"
 						end
 					end
 					waiter.IsBusy = false
@@ -933,14 +860,14 @@ local function dispatchCustomerToEatAndLeave(player: Player, earnedGold: number,
 				waiter.IsBusy = false
 			end
 		else
-			-- Fallback if waiter unavailable: still place distinct dish directly on customer's table
+			-- Served personally by the Owner (before hiring Waiters)
 			local waitStart = os.clock()
 			while not customerSeatedReady and (os.clock() - waitStart) < 5 do
 				task.wait(0.2)
 			end
 			if servedCust.Model.Parent and baseModel.Parent then
 				servedCust.TableMeal = buildDistinctFoodOnPlate(baseModel, CFrame.new(tablePos), resolvedHint, nil)
-				servedCust.BubbleText.Text = string.format("%s: Yum! %s (+%dG) ⭐", servedCust.Name, resolvedLabel, earnedGold)
+				servedCust.BubbleText.Text = string.format("%s: Excellent %s (+%dG)", servedCust.Name, resolvedLabel, earnedGold)
 			end
 		end
 
@@ -1101,56 +1028,56 @@ local function spawnWarehouseFetchChef(
 		return
 	end
 
-	local runner = Instance.new("Model")
-	runner.Name = "WarehouseFetchChef"
 	local lookCF = CFrame.lookAt(startPos, endPos)
-
-	local function rPart(name: string, sz: Vector3, rel: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = sz
-		p.CFrame = lookCF * rel
-		p.Color = col
-		p.Material = mat
-		if shape then p.Shape = shape end
-		p.Anchored = true
-		p.CanCollide = false
-		p.CanTouch = false
-		p.CanQuery = false
-		p.Parent = runner
-		return p
+	local rig = MafiaVisualBuilder.BuildChefRig("WarehouseFetchChef", spec.AccentColor, 1.0, lookCF, false)
+	local runner = rig.Model
+	-- Pose arms forward carrying the Warehouse ingredient crate cleanly
+	local laj = rig.Root:FindFirstChild("LeftArmJoint")
+	local raj = rig.Root:FindFirstChild("RightArmJoint")
+	if laj and laj:IsA("Motor6D") then
+		laj.C0 = CFrame.new(-1.38, 0.85, -0.1) * CFrame.Angles(math.rad(68), 0, 0)
+	end
+	if raj and raj:IsA("Motor6D") then
+		raj.C0 = CFrame.new(1.38, 0.85, -0.1) * CFrame.Angles(math.rad(68), 0, 0)
 	end
 
-	local body = rPart("Torso", Vector3.new(2.1, 2.5, 1.3), CFrame.new(), Color3.fromRGB(252, 252, 255), Enum.Material.SmoothPlastic, nil)
-	rPart("Apron", Vector3.new(2.2, 1.35, 1.4), CFrame.new(0, -0.6, 0), spec.AccentColor, Enum.Material.SmoothPlastic, nil)
-	local head = rPart("Head", Vector3.new(1.8, 1.8, 1.8), CFrame.new(0, 2.15, 0), Color3.fromRGB(246, 212, 178), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	rPart("HatPuff", Vector3.new(2.2, 1.4, 2.2), CFrame.new(0, 3.6, 0), Color3.fromRGB(255, 255, 255), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	rPart("LeftArm", Vector3.new(0.75, 2.0, 0.75), CFrame.new(-1.35, 0.25, -0.8) * CFrame.Angles(math.rad(65), 0, 0), Color3.fromRGB(252, 252, 255), Enum.Material.SmoothPlastic, nil)
-	rPart("RightArm", Vector3.new(0.75, 2.0, 0.75), CFrame.new(1.35, 0.25, -0.8) * CFrame.Angles(math.rad(65), 0, 0), Color3.fromRGB(252, 252, 255), Enum.Material.SmoothPlastic, nil)
-	rPart("LeftLeg", Vector3.new(0.88, 2.2, 0.88), CFrame.new(-0.52, -2.2, 0), Color3.fromRGB(46, 52, 66), Enum.Material.SmoothPlastic, nil)
-	rPart("RightLeg", Vector3.new(0.88, 2.2, 0.88), CFrame.new(0.52, -2.2, 0), Color3.fromRGB(46, 52, 66), Enum.Material.SmoothPlastic, nil)
-	-- Carried Ingredient Supply Box from Warehouse!
-	rPart("CarriedCrate", Vector3.new(2.2, 1.6, 1.8), CFrame.new(0, 0.45, -1.9), spec.AccentColor, Enum.Material.WoodPlanks, nil)
+	-- Carried Ingredient Supply Crate from Warehouse!
+	rig.AddPart(rig.Root, "CarriedCrate", Vector3.new(1.95, 1.35, 1.55), CFrame.new(0, 0.32, -1.65), spec.AccentColor, Enum.Material.WoodPlanks, nil)
+
+	for _, desc in ipairs(runner:GetDescendants()) do
+		if desc:IsA("BasePart") then
+			desc.Anchored = (desc == rig.Root)
+			desc.Massless = (desc ~= rig.Root)
+			desc.CanCollide = false
+			desc.CanTouch = false
+			desc.CanQuery = false
+		end
+	end
 
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(220, 34)
-	bb.StudsOffset = Vector3.new(0, 3.2, 0)
+	bb.Size = UDim2.fromOffset(224, 30)
+	bb.StudsOffset = Vector3.new(0, 2.55, 0)
 	bb.MaxDistance = 120
-	bb.Parent = head
+	bb.Parent = rig.Head
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(22, 30, 46)
-	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = string.format("%s %s: %s -> %s", spec.Icon, chefLabel, spec.ShortLabel, dishName)
-	lbl.TextSize = 11
-	lbl.TextColor3 = Color3.fromRGB(255, 232, 134)
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 17, 21)
+	lbl.BackgroundTransparency = 0.08
+	lbl.Font = Enum.Font.GothamBold
+	lbl.Text = string.format("%s  |  %s -> %s", string.upper(chefLabel), string.upper(spec.ShortLabel), dishName)
+	lbl.TextSize = 10
+	lbl.TextColor3 = Color3.fromRGB(224, 198, 128)
 	lbl.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 6)
+	c.CornerRadius = UDim.new(0, 5)
 	c.Parent = lbl
+	local st = Instance.new("UIStroke")
+	st.Color = Color3.fromRGB(152, 126, 74)
+	st.Thickness = 1
+	st.Parent = lbl
 
-	runner.PrimaryPart = body
+	runner.PrimaryPart = rig.Root
 	runner.Parent = hq
 
 	task.spawn(function()
@@ -1161,7 +1088,7 @@ local function spawnWarehouseFetchChef(
 			end
 			local alpha = i / steps
 			local p = startPos:Lerp(endPos, alpha)
-			local bob = math.abs(math.sin(alpha * math.pi * 6)) * 0.45
+			local bob = math.abs(math.sin(alpha * math.pi * 6)) * 0.42
 			runner:PivotTo(CFrame.lookAt(p + Vector3.new(0, bob, 0), endPos + Vector3.new(0, bob, 0)))
 			task.wait(0.055)
 		end
@@ -1233,7 +1160,12 @@ local function printRestaurantReceipt(
 end
 
 local function spawnRandomCustomerOrder(player: Player): WaitingOrder
-	local cName = CUSTOMER_NAMES[math.random(1, #CUSTOMER_NAMES)]
+	local starInfo = RestaurantService.GetRestaurantStarInfo(player)
+	local isVipGuest = (starInfo.Stars >= 2 and math.random() < 0.38)
+	local cName = if isVipGuest
+		then VIP_CRITIC_NAMES[math.random(1, #VIP_CRITIC_NAMES)]
+		else CUSTOMER_NAMES[math.random(1, #CUSTOMER_NAMES)]
+	local vipMult = if isVipGuest then 1.65 else 1.0
 	local bestRecipe = RestaurantService.PickBestAvailableRecipe(player)
 	local order: WaitingOrder
 
@@ -1243,8 +1175,8 @@ local function spawnRandomCustomerOrder(player: Player): WaitingOrder
 			CustomerName = cName,
 			DishName = if spec then spec.DisplayName else bestRecipe,
 			RecipeId = bestRecipe,
-			BaseGold = if spec then spec.CoinsReward else 40,
-			BaseRep = if spec then spec.ReputationReward else 10,
+			BaseGold = math.floor((if spec then spec.CoinsReward else 40) * vipMult),
+			BaseRep = math.floor((if spec then spec.ReputationReward else 10) * vipMult),
 			IsBeingCooked = false,
 		}
 	else
@@ -1253,8 +1185,8 @@ local function spawnRandomCustomerOrder(player: Player): WaitingOrder
 			CustomerName = cName,
 			DishName = special.Name,
 			RecipeId = nil,
-			BaseGold = special.Gold,
-			BaseRep = special.Rep,
+			BaseGold = math.floor(special.Gold * vipMult),
+			BaseRep = math.floor(special.Rep * vipMult),
 			IsBeingCooked = false,
 		}
 	end
@@ -1344,6 +1276,9 @@ end
 
 local function setPlayerSprint(player: Player, enabled: boolean): (boolean, string)
 	if ScooterService.IsOnScooter(player) then
+		if enabled then
+			return ScooterService.TriggerTurbo(player)
+		end
 		return true, "OK"
 	end
 	local char = player.Character
@@ -1608,6 +1543,16 @@ local function buildClientPayload(player: Player): { [string]: any }
 		Sectors = sectorsSummary,
 		NextCrewCost = CrewService.GetNextHireCost(player),
 		MaxCrew = CrewService.GetMaxCrew(player),
+		WaiterCount = CrewService.GetWaiterCount(player),
+		MaxWaiters = CrewService.MAX_WAITERS,
+		NextWaiterCost = CrewService.GetNextWaiterCost(player),
+		CourierCount = DeliveryRunnerService.GetCourierCount(player),
+		MaxCouriers = DeliveryRunnerService.MAX_COURIERS,
+		NextCourierCost = DeliveryRunnerService.GetNextCourierCost(player),
+		CentralParkBranch = CentralParkBranchService.GetSnapshot(player),
+		SpinEvent = SpinEventService.GetSnapshot(player),
+		StarRating = RestaurantService.GetRestaurantStarInfo(player),
+		Syndicate = SyndicateContractService.GetSnapshot(player),
 		FoodEmperor = getFoodEmperor(),
 		OwnedPasses = MonetizationService.GetOwnedMap(player),
 		VIPOrder = VIPOrderService.GetOrderSnapshot(player),
@@ -1625,6 +1570,7 @@ local function buildClientPayload(player: Player): { [string]: any }
 		BodyguardCount = BodyguardService.GetGuardCount(player),
 		MaxBodyguards = BodyguardService.MAX_BODYGUARDS,
 		NextBodyguardCost = BodyguardService.GetNextCost(player),
+		Bodyguards = BodyguardService.GetBodyguardPayload(player),
 		DeliveryRunnerActive = DeliveryRunnerService.IsActive(player),
 		DeliveryRunnerCooldown = DeliveryRunnerService.GetCooldownRemaining(player),
 		BlackMarket = BlackMarketService.GetCatalogPayload(player),
@@ -1697,6 +1643,10 @@ function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolea
 		kitchen.ReadyDishes[recipeId] = (kitchen.ReadyDishes[recipeId] or 0) + 1
 		setGrillCookingVisual(player, false, nil)
 		syncCounterPlatters(player)
+		if SPECIALTY_RECIPE_IDS[recipeId] then
+			specialtyCookCounts[player] = (specialtyCookCounts[player] or 0) + 1
+			SyndicateContractService.RecordProgress(player, "SpecialtyFeast", 1)
+		end
 		updateCustomerSpeech(player, "Food Ready! Sell Now!")
 		print(string.format("[RestaurantService] %s finished cooking %s!", player.Name, recipe.DisplayName))
 		RestaurantService.PushStateToClient(player)
@@ -1720,6 +1670,9 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 	local eventRepMult = if typeof(eventRepMultAttr) == "number" then eventRepMultAttr else 1.0
 	local passCoinsMult = MonetizationService.GetPayoutMultiplier(player)
 	local passRepMult = MonetizationService.GetRepMultiplier(player)
+	local waiterTipMult = CrewService.GetWaiterTipMultiplier(player)
+	local starMult = RestaurantService.GetRestaurantStarInfo(player).Multiplier or 1.0
+	local rankMult = SyndicateContractService.GetRankPayoutMultiplier(player)
 	local totalCoins = 0
 	local totalExp = 0
 	local totalRep = 0
@@ -1731,15 +1684,16 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 		if recipe and qty > 0 then
 			servedCopy[recipeId] = qty
 			table.insert(dishNames, recipe.DisplayName)
-			totalCoins += math.floor(recipe.CoinsReward * tier.PayoutMultiplier * eventCoinsMult * passCoinsMult) * qty
+			totalCoins += math.floor(recipe.CoinsReward * tier.PayoutMultiplier * eventCoinsMult * passCoinsMult * waiterTipMult * starMult * rankMult) * qty
 			totalExp += recipe.ExpReward * qty
-			totalRep += math.floor(recipe.ReputationReward * eventRepMult * passRepMult) * qty
+			totalRep += math.floor(recipe.ReputationReward * eventRepMult * passRepMult * starMult) * qty
 		end
 	end
 
 	table.clear(kitchen.ReadyDishes)
 	clearPlatters(player)
 	PlayerDataService.AddRewards(player, totalCoins, totalExp, totalRep)
+	SyndicateContractService.RecordProgress(player, "CookDishes", totalDishes)
 	local vipCompleted, vipMsg = VIPOrderService.TryFulfillFromServed(player, servedCopy)
 	local custName = if waitingOrders[player] then waitingOrders[player].CustomerName else CUSTOMER_NAMES[math.random(1, #CUSTOMER_NAMES)]
 	local chefLabel = if MonetizationService.HasPass(player, "MasterProChef")
@@ -1811,12 +1765,25 @@ function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverrid
 
 	local profile = PlayerDataService.GetProfile(player)
 	local tier = RecipeConfig.RestaurantTiers[profile.RestaurantLevel] or RecipeConfig.RestaurantTiers[1]
-	local cookTime = if MonetizationService.HasPass(player, "MasterProChef") then 1.5 else 2.2
+	local speedMult = tier.CookSpeedMultiplier * CrewService.GetCookSpeedMultiplier(player) * MonetizationService.GetCookSpeedMultiplier(player)
+	local baseCookSec = 5.5
+	if order.RecipeId and RecipeConfig.Recipes[order.RecipeId] then
+		baseCookSec = RecipeConfig.Recipes[order.RecipeId].CookTime
+	end
+	local cookTime = math.max(1.8, baseCookSec / speedMult)
+	local kitchen = ensureKitchen(player)
+	kitchen.IsCooking = true
+	kitchen.CurrentRecipeId = order.RecipeId or order.DishName
+	kitchen.CookEndsAt = os.clock() + cookTime
+	RestaurantService.PushStateToClient(player)
 
 	task.delay(cookTime, function()
 		if not player.Parent then
 			return
 		end
+		kitchen.IsCooking = false
+		kitchen.CurrentRecipeId = nil
+		kitchen.CookEndsAt = 0
 		setGrillCookingVisual(player, false, nil)
 
 		local eventCoinsMultAttr = ReplicatedStorage:GetAttribute("ActiveEventCoinsMult")
@@ -1825,12 +1792,20 @@ function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverrid
 		local eventRepMult = if typeof(eventRepMultAttr) == "number" then eventRepMultAttr else 1.0
 		local passCoinsMult = MonetizationService.GetPayoutMultiplier(player)
 		local passRepMult = MonetizationService.GetRepMultiplier(player)
+		local waiterTipMult = CrewService.GetWaiterTipMultiplier(player)
+		local starMult = RestaurantService.GetRestaurantStarInfo(player).Multiplier or 1.0
+		local rankMult = SyndicateContractService.GetRankPayoutMultiplier(player)
 
-		local earnedGold = math.max(12, math.floor(order.BaseGold * tier.PayoutMultiplier * eventCoinsMult * passCoinsMult))
-		local earnedRep = math.max(4, math.floor(order.BaseRep * eventRepMult * passRepMult))
+		local earnedGold = math.max(12, math.floor(order.BaseGold * tier.PayoutMultiplier * eventCoinsMult * passCoinsMult * waiterTipMult * starMult * rankMult))
+		local earnedRep = math.max(4, math.floor(order.BaseRep * eventRepMult * passRepMult * starMult))
 		local earnedExp = math.max(10, math.floor(order.BaseGold * 0.4))
 
 		PlayerDataService.AddRewards(player, earnedGold, earnedExp, earnedRep)
+		SyndicateContractService.RecordProgress(player, "CookDishes", 1)
+		if usedRecipeId and SPECIALTY_RECIPE_IDS[usedRecipeId] then
+			specialtyCookCounts[player] = (specialtyCookCounts[player] or 0) + 1
+			SyndicateContractService.RecordProgress(player, "SpecialtyFeast", 1)
+		end
 		if usedRecipeId then
 			VIPOrderService.TryFulfillFromServed(player, { [usedRecipeId] = 1 })
 		end
@@ -2033,9 +2008,10 @@ local function setupRemotes(): ()
 	end
 
 	if actionFunc then
-		actionFunc.OnServerInvoke = function(player: Player, action: string, arg: any): { Success: boolean, Message: string, State: any }
+		actionFunc.OnServerInvoke = function(player: Player, action: string, arg: any): { Success: boolean, Message: string, SpinResult: any?, State: any }
 			local ok = false
 			local msg = "Invalid action"
+			local spinResult: any = nil
 
 			if action == "GetState" then
 				ok, msg = true, "OK"
@@ -2054,22 +2030,60 @@ local function setupRemotes(): ()
 				ok, msg = ExpressDeliveryService.AcceptDelivery(player)
 			elseif action == "HireBodyguard" then
 				ok, msg = BodyguardService.TryHireBodyguard(player)
+			elseif action == "RecruitBodyguard" and typeof(arg) == "table" and typeof(arg.ClassId) == "string" then
+				local slotIdx = if typeof(arg.SlotIndex) == "number" then arg.SlotIndex else nil
+				ok, msg = BodyguardService.TryRecruitClass(player, arg.ClassId, slotIdx)
+			elseif action == "BuyGuardGear" and typeof(arg) == "string" then
+				ok, msg = BodyguardService.TryBuyGear(player, arg)
+			elseif action == "EquipGuardGear" and typeof(arg) == "table" and typeof(arg.SlotIndex) == "number" and typeof(arg.GearId) == "string" then
+				ok, msg = BodyguardService.TryEquipGear(player, arg.SlotIndex, arg.GearId)
 			elseif action == "DispatchDeliveryRunner" then
 				ok, msg = DeliveryRunnerService.DispatchRunner(player)
+			elseif action == "HireCourier" then
+				ok, msg = DeliveryRunnerService.TryHireCourier(player)
+				if ok then SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1) end
+			elseif action == "HireWaiter" then
+				ok, msg = CrewService.TryHireWaiter(player)
+				if ok then SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1) end
+			elseif action == "BuyCentralParkBranch" then
+				ok, msg = CentralParkBranchService.TryBuyBranch(player)
+			elseif action == "ToggleCentralParkStaff" then
+				ok, msg = CentralParkBranchService.TryToggleStaff(player)
+			elseif action == "TeleportCentralParkBranch" then
+				ok, msg = CentralParkBranchService.TeleportToBranch(player)
+			elseif action == "DefendCentralParkBranch" then
+				ok, msg = CentralParkBranchService.TryDefendShakedown(player)
+			elseif action == "ClaimSyndicateContract" and typeof(arg) == "number" then
+				ok, msg = SyndicateContractService.ClaimOrRerollContract(player, math.floor(arg))
+			elseif action == "StartSmugglerConvoy" then
+				ok, msg = SyndicateContractService.StartSmugglerConvoy(player)
+			elseif action == "StartGangWarDrop" then
+				ok, msg = SyndicateContractService.StartGangWarDrop(player)
+			elseif action == "TriggerBikeTurbo" then
+				ok, msg = ScooterService.TriggerTurbo(player)
+			elseif action == "TeleportSpinWheel" then
+				ok, msg = SpinEventService.TeleportToWheel(player)
+			elseif action == "SpinMarketWheel" then
+				ok, msg, spinResult = SpinEventService.TrySpin(player)
 			elseif action == "BuyBlackMarketItem" and typeof(arg) == "string" then
 				ok, msg = BlackMarketService.BuyItem(player, arg)
+			elseif action == "BuyAmmo" and typeof(arg) == "table" and typeof(arg.AmmoType) == "string" and typeof(arg.PackIndex) == "number" then
+				ok, msg = BlackMarketService.BuyAmmo(player, arg.AmmoType, arg.PackIndex)
 			elseif action == "TeleportBlackMarket" then
 				ok, msg = BlackMarketService.TeleportToBlackMarket(player)
 			elseif action == "SkipDayNight" then
 				ok, msg = DayNightService.SkipPhase(player)
 			elseif action == "UpgradeRestaurant" then
 				ok, msg = RestaurantService.TryUpgradeRestaurant(player)
+				if ok then SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1) end
 			elseif action == "UpgradeWarehouse" and typeof(arg) == "string" and WarehouseConfig.Specs[arg :: WarehouseConfig.WarehouseCategory] then
 				ok, msg = WarehouseService.TryUpgradeWarehouse(player, arg :: WarehouseConfig.WarehouseCategory)
+				if ok then SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1) end
 			elseif action == "MoveWarehouse" and typeof(arg) == "string" and WarehouseConfig.Specs[arg :: WarehouseConfig.WarehouseCategory] then
 				ok, msg = WarehouseService.MoveWarehouseToNextPlot(player, arg :: WarehouseConfig.WarehouseCategory)
 			elseif action == "HireCrew" then
 				ok, msg = CrewService.TryHireCrew(player)
+				if ok then SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1) end
 			elseif action == "HireRaider" then
 				ok, msg = RaiderChefService.TryHireRaider(player)
 			elseif action == "UpgradeDefenses" then
@@ -2091,6 +2105,7 @@ local function setupRemotes(): ()
 			return {
 				Success = ok,
 				Message = msg,
+				SpinResult = spinResult,
 				State = buildClientPayload(player),
 			}
 		end
@@ -2106,17 +2121,37 @@ function RestaurantService.Start(): ()
 	setupRemotes()
 	wireRestaurantPrompts()
 
-	CrewService.SetAutoServeHandler(function(player)
+	-- True supply-chain separation:
+	-- 1) Hired Chefs ONLY fetch ingredients from Warehouse & cook plated food onto Kitchen Counter!
+	CrewService.SetAutoCookOnlyHandler(function(player)
 		local kitchen = ensureKitchen(player)
-		if countReadyDishes(kitchen) > 0 then
-			RestaurantService.ServeAllReadyDishes(player)
-		end
-		if not kitchen.IsCooking then
+		if not kitchen.IsCooking and countReadyDishes(kitchen) < 6 then
 			local best = RestaurantService.PickBestAvailableRecipe(player)
 			if best then
 				RestaurantService.CookRecipe(player, best)
 			end
 		end
+	end)
+
+	-- 2) Hired Waiters ONLY pick up ready plated dishes from Kitchen Counter & deliver them to seated Customers!
+	CrewService.SetAutoWaiterHandler(function(player)
+		local kitchen = ensureKitchen(player)
+		if countReadyDishes(kitchen) > 0 then
+			RestaurantService.ServeAllReadyDishes(player)
+		end
+	end)
+
+	CrewService.SetWaiterChangedHandler(function(player)
+		spawnWaitStaffForPlayer(player)
+		RestaurantService.PushStateToClient(player)
+	end)
+
+	CentralParkBranchService.SetChangedCallback(function(player)
+		RestaurantService.PushStateToClient(player)
+	end)
+
+	SyndicateContractService.SetChangedCallback(function(player)
+		RestaurantService.PushStateToClient(player)
 	end)
 
 	MonetizationService.SetAutoCookHandler(function(player)
@@ -2143,6 +2178,8 @@ function RestaurantService.Start(): ()
 
 	MonetizationService.SetPurchaseChangedHandler(function(player, msg)
 		RaiderChefService.SyncRaidersForPlayer(player)
+		BlackMarketService.SyncPlayerAmmoAndGear(player)
+		BodyguardService.RebuildGuardsForPlayer(player)
 		RestaurantService.PushStateToClient(player)
 		local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 		local toastEv = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
@@ -2236,8 +2273,10 @@ function RestaurantService.Start(): ()
 						spawnSingleCityCustomer(p, 215)
 					end
 					if ord and not ord.IsBeingCooked then
-						local hasChef = MonetizationService.HasPass(p, "MasterProChef") or CrewService.GetCrewCount(p) > 0
-						if hasChef then
+						local hasChef = CrewService.GetCrewCount(p) > 0
+						local hasWaiter = CrewService.GetWaiterCount(p) > 0
+						local hasProChef = MonetizationService.HasPass(p, "MasterProChef")
+						if (hasChef and hasWaiter) or hasProChef then
 							RestaurantService.ServeWaitingCustomerOrder(p, nil)
 						end
 					end

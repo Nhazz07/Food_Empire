@@ -7,21 +7,35 @@ local CollectionService = game:GetService("CollectionService")
 local RecipeConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("RecipeConfig")
 )
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local MonetizationService = require("./MonetizationService")
 
 export type AutoServeCallback = (player: Player) -> ()
+export type AutoCookOnlyCallback = (player: Player) -> ()
+export type AutoWaiterCallback = (player: Player) -> ()
+export type WaiterChangedCallback = (player: Player) -> ()
 
 local CrewService = {}
 
+CrewService.MAX_WAITERS = 3
+CrewService.WAITER_COSTS = { [1] = 200, [2] = 360, [3] = 540 }
+
 local CREW_SPEED_BONUS_PER_MEMBER = 0.15
-local AUTO_SERVE_INTERVAL = 6
+local AUTO_COOK_INTERVAL = 5.5
+local AUTO_WAITER_INTERVAL = 4.5
 
 local crewModels: { [Player]: { Model } } = {}
 local autoServeHandler: AutoServeCallback? = nil
+local autoCookOnlyHandler: AutoCookOnlyCallback? = nil
+local autoWaiterHandler: AutoWaiterCallback? = nil
+local waiterChangedHandler: WaiterChangedCallback? = nil
 local isRunning = false
 local loopThread: thread? = nil
+local waiterThread: thread? = nil
 local playerRemovingConn: RBXScriptConnection? = nil
 local unsubscribeProfile: (() -> ())? = nil
 local unsubscribeBase: (() -> ())? = nil
@@ -38,8 +52,36 @@ function CrewService.SetAutoServeHandler(handler: AutoServeCallback): ()
 	autoServeHandler = handler
 end
 
+function CrewService.SetAutoCookOnlyHandler(handler: AutoCookOnlyCallback): ()
+	autoCookOnlyHandler = handler
+end
+
+function CrewService.SetAutoWaiterHandler(handler: AutoWaiterCallback): ()
+	autoWaiterHandler = handler
+end
+
+function CrewService.SetWaiterChangedHandler(handler: WaiterChangedCallback): ()
+	waiterChangedHandler = handler
+end
+
 function CrewService.GetCrewCount(player: Player): number
 	return PlayerDataService.GetProfile(player).CrewCount
+end
+
+function CrewService.GetWaiterCount(player: Player): number
+	return PlayerDataService.GetProfile(player).WaiterCount
+end
+
+function CrewService.GetNextWaiterCost(player: Player): number?
+	local count = CrewService.GetWaiterCount(player)
+	if count >= CrewService.MAX_WAITERS then
+		return nil
+	end
+	return CrewService.WAITER_COSTS[count + 1] or 540
+end
+
+function CrewService.GetWaiterTipMultiplier(player: Player): number
+	return 1 + CrewService.GetWaiterCount(player) * 0.10
 end
 
 function CrewService.GetNextHireCost(player: Player): number
@@ -72,61 +114,40 @@ local function clearCrewVisuals(player: Player): ()
 end
 
 local function spawnCrewChef(parent: Instance, index: number, worldCF: CFrame, accentColor: Color3): Model
-	local npc = Instance.new("Model")
-	npc.Name = "CrewChef_" .. tostring(index)
-	local cf = worldCF * CFrame.new(0, 3.6, 0)
-
-	local function cPart(name: string, sz: Vector3, rel: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = sz
-		p.CFrame = cf * rel
-		p.Color = col
-		p.Material = mat
-		if shape then p.Shape = shape end
-		p.Anchored = true
-		p.CanCollide = false
-		p.CanTouch = false
-		p.CanQuery = false
-		p.Parent = npc
-		return p
+	local rig = MafiaVisualBuilder.BuildChefRig("CrewChef_" .. tostring(index), accentColor, 1.04, worldCF * CFrame.new(0, 3.55, 0), false)
+	local npc = rig.Model
+	-- Anchor stationary kitchen hustle chefs cleanly so AmbientEffectsController animates them at the stove
+	for _, desc in ipairs(npc:GetDescendants()) do
+		if desc:IsA("BasePart") then
+			desc.Anchored = true
+			desc.CanCollide = false
+			desc.CanTouch = false
+			desc.CanQuery = false
+		end
 	end
 
-	local body = cPart("Torso", Vector3.new(2.3, 2.7, 1.35), CFrame.new(), Color3.fromRGB(250, 250, 252), Enum.Material.SmoothPlastic, nil)
-	cPart("Apron", Vector3.new(2.4, 1.45, 1.45), CFrame.new(0, -0.68, 0), accentColor, Enum.Material.SmoothPlastic, nil)
-	local head = cPart("Head", Vector3.new(1.9, 1.9, 1.9), CFrame.new(0, 2.25, 0), Color3.fromRGB(246, 212, 178), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	cPart("EyeL", Vector3.new(0.22, 0.24, 0.12), CFrame.new(-0.32, 2.34, -0.9), Color3.fromRGB(24, 24, 30), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	cPart("EyeR", Vector3.new(0.22, 0.24, 0.12), CFrame.new(0.32, 2.34, -0.9), Color3.fromRGB(24, 24, 30), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	cPart("HatBand", Vector3.new(0.7, 1.95, 1.95), CFrame.new(0, 3.25, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(245, 245, 250), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-	cPart("HatPuff", Vector3.new(2.35, 1.5, 2.3), CFrame.new(0, 4.05, 0), Color3.fromRGB(255, 255, 255), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	cPart("LeftArm", Vector3.new(0.85, 2.35, 0.85), CFrame.new(-1.6, 0.05, 0), Color3.fromRGB(250, 250, 252), Enum.Material.SmoothPlastic, nil)
-	cPart("RightArm", Vector3.new(0.85, 2.35, 0.85), CFrame.new(1.6, 0.2, -0.45) * CFrame.Angles(math.rad(35), 0, 0), Color3.fromRGB(250, 250, 252), Enum.Material.SmoothPlastic, nil)
-	cPart("Spoon", Vector3.new(0.24, 2.2, 0.24), CFrame.new(1.6, 0.65, -1.55) * CFrame.Angles(math.rad(-25), 0, 0), Color3.fromRGB(168, 114, 62), Enum.Material.Wood, nil)
-	cPart("LeftLeg", Vector3.new(0.95, 2.4, 0.95), CFrame.new(-0.58, -2.45, 0), Color3.fromRGB(46, 52, 66), Enum.Material.SmoothPlastic, nil)
-	cPart("RightLeg", Vector3.new(0.95, 2.4, 0.95), CFrame.new(0.58, -2.45, 0), Color3.fromRGB(46, 52, 66), Enum.Material.SmoothPlastic, nil)
-	cPart("LeftShoe", Vector3.new(1.05, 0.55, 1.35), CFrame.new(-0.58, -3.48, -0.15), Color3.fromRGB(26, 28, 34), Enum.Material.SmoothPlastic, nil)
-	cPart("RightShoe", Vector3.new(1.05, 0.55, 1.35), CFrame.new(0.58, -3.48, -0.15), Color3.fromRGB(26, 28, 34), Enum.Material.SmoothPlastic, nil)
-
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(116, 26)
-	bb.StudsOffset = Vector3.new(0, 3.3, 0)
-	bb.MaxDistance = 75
-	bb.Parent = head
+	bb.Size = UDim2.fromOffset(128, 24)
+	bb.StudsOffset = Vector3.new(0, 2.8, 0)
+	bb.MaxDistance = 78
+	bb.Parent = rig.Head
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = accentColor
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
+	lbl.BackgroundTransparency = 0.08
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = "Chef #" .. tostring(index)
-	lbl.TextSize = 13
-	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.Text = "CHEF #" .. tostring(index)
+	lbl.TextSize = 11
+	lbl.TextColor3 = Color3.fromRGB(234, 231, 224)
 	lbl.Parent = bb
+	Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 4)
+	local st = Instance.new("UIStroke")
+	st.Color = Color3.fromRGB(168, 138, 76)
+	st.Thickness = 1.1
+	st.Parent = lbl
 
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 6)
-	c.Parent = lbl
-
-	npc.PrimaryPart = body
+	npc.PrimaryPart = rig.Root
 	CollectionService:AddTag(npc, "AnimatedKitchenChef")
 	npc.Parent = parent
 	return npc
@@ -181,7 +202,28 @@ function CrewService.TryHireCrew(player: Player): (boolean, string)
 	PlayerDataService.SetCrewCount(player, current + 1)
 	CrewService.SyncCrewVisuals(player)
 	print(string.format("[CrewService] %s hired Crew Chef #%d!", player.Name, current + 1))
-	return true, "Hired Crew Chef!"
+	return true, string.format("Hired Kitchen Chef #%d! Fetches from Warehouse & cooks dishes.", current + 1)
+end
+
+function CrewService.TryHireWaiter(player: Player): (boolean, string)
+	if not BaseService.GetPlayerBaseSlot(player) then
+		return false, "Claim your Restaurant Plaza first!"
+	end
+	local current = CrewService.GetWaiterCount(player)
+	local cost = CrewService.GetNextWaiterCost(player)
+	if not cost then
+		return false, string.format("Max Waiters hired (%d / %d)!", CrewService.MAX_WAITERS, CrewService.MAX_WAITERS)
+	end
+	if not PlayerDataService.SpendCoins(player, cost) then
+		return false, string.format("Need %d Gold to hire Waiter #%d!", cost, current + 1)
+	end
+
+	PlayerDataService.SetWaiterCount(player, current + 1)
+	if waiterChangedHandler then
+		waiterChangedHandler(player)
+	end
+	print(string.format("[CrewService] %s hired Dining Waiter #%d!", player.Name, current + 1))
+	return true, string.format("Hired Dining Waiter #%d! Delivers cooked dishes to customers (+10%% tips).", current + 1)
 end
 
 function CrewService.Start(): ()
@@ -206,15 +248,18 @@ function CrewService.Start(): ()
 		clearCrewVisuals(player)
 	end)
 
+	-- Hired Chefs loop: fetch ingredients from Warehouse & cook dishes onto the Kitchen Counter!
 	loopThread = task.spawn(function()
 		while isRunning do
-			task.wait(AUTO_SERVE_INTERVAL)
+			task.wait(AUTO_COOK_INTERVAL)
 			if not isRunning then
 				break
 			end
-			if autoServeHandler then
-				for _, player in ipairs(Players:GetPlayers()) do
-					if CrewService.GetCrewCount(player) > 0 then
+			for _, player in ipairs(Players:GetPlayers()) do
+				if CrewService.GetCrewCount(player) > 0 then
+					if autoCookOnlyHandler then
+						autoCookOnlyHandler(player)
+					elseif autoServeHandler then
 						autoServeHandler(player)
 					end
 				end
@@ -222,7 +267,24 @@ function CrewService.Start(): ()
 		end
 	end)
 
-	print("[Food Empire] CrewService started (hireable Restaurant Crew Chefs + auto-serve active)!")
+	-- Hired Waiters loop: pick up ready dishes from Kitchen Counter & deliver them to Customers!
+	waiterThread = task.spawn(function()
+		while isRunning do
+			task.wait(AUTO_WAITER_INTERVAL)
+			if not isRunning then
+				break
+			end
+			if autoWaiterHandler then
+				for _, player in ipairs(Players:GetPlayers()) do
+					if CrewService.GetWaiterCount(player) > 0 then
+						autoWaiterHandler(player)
+					end
+				end
+			end
+		end
+	end)
+
+	print("[Food Empire] CrewService started (Hireable Kitchen Chefs & Dining Waiters supply chain active)!")
 end
 
 function CrewService.Stop(): ()
@@ -230,6 +292,10 @@ function CrewService.Stop(): ()
 	if loopThread then
 		task.cancel(loopThread)
 		loopThread = nil
+	end
+	if waiterThread then
+		task.cancel(waiterThread)
+		waiterThread = nil
 	end
 	if unsubscribeBase then
 		unsubscribeBase()

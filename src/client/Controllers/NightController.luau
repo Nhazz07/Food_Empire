@@ -1,7 +1,7 @@
 --!strict
 
 -- NightController: Client-side Night Mode experience.
---  * Live HUD clock pill (☀️ Day / 🌅 Dusk / 🌙 Night) — click it to skip to the next phase.
+--  * Live HUD clock pill (DAY / DUSK / NIGHT) — click or press [N] to switch phase.
 --  * Soft personal lantern glow around your character at night so you can always see.
 --  * Looping night cricket ambience that fades in at dusk and out at dawn.
 
@@ -56,49 +56,58 @@ function NightController.Init(parentGui: ScreenGui, onSkip: () -> ()): ()
 	local pill = Instance.new("TextButton")
 	pill.Name = "DayNightClock"
 	pill.AnchorPoint = Vector2.new(1, 0)
-	pill.Position = UDim2.new(1, -14, 0, 50)
-	pill.Size = UDim2.fromOffset(212, 46)
-	pill.BackgroundColor3 = Color3.fromRGB(30, 108, 186)
-	pill.BackgroundTransparency = 0.08
-	pill.AutoButtonColor = true
+	pill.Position = UDim2.new(1, -14, 0, 8)
+	pill.Size = UDim2.fromOffset(216, 46)
+	pill.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
+	pill.BackgroundTransparency = 0.06
+	pill.AutoButtonColor = false
 	pill.Text = ""
 	pill.Parent = parentGui
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 12)
+	corner.CornerRadius = UDim.new(0, 6)
 	corner.Parent = pill
 	local stroke = Instance.new("UIStroke")
 	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Color = Color3.fromRGB(255, 224, 96)
-	stroke.Thickness = 1.8
+	stroke.Color = Color3.fromRGB(52, 56, 66)
+	stroke.Thickness = 1.2
 	stroke.Parent = pill
 	pillStroke = stroke
 
 	local lbl = Instance.new("TextLabel")
-	lbl.Position = UDim2.new(0, 10, 0, 3)
-	lbl.Size = UDim2.new(1, -20, 0, 22)
+	lbl.Position = UDim2.new(0, 10, 0, 4)
+	lbl.Size = UDim2.new(1, -20, 0, 20)
 	lbl.BackgroundTransparency = 1
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = "☀️ DAY • 2:00 PM"
-	lbl.TextSize = 14
+	lbl.Text = "DAY  |  2:00 PM"
+	lbl.TextSize = 12
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.TextColor3 = Color3.fromRGB(234, 231, 224)
 	lbl.Parent = pill
 	clockLabel = lbl
 
 	local sub = Instance.new("TextLabel")
 	sub.Position = UDim2.new(0, 10, 0, 24)
-	sub.Size = UDim2.new(1, -20, 0, 18)
+	sub.Size = UDim2.new(1, -20, 0, 16)
 	sub.BackgroundTransparency = 1
-	sub.Font = Enum.Font.GothamBold
-	sub.Text = "Tap to skip to Night 🌙"
-	sub.TextSize = 11
+	sub.Font = Enum.Font.Gotham
+	sub.Text = "Click or [N] to switch phase"
+	sub.TextSize = 10
 	sub.TextXAlignment = Enum.TextXAlignment.Left
-	sub.TextColor3 = Color3.fromRGB(220, 236, 255)
+	sub.TextColor3 = Color3.fromRGB(152, 156, 166)
 	sub.Parent = pill
 	bonusLabel = sub
 
 	clockPill = pill
 	pill.MouseButton1Click:Connect(onSkip)
+
+	-- Drain DayNightSync RemoteEvent cleanly so Studio's invocation queue never warns
+	task.spawn(function()
+		local remotes = ReplicatedStorage:WaitForChild("Remotes", 10)
+		local dnSync = if remotes then remotes:WaitForChild("DayNightSync", 10) else nil
+		if dnSync and dnSync:IsA("RemoteEvent") then
+			dnSync.OnClientEvent:Connect(function() end)
+		end
+	end)
 
 	-- Looping cricket night ambience
 	local snd = Instance.new("Sound")
@@ -119,17 +128,16 @@ function NightController.Init(parentGui: ScreenGui, onSkip: () -> ()): ()
 		local isNight = ReplicatedStorage:GetAttribute("IsNight") == true
 
 		if clockLabel and bonusLabel and clockPill and pillStroke then
-			local icon = if phase == "Night" then "🌙" elseif phase == "Dusk" then "🌅" elseif phase == "Dawn" then "🌄" else "☀️"
-			clockLabel.Text = string.format("%s %s • %s", icon, string.upper(phase), formatClock(c))
+			clockLabel.Text = string.format("%s  |  %s", string.upper(phase), formatClock(c))
 			if isNight then
-				bonusLabel.Text = "+35% Gold • Mafia alert! (tap: skip ☀️)"
-				bonusLabel.TextColor3 = Color3.fromRGB(255, 214, 110)
+				bonusLabel.Text = "+35% Gold  |  Mafia Alert  [N]"
+				bonusLabel.TextColor3 = Color3.fromRGB(196, 166, 102)
 			else
-				bonusLabel.Text = "Tap to skip to Night 🌙"
-				bonusLabel.TextColor3 = Color3.fromRGB(220, 236, 255)
+				bonusLabel.Text = "Press [N] to switch to Night"
+				bonusLabel.TextColor3 = Color3.fromRGB(152, 156, 166)
 			end
-			clockPill.BackgroundColor3 = Color3.fromRGB(30, 108, 186):Lerp(Color3.fromRGB(26, 22, 64), nf)
-			pillStroke.Color = Color3.fromRGB(255, 224, 96):Lerp(Color3.fromRGB(150, 168, 255), nf)
+			clockPill.BackgroundColor3 = Color3.fromRGB(22, 24, 30):Lerp(Color3.fromRGB(14, 15, 20), nf)
+			pillStroke.Color = Color3.fromRGB(58, 62, 72):Lerp(Color3.fromRGB(118, 32, 38), nf)
 		end
 
 		-- Personal lantern glow so the player never gets lost in the dark

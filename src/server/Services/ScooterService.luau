@@ -14,11 +14,16 @@ local ScooterService = {}
 
 ScooterService.MOTORBIKE_COIN_COST = 750
 
-local MOTORBIKE_WALK_SPEED = 42
+local MOTORBIKE_WALK_SPEED = 44
+local MOTORBIKE_TURBO_SPEED = 66
+local TURBO_DURATION = 4.5
+local TURBO_COOLDOWN = 9.0
 local NORMAL_WALK_SPEED = 16
 local WHEEL_RADIUS = 1.35
 
 local activeBikes: { [Player]: Model } = {}
+local turboCooldownUntil: { [Player]: number } = {}
+local turboToken: { [Player]: number } = {}
 local isRunning = false
 local playerRemovingConn: RBXScriptConnection? = nil
 local charConns: { [Player]: RBXScriptConnection } = {}
@@ -284,9 +289,71 @@ local function mountMotorbike(player: Player): (boolean, string)
 	activeBikes[player] = bike
 	player:SetAttribute("OnScooter", true)
 	char:SetAttribute("RidingMotorbike", true)
+	char:SetAttribute("BikeTurboActive", false)
 	hum.WalkSpeed = MOTORBIKE_WALK_SPEED
 
-	return true, "Sport Motorbike Mounted! (Press V to dismount)"
+	return true, "Sport Motorbike Mounted! Press [LeftShift] for NITRO BOOST or [V] to dismount."
+end
+
+function ScooterService.TriggerTurbo(player: Player): (boolean, string)
+	if not ScooterService.IsOnScooter(player) then
+		-- If player owns the bike and isn't mounted yet, mount and immediately engage Nitro!
+		if ScooterService.OwnsMotorbike(player) then
+			local mountedOk = mountMotorbike(player)
+			if not mountedOk then
+				return false, "Mount your Sport Motorbike [V] first!"
+			end
+		else
+			return false, "Unlock & mount your Sport Motorbike [V] first!"
+		end
+	end
+
+	local char = player.Character
+	local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+	local bike = activeBikes[player]
+	if not char or not hum or hum.Health <= 0 or not bike or not bike.Parent then
+		return false, "Mount your Sport Motorbike [V] first!"
+	end
+
+	local now = os.clock()
+	local cdUntil = turboCooldownUntil[player] or 0
+	if cdUntil > now then
+		return false, string.format("Motorbike Nitro recharging (%ds)!", math.ceil(cdUntil - now))
+	end
+
+	turboCooldownUntil[player] = now + TURBO_COOLDOWN
+	local nextTok = (turboToken[player] or 0) + 1
+	turboToken[player] = nextTok
+
+	char:SetAttribute("BikeTurboActive", true)
+	hum.WalkSpeed = MOTORBIKE_TURBO_SPEED
+
+	local exhaust = bike:FindFirstChild("ExhaustPipeR")
+	local smoke = if exhaust then exhaust:FindFirstChild("ExhaustSmoke") else nil
+	if smoke and smoke:IsA("ParticleEmitter") then
+		smoke.Color = ColorSequence.new(Color3.fromRGB(255, 168, 62), Color3.fromRGB(120, 124, 134))
+		smoke.Rate = 38
+		smoke.Speed = NumberRange.new(12, 22)
+	end
+
+	task.delay(TURBO_DURATION, function()
+		if turboToken[player] ~= nextTok then
+			return
+		end
+		if char.Parent then
+			char:SetAttribute("BikeTurboActive", false)
+		end
+		if ScooterService.IsOnScooter(player) and hum.Parent and hum.Health > 0 then
+			hum.WalkSpeed = MOTORBIKE_WALK_SPEED
+		end
+		if smoke and smoke.Parent then
+			smoke.Color = ColorSequence.new(Color3.fromRGB(220, 224, 232), Color3.fromRGB(170, 176, 188))
+			smoke.Rate = 5
+			smoke.Speed = NumberRange.new(3, 6)
+		end
+	end)
+
+	return true, "MOTORBIKE NITRO OVERDRIVE ENGAGED (66 Speed for 4.5s)!"
 end
 
 function ScooterService.BuyWithCoins(player: Player): (boolean, string)
