@@ -192,6 +192,14 @@ local function getReserveForWeapon(player: Player, spec: BlackMarketItemSpec): (
 	return cur, maxRes
 end
 
+local function getEffectiveMagSize(player: Player, weaponId: string, spec: BlackMarketItemSpec): number
+	local baseMag = spec.MagSize or 12
+	if PlayerDataService.HasWeaponMod(player, weaponId, "ExtendedMag") then
+		return math.max(baseMag + 2, math.ceil(baseMag * 1.5))
+	end
+	return baseMag
+end
+
 local function ensureWeaponMag(player: Player, weaponId: string): WeaponMagState?
 	local spec = BlackMarketService.ITEMS[weaponId]
 	if not spec or spec.Kind ~= "Weapon" then
@@ -205,7 +213,7 @@ local function ensureWeaponMag(player: Player, weaponId: string): WeaponMagState
 	local st = byWeapon[weaponId]
 	if not st then
 		st = {
-			Mag = spec.MagSize or 12,
+			Mag = getEffectiveMagSize(player, weaponId, spec),
 			Reloading = false,
 			ReloadToken = 0,
 		}
@@ -250,6 +258,38 @@ local function getEquippedWeaponIdForPlayer(player: Player): string?
 	return nil
 end
 
+local function syncToolGunsmithAttachments(player: Player, weaponId: string, tool: Tool): ()
+	local hasSup = PlayerDataService.HasWeaponMod(player, weaponId, "Suppressor")
+	local hasExt = PlayerDataService.HasWeaponMod(player, weaponId, "ExtendedMag")
+	local hasHvy = PlayerDataService.HasWeaponMod(player, weaponId, "HeavyBarrel")
+	tool:SetAttribute("Mod_Suppressor", hasSup)
+	tool:SetAttribute("Mod_ExtendedMag", hasExt)
+	tool:SetAttribute("Mod_HeavyBarrel", hasHvy)
+
+	if hasSup and not tool:FindFirstChild("GunsmithSuppressor") then
+		local handle = tool:FindFirstChild("Handle")
+		local muzzle = tool:FindFirstChild("MuzzleTip")
+		if handle and handle:IsA("BasePart") and muzzle and muzzle:IsA("BasePart") then
+			local sup = Instance.new("Part")
+			sup.Name = "GunsmithSuppressor"
+			sup.Shape = Enum.PartType.Cylinder
+			sup.Size = Vector3.new(0.92, 0.28, 0.28)
+			sup.Color = Color3.fromRGB(22, 24, 30)
+			sup.Material = Enum.Material.Metal
+			sup.CanCollide = false
+			sup.CanTouch = false
+			sup.CanQuery = false
+			sup.Massless = true
+			sup.CFrame = muzzle.CFrame * CFrame.new(0, 0, -0.42) * CFrame.Angles(0, math.rad(90), 0)
+			sup.Parent = tool
+			local w = Instance.new("WeldConstraint")
+			w.Part0 = handle
+			w.Part1 = sup
+			w.Parent = sup
+		end
+	end
+end
+
 local function syncToolAmmoAttributes(player: Player, weaponId: string): ()
 	local spec = BlackMarketService.ITEMS[weaponId]
 	local st = ensureWeaponMag(player, weaponId)
@@ -258,14 +298,16 @@ local function syncToolAmmoAttributes(player: Player, weaponId: string): ()
 		return
 	end
 	local reserve, reserveMax = getReserveForWeapon(player, spec)
+	local maxMag = getEffectiveMagSize(player, weaponId, spec)
 	tool:SetAttribute("AmmoMag", st.Mag)
-	tool:SetAttribute("AmmoMaxMag", spec.MagSize or 12)
+	tool:SetAttribute("AmmoMaxMag", maxMag)
 	tool:SetAttribute("AmmoReserve", reserve)
 	tool:SetAttribute("AmmoReserveMax", reserveMax)
 	tool:SetAttribute("AmmoType", spec.AmmoType or "Pistol9mm")
 	tool:SetAttribute("AmmoLabel", spec.AmmoLabel or "9mm")
 	tool:SetAttribute("ReloadStyle", spec.ReloadStyle or "Magazine")
 	tool:SetAttribute("IsReloading", st.Reloading)
+	syncToolGunsmithAttachments(player, weaponId, tool)
 end
 
 local function sendWeaponAmmoSync(
@@ -280,11 +322,12 @@ local function sendWeaponAmmoSync(
 		return
 	end
 	local reserve, reserveMax = getReserveForWeapon(player, spec)
+	local maxMag = getEffectiveMagSize(player, weaponId, spec)
 	local payload: { [string]: any } = {
 		Type = eventType,
 		WeaponId = weaponId,
 		Mag = st.Mag,
-		MaxMag = spec.MagSize or 12,
+		MaxMag = maxMag,
 		Reserve = reserve,
 		ReserveMax = reserveMax,
 		AmmoType = spec.AmmoType or "Pistol9mm",
@@ -324,9 +367,10 @@ local function sendFullAmmoSync(player: Player): ()
 			if st then
 				syncToolAmmoAttributes(player, weaponId)
 				local reserve, reserveMax = getReserveForWeapon(player, spec)
+				local maxMag = getEffectiveMagSize(player, weaponId, spec)
 				weaponsPayload[weaponId] = {
 					Mag = st.Mag,
-					MaxMag = spec.MagSize or 12,
+					MaxMag = maxMag,
 					Reserve = reserve,
 					ReserveMax = reserveMax,
 					AmmoType = spec.AmmoType or "Pistol9mm",
@@ -858,10 +902,12 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 
 	local muzzlePart = char:FindFirstChild("MuzzleTip", true)
 	local origin = if muzzlePart and muzzlePart:IsA("BasePart") then muzzlePart.Position else (root.Position + Vector3.new(0, 1.5, 0))
-	local range = spec.Range or 95
+	local hasHeavyBarrel = PlayerDataService.HasWeaponMod(player, weaponId, "HeavyBarrel")
+	local hasSuppressor = PlayerDataService.HasWeaponMod(player, weaponId, "Suppressor")
+	local range = math.floor((spec.Range or 95) * (if hasHeavyBarrel then 1.18 else 1.0))
 	local pellets = spec.Pellets or 1
-	local dmg = spec.Damage or 25
-	local spread = spec.Spread or (if pellets > 1 then 0.072 else 0.014)
+	local dmg = math.ceil((spec.Damage or 25) * (if hasHeavyBarrel then 1.22 else 1.0))
+	local spread = (spec.Spread or (if pellets > 1 then 0.072 else 0.014)) * (if hasHeavyBarrel then 0.78 else 1.0)
 
 	local rawDir = aimPoint - origin
 	if rawDir.Magnitude < 0.2 then
@@ -869,9 +915,11 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 	end
 	local baseDir = rawDir.Unit
 
-	-- Broadcast gunshot audio to OTHER players only (local shooter plays 0ms audio instantly on trigger!)
-	local sfxType = spec.AudioKey or "PistolShot"
-	emitCombatSFX(sfxType, origin, player)
+	-- Broadcast gunshot audio to OTHER players only (suppressed shots are silent at distance!)
+	if not hasSuppressor then
+		local sfxType = spec.AudioKey or "PistolShot"
+		emitCombatSFX(sfxType, origin, player)
+	end
 
 	local ignoreList: { Instance } = { char }
 	for _, ch in ipairs(Workspace:GetChildren()) do
@@ -893,6 +941,9 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 		if result and result.Instance then
 			local hitModel = result.Instance:FindFirstAncestorOfClass("Model")
 			if hitModel then
+				if hasSuppressor then
+					hitModel:SetAttribute("SuppressedHitAt", os.clock())
+				end
 				didHit = applyBulletHit(player, root, hitModel, hitPos, dmg, weaponId)
 			end
 		end
@@ -943,7 +994,7 @@ local function handleWeaponReload(player: Player, weaponId: any, action: any): (
 	local ammoType = spec.AmmoType or "Pistol9mm"
 	local ammoSpec = WeaponConfig.AMMO_TYPES[ammoType]
 	local reserveMax = if ammoSpec then ammoSpec.MaxReserve else 96
-	local magSize = spec.MagSize or 12
+	local magSize = getEffectiveMagSize(player, weaponId, spec)
 	local curReserve = PlayerDataService.GetAmmo(player, ammoType)
 
 	if st.Mag >= magSize then
@@ -1191,6 +1242,36 @@ function BlackMarketService.TeleportToBlackMarket(player: Player): (boolean, str
 	return true, "Arrived at the Underground Black Market."
 end
 
+-- Gunsmith Attachment Workbench: Suppressor, ExtendedMag, HeavyBarrel per owned firearm!
+function BlackMarketService.BuyWeaponMod(player: Player, weaponId: string, modId: string): (boolean, string)
+	local spec = BlackMarketService.ITEMS[weaponId]
+	if not spec or spec.Kind ~= "Weapon" then
+		return false, "Invalid firearm for Gunsmith attachment!"
+	end
+	if not playerOwnsWeapon(player, weaponId) then
+		return false, string.format("Unlock %s first before installing Gunsmith attachments!", spec.DisplayName)
+	end
+	local modSpec = WeaponConfig.GUNSMITH_MODS[modId]
+	if not modSpec then
+		return false, "Unknown Gunsmith attachment!"
+	end
+	if PlayerDataService.HasWeaponMod(player, weaponId, modId) then
+		return false, string.format("%s is already installed on %s!", modSpec.DisplayName, spec.DisplayName)
+	end
+	if not PlayerDataService.SpendCoins(player, modSpec.Price) then
+		return false, string.format("Need %d Gold to install %s on %s!", modSpec.Price, modSpec.DisplayName, spec.DisplayName)
+	end
+
+	PlayerDataService.UnlockWeaponMod(player, weaponId, modId)
+	local st = ensureWeaponMag(player, weaponId)
+	if st and modId == "ExtendedMag" then
+		st.Mag = getEffectiveMagSize(player, weaponId, spec)
+	end
+	syncToolAmmoAttributes(player, weaponId)
+	sendWeaponAmmoSync(player, "Update", weaponId, nil)
+	return true, string.format("Installed %s on %s!", modSpec.DisplayName, spec.DisplayName)
+end
+
 function BlackMarketService.GetCatalogPayload(player: Player): { [string]: any }
 	local profile = PlayerDataService.GetProfile(player)
 	local armor = math.clamp(math.floor(profile.Armor or 0), 0, 100)
@@ -1207,6 +1288,7 @@ function BlackMarketService.GetCatalogPayload(player: Player): { [string]: any }
 	return {
 		OwnedWeapons = ownedMap,
 		AmmoInventory = ammoCopy,
+		WeaponMods = profile.WeaponMods or {},
 		HasKevlarVest = armor > 0,
 		Armor = armor,
 	}

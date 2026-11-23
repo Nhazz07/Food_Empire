@@ -91,6 +91,8 @@ local ROUTES: { CornerRoute } = {
 }
 
 local statesBySector: { [string]: ActiveShipmentState } = {}
+local vaultCooldownUntil: { [string]: number } = {}
+local vaultStatusLabels: { [string]: TextLabel } = {}
 local isRunning = false
 local mainThread: thread? = nil
 local shipmentFolder: Folder? = nil
@@ -514,6 +516,191 @@ function ShipmentService.GetBestActiveShipmentPosition(preferCategory: Warehouse
 	return Vector3.new(0, 4, 0)
 end
 
+function ShipmentService.TryCrackTerritoryVault(player: Player, categoryArg: string?): (boolean, string)
+	local now = os.clock()
+	local chosenRoute: CornerRoute? = nil
+
+	if typeof(categoryArg) == "string" and categoryArg ~= "" then
+		for _, r in ipairs(ROUTES) do
+			if string.lower(r.Category) == string.lower(categoryArg) or string.lower(r.SectorId) == string.lower(categoryArg) then
+				chosenRoute = r
+				break
+			end
+		end
+	end
+
+	if not chosenRoute then
+		local char = player.Character
+		local hrp = if char then char:FindFirstChild("HumanoidRootPart") else nil
+		local bestDist = math.huge
+		for _, r in ipairs(ROUTES) do
+			local cd = vaultCooldownUntil[r.Category] or 0
+			if cd <= now then
+				if hrp and hrp:IsA("BasePart") then
+					local d = (hrp.Position - r.OriginPos).Magnitude
+					if d < bestDist then
+						bestDist = d
+						chosenRoute = r
+					end
+				elseif not chosenRoute then
+					chosenRoute = r
+				end
+			end
+		end
+		if not chosenRoute then
+			chosenRoute = ROUTES[1]
+		end
+	end
+
+	local cat = chosenRoute.Category
+	local cdUntil = vaultCooldownUntil[cat] or 0
+	if cdUntil > now then
+		local rem = math.max(1, math.ceil(cdUntil - now))
+		return false, string.format("%s Territory Supply Vault is locked down (%ds cooldown)!", cat, rem)
+	end
+
+	vaultCooldownUntil[cat] = now + 22
+	local keycards = tonumber(player:GetAttribute("VaultKeycards")) or 0
+	local usedKeycard = false
+	if keycards > 0 then
+		usedKeycard = true
+		player:SetAttribute("VaultKeycards", keycards - 1)
+	end
+
+	local goldReward = if usedKeycard then 440 else 320
+	local repReward = if usedKeycard then 65 else 55
+	local expReward = if usedKeycard then 85 else 75
+	PlayerDataService.AddRewards(player, goldReward, expReward, repReward)
+
+	local spec = WarehouseConfig.Specs[cat]
+	local stockAdded = 0
+	if spec and WarehouseService.IsUnlocked(player, cat) then
+		for _, ing in ipairs(spec.Ingredients) do
+			if ing ~= "golden_tuna" and ing ~= "king_crab" then
+				stockAdded += WarehouseService.AddIngredient(player, ing, 5)
+			end
+		end
+	end
+
+	local rareAddedName: string? = nil
+	if WarehouseService.IsUnlocked(player, "Fish") then
+		local rareId = if math.random() < 0.5 then "golden_tuna" else "king_crab"
+		local rAdded = WarehouseService.AddIngredient(player, rareId, 1)
+		if rAdded > 0 then
+			rareAddedName = if rareId == "golden_tuna" then "+1 Golden Tuna" else "+1 King Crab"
+		end
+	end
+
+	player:SetAttribute("StolenShipmentUntil", now + 35)
+	local lbl = vaultStatusLabels[cat]
+	if lbl and lbl.Parent then
+		lbl.Text = string.format("SYNDICATE VAULT: %s  |  CRACKED (LOCKDOWN)", string.upper(cat))
+		lbl.TextColor3 = Color3.fromRGB(214, 118, 92)
+		task.delay(22, function()
+			if lbl.Parent then
+				lbl.Text = string.format("SYNDICATE SUPPLY VAULT: %s  |  +320G & RARE STOCK  [E]", string.upper(cat))
+				lbl.TextColor3 = Color3.fromRGB(236, 204, 128)
+			end
+		end)
+	end
+
+	local bonusTag = if usedKeycard then " [KEYCARD BONUS +120G]" else ""
+	local rareTag = if rareAddedName then (" | " .. rareAddedName) else ""
+	local msg = string.format(
+		"CRACKED %s SUPPLY VAULT! +%dG, +%d Rep, +%d Stock%s%s!",
+		string.upper(cat),
+		goldReward,
+		repReward,
+		stockAdded,
+		rareTag,
+		bonusTag
+	)
+	sendToast(player, msg)
+	notifyChanged()
+	return true, msg
+end
+
+local function buildTerritorySupplyVaults(): ()
+	for _, route in ipairs(ROUTES) do
+		local cat = route.Category
+		local spec = WarehouseConfig.Specs[cat]
+		local accent = if spec then spec.AccentColor else Color3.fromRGB(184, 146, 78)
+		local signX = if route.OriginPos.X >= 0 then -1 else 1
+		local signZ = if route.OriginPos.Z >= 0 then -1 else 1
+		local vaultPos = route.OriginPos + Vector3.new(signX * 22, 0, signZ * 14)
+		local vaultCF = CFrame.lookAt(vaultPos, Vector3.new(0, vaultPos.Y, 0))
+
+		local vm = Instance.new("Model")
+		vm.Name = "TerritorySupplyVault_" .. cat
+
+		local function vPart(name: string, sz: Vector3, rel: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
+			local p = Instance.new("Part")
+			p.Name = name
+			p.Size = sz
+			p.CFrame = vaultCF * rel
+			p.Color = col
+			p.Material = mat
+			if shape then p.Shape = shape end
+			p.Anchored = true
+			p.CanCollide = true
+			p.Parent = vm
+			return p
+		end
+
+		local body = vPart("VaultBunker", Vector3.new(10.5, 8.2, 7.6), CFrame.new(0, 4.1, 0), Color3.fromRGB(22, 24, 30), Enum.Material.Metal, nil)
+		vPart("BrassTrimTop", Vector3.new(11.0, 0.7, 8.1), CFrame.new(0, 8.35, 0), Color3.fromRGB(168, 134, 72), Enum.Material.Metal, nil)
+		vPart("VaultFrame", Vector3.new(7.4, 6.8, 0.6), CFrame.new(0, 3.8, -3.75), Color3.fromRGB(36, 38, 46), Enum.Material.Metal, nil)
+		local door = vPart("CircularVaultDoor", Vector3.new(0.85, 5.4, 5.4), CFrame.new(0, 3.8, -4.05) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(168, 134, 72), Enum.Material.Metal, Enum.PartType.Cylinder)
+		door.CanCollide = false
+		local spoke1 = vPart("VaultWheelSpoke1", Vector3.new(3.2, 0.32, 0.32), CFrame.new(0, 3.8, -4.55), Color3.fromRGB(218, 184, 112), Enum.Material.Metal, nil)
+		spoke1.CanCollide = false
+		local spoke2 = vPart("VaultWheelSpoke2", Vector3.new(0.32, 3.2, 0.32), CFrame.new(0, 3.8, -4.55), Color3.fromRGB(218, 184, 112), Enum.Material.Metal, nil)
+		spoke2.CanCollide = false
+		local accentBar = vPart("CategoryAccentBar", Vector3.new(8.6, 0.35, 0.25), CFrame.new(0, 7.4, -3.85), accent, Enum.Material.SmoothPlastic, nil)
+		accentBar.CanCollide = false
+
+		local bb = Instance.new("BillboardGui")
+		bb.Name = "VaultBillboard"
+		bb.Size = UDim2.fromOffset(270, 42)
+		bb.StudsOffset = Vector3.new(0, 6.4, 0)
+		bb.MaxDistance = 240
+		bb.Parent = body
+
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.fromScale(1, 1)
+		lbl.BackgroundColor3 = Color3.fromRGB(14, 16, 22)
+		lbl.BackgroundTransparency = 0.08
+		lbl.Font = Enum.Font.GothamBlack
+		lbl.Text = string.format("SYNDICATE SUPPLY VAULT: %s  |  +320G & RARE STOCK  [E]", string.upper(cat))
+		lbl.TextSize = 11
+		lbl.TextColor3 = Color3.fromRGB(236, 204, 128)
+		lbl.Parent = bb
+		Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 6)
+		local st = Instance.new("UIStroke")
+		st.Color = Color3.fromRGB(168, 134, 72)
+		st.Thickness = 1.4
+		st.Parent = lbl
+		vaultStatusLabels[cat] = lbl
+
+		local prompt = Instance.new("ProximityPrompt")
+		prompt.Name = "CrackVaultPrompt"
+		prompt.KeyboardKeyCode = Enum.KeyCode.E
+		prompt.HoldDuration = 0.35
+		prompt.MaxActivationDistance = 18
+		prompt.RequiresLineOfSight = false
+		prompt.ActionText = string.format("Crack %s Supply Vault (+320G & Rare Stock)", cat)
+		prompt.ObjectText = "Syndicate Territory Vault"
+		prompt.Parent = body
+
+		prompt.Triggered:Connect(function(player: Player)
+			ShipmentService.TryCrackTerritoryVault(player, cat)
+		end)
+
+		vm.PrimaryPart = body
+		vm.Parent = shipmentFolder or Workspace
+	end
+end
+
 function ShipmentService.GetSnapshot(): { [string]: any }
 	local now = os.clock()
 	local out: { [string]: any } = {}
@@ -562,6 +749,8 @@ function ShipmentService.Start(): ()
 		statesBySector[route.SectorId] = st
 		updateCornerVisuals(st)
 	end
+
+	buildTerritorySupplyVaults()
 
 	mainThread = task.spawn(function()
 		while isRunning do

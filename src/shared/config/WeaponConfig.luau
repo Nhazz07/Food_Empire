@@ -432,6 +432,46 @@ WeaponConfig.WEAPONS = {
 	},
 } :: { [string]: WeaponSpec }
 
+export type GunsmithModId = "Suppressor" | "ExtendedMag" | "HeavyBarrel"
+
+export type GunsmithModSpec = {
+	Id: GunsmithModId,
+	DisplayName: string,
+	ShortLabel: string,
+	Price: number,
+	Description: string,
+}
+
+WeaponConfig.GUNSMITH_MOD_ORDER = {
+	"Suppressor",
+	"ExtendedMag",
+	"HeavyBarrel",
+} :: { GunsmithModId }
+
+WeaponConfig.GUNSMITH_MODS = {
+	Suppressor = {
+		Id = "Suppressor",
+		DisplayName = "Tactical Suppressor",
+		ShortLabel = "SUPPRESSOR",
+		Price = 320,
+		Description = "Silences gunfire and prevents nearby rival squad alerts when eliminating targets.",
+	},
+	ExtendedMag = {
+		Id = "ExtendedMag",
+		DisplayName = "Extended Magazine",
+		ShortLabel = "EXT. MAG (+50%)",
+		Price = 380,
+		Description = "Increases loaded magazine or shell tube capacity by +50%.",
+	},
+	HeavyBarrel = {
+		Id = "HeavyBarrel",
+		DisplayName = "Heavy Match Barrel",
+		ShortLabel = "HEAVY BARREL (+22% DMG)",
+		Price = 450,
+		Description = "+22% bullet damage, +18% effective range, and -25% weapon recoil.",
+	},
+} :: { [string]: GunsmithModSpec }
+
 function WeaponConfig.GetCompatibleWeaponsForAmmo(ammoId: AmmoTypeId): { string }
 	local names: { string } = {}
 	for _, wid in ipairs(WeaponConfig.WEAPON_ORDER) do

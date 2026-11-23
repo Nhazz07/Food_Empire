@@ -648,6 +648,87 @@ local function applyDistinctRestaurantTheme(slot: BaseSlot): ()
 	decor.Parent = hq
 end
 
+function BaseService.SyncInteriorStations(slot: BaseSlot, hasDualStove: boolean, hasVIPBooths: boolean): ()
+	local baseModel = BaseService.GetBaseModel(slot)
+	local hq = if baseModel then baseModel:FindFirstChild("RestaurantHQ") else nil
+	if not hq or not hq:IsA("Model") or not hq.PrimaryPart then
+		return
+	end
+	local hqCF = hq.PrimaryPart.CFrame
+	local theme = RESTAURANT_THEMES[slot] or RESTAURANT_THEMES.East
+
+	local oldStove2 = hq:FindFirstChild("DualStoveExpansion")
+	if oldStove2 then oldStove2:Destroy() end
+	if hasDualStove then
+		local stFolder = Instance.new("Model")
+		stFolder.Name = "DualStoveExpansion"
+		local function sPart(name: string, sz: Vector3, relCF: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
+			local p = Instance.new("Part")
+			p.Name = name
+			p.Size = sz
+			p.CFrame = hqCF * relCF
+			p.Color = col
+			p.Material = mat
+			if shape then p.Shape = shape end
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.Parent = stFolder
+			return p
+		end
+		local steel = Color3.fromRGB(148, 154, 164)
+		local darkSteel = Color3.fromRGB(36, 40, 46)
+		local castIron = Color3.fromRGB(24, 26, 30)
+		local copper = Color3.fromRGB(184, 108, 64)
+		local ember = Color3.fromRGB(238, 112, 44)
+
+		sPart("Stove2Body", Vector3.new(7.4, 3.2, 5.2), CFrame.new(-7.4, 2.2, -17.5), Color3.fromRGB(46, 50, 58), Enum.Material.Metal, nil)
+		sPart("Stove2Top", Vector3.new(7.8, 0.28, 5.6), CFrame.new(-7.4, 3.94, -17.5), steel, Enum.Material.Metal, nil)
+		for _, bx in ipairs({ -9.2, -5.6 }) do
+			for _, bz in ipairs({ -18.7, -16.3 }) do
+				sPart("Burner2Grate", Vector3.new(1.9, 0.18, 1.9), CFrame.new(bx, 4.15, bz), castIron, Enum.Material.Metal, nil)
+				sPart("Burner2Flame", Vector3.new(0.14, 1.15, 1.15), CFrame.new(bx, 4.12, bz) * CFrame.Angles(0, 0, math.rad(90)), ember, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+			end
+		end
+		sPart("BraisingPan2", Vector3.new(0.55, 1.5, 1.5), CFrame.new(-9.2, 4.45, -18.7) * CFrame.Angles(0, 0, math.rad(90)), copper, Enum.Material.Metal, Enum.PartType.Cylinder)
+		sPart("Hood2", Vector3.new(8.0, 2.0, 5.8), CFrame.new(-7.4, 11.2, -17.5), darkSteel, Enum.Material.Metal, nil)
+		sPart("Hood2Brass", Vector3.new(8.1, 0.22, 5.9), CFrame.new(-7.4, 10.22, -17.5), theme.BrassAccent, Enum.Material.Metal, nil)
+		stFolder.Parent = hq
+	end
+
+	local oldVip = hq:FindFirstChild("VIPPrivateBoothsExpansion")
+	if oldVip then oldVip:Destroy() end
+	if hasVIPBooths then
+		local vipFolder = Instance.new("Model")
+		vipFolder.Name = "VIPPrivateBoothsExpansion"
+		local function vPart(name: string, sz: Vector3, relCF: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
+			local p = Instance.new("Part")
+			p.Name = name
+			p.Size = sz
+			p.CFrame = hqCF * relCF
+			p.Color = col
+			p.Material = mat
+			if shape then p.Shape = shape end
+			p.Anchored = true
+			p.CanCollide = false
+			p.CanQuery = false
+			p.Parent = vipFolder
+			return p
+		end
+		-- High-back quilted leather VIP Private Dining Alcove & Brass Privacy Partition
+		vPart("VIPCarpet", Vector3.new(12.5, 0.12, 11.5), CFrame.new(-25.5, 0.72, -6.5), Color3.fromRGB(94, 24, 30), Enum.Material.Fabric, nil)
+		vPart("VIPTable", Vector3.new(7.4, 0.45, 4.6), CFrame.new(-25.5, 3.75, -6.5), Color3.fromRGB(224, 220, 212), Enum.Material.Marble, nil)
+		vPart("VIPTableBase", Vector3.new(1.4, 3.0, 1.4), CFrame.new(-25.5, 2.1, -6.5), theme.BrassAccent, Enum.Material.Metal, nil)
+		vPart("VIPBoothBackN", Vector3.new(7.6, 4.4, 1.2), CFrame.new(-25.5, 3.0, -10.8), theme.SeatColor, Enum.Material.Leather, nil)
+		vPart("VIPBoothSeatN", Vector3.new(7.4, 1.6, 2.0), CFrame.new(-25.5, 1.6, -9.5), theme.SeatColor, Enum.Material.Leather, nil)
+		vPart("VIPBoothBackS", Vector3.new(7.6, 4.4, 1.2), CFrame.new(-25.5, 3.0, -2.2), theme.SeatColor, Enum.Material.Leather, nil)
+		vPart("VIPBoothSeatS", Vector3.new(7.4, 1.6, 2.0), CFrame.new(-25.5, 1.6, -3.5), theme.SeatColor, Enum.Material.Leather, nil)
+		vPart("VIPBrassScreen", Vector3.new(0.35, 6.2, 11.2), CFrame.new(-19.0, 3.9, -6.5), theme.BrassAccent, Enum.Material.Metal, nil)
+		vPart("VIPCandleLamp", Vector3.new(0.85, 0.7, 0.85), CFrame.new(-25.5, 4.35, -6.5) * CFrame.Angles(0, 0, math.rad(90)), theme.BrassAccent, Enum.Material.Metal, Enum.PartType.Cylinder)
+		vipFolder.Parent = hq
+	end
+end
+
 local function teleportToCentralLobby(character: Model): ()
 	local root = character:WaitForChild("HumanoidRootPart", 5)
 	if root and root:IsA("BasePart") then

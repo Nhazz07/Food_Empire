@@ -36,8 +36,56 @@ local isRunning = false
 local eventThread: thread? = nil
 local leaderboardThread: thread? = nil
 local traderConn: RBXScriptConnection? = nil
+local monumentPromptConn: RBXScriptConnection? = nil
+local tributeCooldownByPlayer: { [Player]: number } = {}
+local lastAutoTributeAt = 0
 local boardEventLabel: TextLabel? = nil
+local emperorHeaderLabel: TextLabel? = nil
 local boardRankLabels: { TextLabel } = {}
+
+local function getRankTitleForRep(rep: number): string
+	if rep >= 2000 then return "GODFATHER"
+	elseif rep >= 900 then return "UNDERBOSS"
+	elseif rep >= 400 then return "CAPOREGIME"
+	elseif rep >= 150 then return "SOLDIER"
+	elseif rep >= 50 then return "ASSOCIATE"
+	else return "RUNNER" end
+end
+
+function CentralEventService.TryClaimEmperorTribute(player: Player): (boolean, string)
+	local now = os.clock()
+	local cdUntil = tributeCooldownByPlayer[player] or 0
+	if cdUntil > now then
+		local rem = math.max(1, math.ceil(cdUntil - now))
+		return false, string.format("Emperor Monument Tribute recharging (%ds)!", rem)
+	end
+	tributeCooldownByPlayer[player] = now + 25
+
+	local topPlayer: Player? = nil
+	local topRep = -1
+	for _, p in ipairs(Players:GetPlayers()) do
+		local r = PlayerDataService.GetProfile(p).Reputation
+		if r > topRep then
+			topRep = r
+			topPlayer = p
+		end
+	end
+
+	local isEmperor = (topPlayer == player)
+	local gold = if isEmperor then 150 else 65
+	local rep = if isEmperor then 25 else 15
+	PlayerDataService.AddRewards(player, gold, 40, rep)
+
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	local ev = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
+	local msg = if isEmperor
+		then string.format("FOOD EMPEROR TRIBUTE CLAIMED! +%d Gold & +%d Rep from the Central Plaza Monument!", gold, rep)
+		else string.format("SYNDICATE MONUMENT STIPEND CLAIMED! +%d Gold & +%d Rep (Surpass %d Rep to reign as #1 Food Emperor)!", gold, rep, math.max(0, topRep))
+	if ev and ev:IsA("RemoteEvent") then
+		ev:FireClient(player, msg)
+	end
+	return true, msg
+end
 
 local function spawnCentralPlazaBoards(): ()
 	local map = Workspace:FindFirstChild("FoodEmpireMap")
@@ -117,42 +165,132 @@ local function spawnCentralPlazaBoards(): ()
 	evLbl.Parent = evBg
 	boardEventLabel = evLbl
 
-	-- Right Board: Live Top 4 Food Emperor Leaderboard
-	local lbBg = buildBoardFrame("EmperorLeaderboard", Vector3.new(26, 1.35, -42), -18, "FOOD EMPERORS", Color3.fromRGB(218, 152, 28))
+	-- Right Monument: 3D Obsidian & Brass FOOD EMPEROR SYNDICATE MONUMENT & Live Leaderboard
+	local oldMon = plaza:FindFirstChild("FoodEmperorMonument")
+	if oldMon then oldMon:Destroy() end
+	local monument = Instance.new("Model")
+	monument.Name = "FoodEmperorMonument"
+	monument.Parent = plaza
+
+	local monPos = Vector3.new(26, 1.35, -40)
+	local monCF = CFrame.new(monPos) * CFrame.Angles(0, math.rad(-18), 0)
+	local function mPart(name: string, sz: Vector3, rel: CFrame, col: Color3, mat: Enum.Material): Part
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = sz
+		p.CFrame = monCF * rel
+		p.Color = col
+		p.Material = mat
+		p.Anchored = true
+		p.CanCollide = true
+		p.Parent = monument
+		return p
+	end
+
+	local obsidian = Color3.fromRGB(18, 20, 26)
+	local brass = Color3.fromRGB(184, 146, 78)
+	local darkMarble = Color3.fromRGB(26, 28, 36)
+
+	local pedestal = mPart("MonumentPedestal", Vector3.new(19.0, 2.2, 6.2), CFrame.new(0, 1.1, 0), darkMarble, Enum.Material.Marble)
+	mPart("BrassPlinth", Vector3.new(17.6, 0.5, 4.8), CFrame.new(0, 2.45, 0), brass, Enum.Material.Metal)
+	mPart("PillarLeft", Vector3.new(1.5, 12.2, 1.6), CFrame.new(-8.2, 8.5, 0), obsidian, Enum.Material.Marble)
+	mPart("PillarRight", Vector3.new(1.5, 12.2, 1.6), CFrame.new(8.2, 8.5, 0), obsidian, Enum.Material.Marble)
+	mPart("CorniceTop", Vector3.new(19.4, 1.1, 2.4), CFrame.new(0, 14.9, 0), brass, Enum.Material.Metal)
+	mPart("EmperorCrestBase", Vector3.new(6.8, 1.4, 1.4), CFrame.new(0, 16.0, 0), obsidian, Enum.Material.Metal)
+	mPart("EmperorCrownSpireC", Vector3.new(1.1, 2.2, 0.8), CFrame.new(0, 17.5, 0), brass, Enum.Material.Metal)
+	mPart("EmperorCrownSpireL", Vector3.new(0.9, 1.6, 0.8), CFrame.new(-1.8, 17.2, 0) * CFrame.Angles(0, 0, math.rad(14)), brass, Enum.Material.Metal)
+	mPart("EmperorCrownSpireR", Vector3.new(0.9, 1.6, 0.8), CFrame.new(1.8, 17.2, 0) * CFrame.Angles(0, 0, math.rad(-14)), brass, Enum.Material.Metal)
+
+	local lbBg = buildBoardFrame("EmperorLeaderboard", monPos, -18, "FOOD EMPEROR MONUMENT", Color3.fromRGB(168, 132, 64))
+	local crownHdr = Instance.new("TextLabel")
+	crownHdr.Position = UDim2.new(0.05, 0, 0.19, 0)
+	crownHdr.Size = UDim2.new(0.90, 0, 0.12, 0)
+	crownHdr.BackgroundTransparency = 1
+	crownHdr.Font = Enum.Font.GothamBlack
+	crownHdr.TextXAlignment = Enum.TextXAlignment.Center
+	crownHdr.TextSize = 20
+	crownHdr.TextColor3 = Color3.fromRGB(244, 212, 124)
+	crownHdr.Text = "REIGNING EMPEROR: ---"
+	crownHdr.Parent = lbBg
+	emperorHeaderLabel = crownHdr
+
 	for i = 1, 4 do
 		local row = Instance.new("TextLabel")
-		row.Position = UDim2.new(0.06, 0, 0.22 + (i - 1) * 0.19, 0)
-		row.Size = UDim2.new(0.88, 0, 0.17, 0)
+		row.Position = UDim2.new(0.05, 0, 0.32 + (i - 1) * 0.16, 0)
+		row.Size = UDim2.new(0.90, 0, 0.15, 0)
 		row.BackgroundTransparency = 1
 		row.Font = Enum.Font.GothamBold
 		row.TextXAlignment = Enum.TextXAlignment.Left
-		row.TextSize = 26
-		row.TextColor3 = if i == 1 then Color3.fromRGB(255, 224, 96) else Color3.new(1, 1, 1)
+		row.TextSize = 22
+		row.TextColor3 = if i == 1 then Color3.fromRGB(255, 224, 96) else Color3.fromRGB(224, 222, 216)
 		row.Text = string.format("#%d  ---", i)
 		row.Parent = lbBg
 		table.insert(boardRankLabels, row)
 	end
+
+	local tribPrompt = Instance.new("ProximityPrompt")
+	tribPrompt.Name = "ClaimEmperorTributePrompt"
+	tribPrompt.KeyboardKeyCode = Enum.KeyCode.E
+	tribPrompt.HoldDuration = 0.25
+	tribPrompt.MaxActivationDistance = 18
+	tribPrompt.RequiresLineOfSight = false
+	tribPrompt.ActionText = "Claim Food Emperor Tribute (+150G & +25 Rep)"
+	tribPrompt.ObjectText = "Food Emperor Syndicate Monument"
+	tribPrompt.Parent = pedestal
+
+	if monumentPromptConn then
+		monumentPromptConn:Disconnect()
+	end
+	monumentPromptConn = tribPrompt.Triggered:Connect(function(player: Player)
+		CentralEventService.TryClaimEmperorTribute(player)
+	end)
+	monument.PrimaryPart = pedestal
 end
 
 local function refreshPlazaLeaderboard(): ()
 	if #boardRankLabels == 0 then
 		return
 	end
-	local entries: { { Name: string, Rep: number, Level: number } } = {}
+	local entries: { { Player: Player, Name: string, Rep: number, Level: number, Coins: number } } = {}
 	for _, p in ipairs(Players:GetPlayers()) do
 		local prof = PlayerDataService.GetProfile(p)
-		table.insert(entries, { Name = p.DisplayName, Rep = prof.Reputation, Level = prof.Level })
+		table.insert(entries, {
+			Player = p,
+			Name = p.DisplayName,
+			Rep = prof.Reputation,
+			Level = prof.Level,
+			Coins = prof.Coins,
+		})
 	end
 	table.sort(entries, function(a, b)
-		return a.Rep > b.Rep
+		if a.Rep ~= b.Rep then
+			return a.Rep > b.Rep
+		end
+		return a.Coins > b.Coins
 	end)
+
+	local top = entries[1]
+	if emperorHeaderLabel then
+		if top then
+			emperorHeaderLabel.Text = string.format("REIGNING EMPEROR: %s [%s]", string.upper(top.Name), getRankTitleForRep(top.Rep))
+		else
+			emperorHeaderLabel.Text = "REIGNING EMPEROR: ---"
+		end
+	end
+
 	for i, lbl in ipairs(boardRankLabels) do
 		local e = entries[i]
 		if e then
-			lbl.Text = string.format("#%d  %s — %d Rep (Lv.%d)", i, e.Name, e.Rep, e.Level)
+			lbl.Text = string.format("#%d  %s [%s] — %d Rep | %dG", i, e.Name, getRankTitleForRep(e.Rep), e.Rep, e.Coins)
 		else
 			lbl.Text = string.format("#%d  ---", i)
 		end
+	end
+
+	local now = os.clock()
+	if top and (now - lastAutoTributeAt) >= 45 then
+		lastAutoTributeAt = now
+		PlayerDataService.AddRewards(top.Player, 75, 20, 12)
 	end
 end
 

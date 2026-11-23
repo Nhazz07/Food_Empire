@@ -26,11 +26,15 @@ local function getMotor(char: Model, partName: string, motorName: string): Motor
 	return if m and m:IsA("Motor6D") then m else nil
 end
 
-local function applySeatedBikePose(char: Model, bankRad: number): ()
-	-- Lower rider comfortably onto the leather saddle & lean rider WITH the motorbike into turns!
+local function applySeatedBikePose(char: Model, bankRad: number, isSedan: boolean): ()
+	-- Lower rider comfortably onto the leather saddle (or driver seat in Mafia Sedan) & lean into turns!
 	local rootJoint = getMotor(char, "LowerTorso", "Root")
 	if rootJoint then
-		rootJoint.Transform = CFrame.new(0, -1.05, 0.35) * CFrame.Angles(math.rad(-10), 0, bankRad * 0.85)
+		if isSedan then
+			rootJoint.Transform = CFrame.new(-1.35, -1.05, -0.20) * CFrame.Angles(math.rad(-4), 0, bankRad * 0.35)
+		else
+			rootJoint.Transform = CFrame.new(0, -1.05, 0.35) * CFrame.Angles(math.rad(-10), 0, bankRad * 0.85)
+		end
 	end
 
 	local waist = getMotor(char, "UpperTorso", "Waist")
@@ -123,6 +127,8 @@ function MotorbikeController.Start(): ()
 
 			local frontWheel = chassis:FindFirstChild("FrontWheelJoint")
 			local rearWheel = chassis:FindFirstChild("RearWheelJoint")
+			local frontRightWheel = chassis:FindFirstChild("FrontRightWheelJoint")
+			local rearRightWheel = chassis:FindFirstChild("RearRightWheelJoint")
 			local wheelSpinCF = CFrame.Angles(-st.WheelAngle, 0, 0)
 			if frontWheel and frontWheel:IsA("Motor6D") then
 				frontWheel.Transform = wheelSpinCF
@@ -130,18 +136,29 @@ function MotorbikeController.Start(): ()
 			if rearWheel and rearWheel:IsA("Motor6D") then
 				rearWheel.Transform = wheelSpinCF
 			end
+			if frontRightWheel and frontRightWheel:IsA("Motor6D") then
+				frontRightWheel.Transform = wheelSpinCF
+			end
+			if rearRightWheel and rearRightWheel:IsA("Motor6D") then
+				rearRightWheel.Transform = wheelSpinCF
+			end
 
 			-- 2. Smooth cornering bank / lean into left & right turns + subtle acceleration wheelie pitch
+			local isSedan = char:GetAttribute("RidingMafiaSedan") == true
 			local yawRate = root.AssemblyAngularVelocity.Y
 			local speedFactor = math.clamp(math.abs(forwardSpeed) / 28, 0, 1)
-			local targetBank = math.clamp(yawRate * 0.14 * speedFactor, -MAX_BANK_RAD, MAX_BANK_RAD)
+			local maxBank = if isSedan then (MAX_BANK_RAD * 0.22) else MAX_BANK_RAD
+			local targetBank = math.clamp(yawRate * 0.14 * speedFactor, -maxBank, maxBank)
 			st.CurrentBank += (targetBank - st.CurrentBank) * math.min(1, clampedDt * 10)
 
 			local accel = math.clamp((forwardSpeed - st.LastSpeed) / math.max(0.01, clampedDt), -60, 60)
 			st.LastSpeed = forwardSpeed
 			local isTurbo = char:GetAttribute("BikeTurboActive") == true
-			local turboPitch = if isTurbo then math.rad(3.2) else 0
+			local turboPitch = if isTurbo then (if isSedan then math.rad(1.4) else math.rad(3.2)) else 0
 			local pitchRad = math.clamp(accel * 0.0012 + turboPitch, math.rad(-3.5), math.rad(6.0))
+			if isSedan then
+				pitchRad *= 0.45
+			end
 
 			local tiltJoint = chassis:FindFirstChild("BikeTiltJoint")
 			if tiltJoint and tiltJoint:IsA("Motor6D") then
@@ -155,8 +172,8 @@ function MotorbikeController.Start(): ()
 				smoke.Rate = if isTurbo then 38 else (4 + speedFactor * 16)
 			end
 
-			-- 4. Lock rider into realistic leaning seated motorcycle posture!
-			applySeatedBikePose(char, st.CurrentBank)
+			-- 4. Lock rider into realistic leaning seated posture!
+			applySeatedBikePose(char, st.CurrentBank, isSedan)
 		end
 	end)
 end

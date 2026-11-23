@@ -31,6 +31,11 @@ export type PlayerProfile = {
 	UnlockedGuardClasses: { [string]: boolean },
 	OwnedGuardGear: { [string]: boolean },
 	GuardLoadouts: { [string]: { [string]: string } },
+	HasDualStove: boolean,
+	HasVIPBooths: boolean,
+	OwnsMafiaSedan: boolean,
+	GuardStance: string,
+	WeaponMods: { [string]: { [string]: boolean } },
 }
 
 export type ProfileChangedCallback = (player: Player, profile: PlayerProfile) -> ()
@@ -90,6 +95,11 @@ local function createDefaultProfile(): PlayerProfile
 		UnlockedGuardClasses = {},
 		OwnedGuardGear = {},
 		GuardLoadouts = {},
+		HasDualStove = false,
+		HasVIPBooths = false,
+		OwnsMafiaSedan = false,
+		GuardStance = "Follow",
+		WeaponMods = {},
 	}
 end
 
@@ -215,6 +225,7 @@ function PlayerDataService.SetDefenseLevel(player: Player, level: number): ()
 	local slot = BaseService.GetPlayerBaseSlot(player)
 	if slot then
 		BaseService.SetDefenseTier(slot, profile.DefenseLevel)
+		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
 	end
 	notifyChanged(player)
 end
@@ -339,6 +350,55 @@ function PlayerDataService.SetOwnsMotorbike(player: Player, owned: boolean): ()
 	local profile = PlayerDataService.GetProfile(player)
 	profile.OwnsMotorbike = owned
 	notifyChanged(player)
+end
+
+function PlayerDataService.SetHasDualStove(player: Player, owned: boolean): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.HasDualStove = owned
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if slot then
+		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
+	end
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetHasVIPBooths(player: Player, owned: boolean): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.HasVIPBooths = owned
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if slot then
+		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
+	end
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetOwnsMafiaSedan(player: Player, owned: boolean): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.OwnsMafiaSedan = owned
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetGuardStance(player: Player, stance: string): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.GuardStance = stance
+	notifyChanged(player)
+end
+
+function PlayerDataService.UnlockWeaponMod(player: Player, weaponId: string, modId: string): ()
+	local profile = PlayerDataService.GetProfile(player)
+	local map = profile.WeaponMods[weaponId]
+	if not map then
+		map = {}
+		profile.WeaponMods[weaponId] = map
+	end
+	map[modId] = true
+	notifyChanged(player)
+end
+
+function PlayerDataService.HasWeaponMod(player: Player, weaponId: string, modId: string): boolean
+	local profile = PlayerDataService.GetProfile(player)
+	local map = profile.WeaponMods[weaponId]
+	return map ~= nil and map[modId] == true
 end
 
 function PlayerDataService.UnlockWeapon(player: Player, weaponId: string): ()
@@ -475,6 +535,23 @@ local function loadPlayer(player: Player): ()
 				end
 			end
 			if typeof(saved.OwnsMotorbike) == "boolean" then profile.OwnsMotorbike = saved.OwnsMotorbike end
+			if typeof(saved.HasDualStove) == "boolean" then profile.HasDualStove = saved.HasDualStove end
+			if typeof(saved.HasVIPBooths) == "boolean" then profile.HasVIPBooths = saved.HasVIPBooths end
+			if typeof(saved.OwnsMafiaSedan) == "boolean" then profile.OwnsMafiaSedan = saved.OwnsMafiaSedan end
+			if typeof(saved.GuardStance) == "string" then profile.GuardStance = saved.GuardStance end
+			if typeof(saved.WeaponMods) == "table" then
+				for wid, mMap in pairs(saved.WeaponMods) do
+					if typeof(wid) == "string" and typeof(mMap) == "table" then
+						local copy: { [string]: boolean } = {}
+						for mid, v in pairs(mMap) do
+							if typeof(mid) == "string" and v == true then
+								copy[mid] = true
+							end
+						end
+						profile.WeaponMods[wid] = copy
+					end
+				end
+			end
 			if typeof(saved.WaiterCount) == "number" then profile.WaiterCount = math.clamp(math.floor(saved.WaiterCount), 0, 3) end
 			if typeof(saved.CourierCount) == "number" then profile.CourierCount = math.clamp(math.floor(saved.CourierCount), 0, 2) end
 			if typeof(saved.OwnsCentralParkBranch) == "boolean" then profile.OwnsCentralParkBranch = saved.OwnsCentralParkBranch end
@@ -505,6 +582,7 @@ local function loadPlayer(player: Player): ()
 	local slot = BaseService.GetPlayerBaseSlot(player)
 	if slot then
 		BaseService.SetDefenseTier(slot, profile.DefenseLevel)
+		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
 	end
 
 	notifyChanged(player)
@@ -538,6 +616,11 @@ local function savePlayer(player: Player): ()
 		GuardLoadouts = profile.GuardLoadouts,
 		AmmoInventory = profile.AmmoInventory,
 		OwnsMotorbike = profile.OwnsMotorbike,
+		HasDualStove = profile.HasDualStove,
+		HasVIPBooths = profile.HasVIPBooths,
+		OwnsMafiaSedan = profile.OwnsMafiaSedan,
+		GuardStance = profile.GuardStance,
+		WeaponMods = profile.WeaponMods,
 		HasKevlarVest = profile.HasKevlarVest,
 		Armor = profile.Armor,
 		OwnedWeapons = profile.OwnedWeapons,
@@ -566,6 +649,7 @@ function PlayerDataService.Start(): ()
 	BaseService.OnBaseAssigned(function(player, slot)
 		local profile = PlayerDataService.GetProfile(player)
 		BaseService.SetDefenseTier(slot, profile.DefenseLevel)
+		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
 		notifyChanged(player)
 	end)
 

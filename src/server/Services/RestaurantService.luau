@@ -32,11 +32,20 @@ local TurfService = require("./TurfService")
 local CentralParkBranchService = require("./CentralParkBranchService")
 local SpinEventService = require("./SpinEventService")
 local SyndicateContractService = require("./SyndicateContractService")
+local CentralEventService = require("./CentralEventService")
 
 type KitchenState = {
 	IsCooking: boolean,
 	CurrentRecipeId: string?,
 	CookEndsAt: number,
+	Boosted1: boolean,
+	Token1: number,
+	IsCooking2: boolean,
+	CurrentRecipeId2: string?,
+	CookEndsAt2: number,
+	Boosted2: boolean,
+	Token2: number,
+	MasterworkBonusCount: number,
 	ReadyDishes: { [string]: number },
 }
 
@@ -106,14 +115,15 @@ function RestaurantService.GetRestaurantStarInfo(player: Player): { [string]: an
 	if CrewService.GetCrewCount(player) >= 1 and CrewService.GetWaiterCount(player) >= 1 then
 		stars += 1
 	end
-	if prof.OwnsCentralParkBranch or specCount >= 2 or served >= 5 then
+	if prof.OwnsCentralParkBranch or prof.HasDualStove or specCount >= 2 or served >= 5 then
 		stars += 1
 	end
-	if prof.RestaurantLevel >= 3 or prof.Reputation >= 200 or specCount >= 4 then
+	if prof.RestaurantLevel >= 3 or prof.HasVIPBooths or prof.Reputation >= 200 or specCount >= 4 then
 		stars += 1
 	end
 	stars = math.clamp(stars, 1, 5)
-	local mult = 1.0 + (stars - 1) * 0.125
+	local vipBoothMult = if prof.HasVIPBooths then 0.20 else 0.0
+	local mult = 1.0 + (stars - 1) * 0.125 + vipBoothMult
 	return {
 		Stars = stars,
 		Title = STAR_TITLES[stars] or "1-STAR STREET DINER",
@@ -121,6 +131,8 @@ function RestaurantService.GetRestaurantStarInfo(player: Player): { [string]: an
 		Multiplier = mult,
 		DishesServed = served,
 		SpecialtyCount = specCount,
+		HasVIPBooths = prof.HasVIPBooths == true,
+		HasDualStove = prof.HasDualStove == true,
 	}
 end
 local customerModels: { [Player]: { Model } } = {}
@@ -1500,6 +1512,14 @@ local function ensureKitchen(player: Player): KitchenState
 		IsCooking = false,
 		CurrentRecipeId = nil,
 		CookEndsAt = 0,
+		Boosted1 = false,
+		Token1 = 0,
+		IsCooking2 = false,
+		CurrentRecipeId2 = nil,
+		CookEndsAt2 = 0,
+		Boosted2 = false,
+		Token2 = 0,
+		MasterworkBonusCount = 0,
 		ReadyDishes = {},
 	}
 	kitchens[player] = created
@@ -1537,6 +1557,14 @@ local function buildClientPayload(player: Player): { [string]: any }
 			IsCooking = kitchen.IsCooking,
 			CurrentRecipeId = kitchen.CurrentRecipeId,
 			TimeRemaining = if kitchen.IsCooking then math.max(0, kitchen.CookEndsAt - os.clock()) else 0,
+			Boosted1 = kitchen.Boosted1,
+			IsCooking2 = kitchen.IsCooking2,
+			CurrentRecipeId2 = kitchen.CurrentRecipeId2,
+			TimeRemaining2 = if kitchen.IsCooking2 then math.max(0, kitchen.CookEndsAt2 - os.clock()) else 0,
+			Boosted2 = kitchen.Boosted2,
+			HasDualStove = profile.HasDualStove == true,
+			HasVIPBooths = profile.HasVIPBooths == true,
+			MasterworkBonusCount = kitchen.MasterworkBonusCount,
 			ReadyDishes = kitchen.ReadyDishes,
 			ReadyTotal = countReadyDishes(kitchen),
 		},
@@ -1558,6 +1586,10 @@ local function buildClientPayload(player: Player): { [string]: any }
 		VIPOrder = VIPOrderService.GetOrderSnapshot(player),
 		OwnsMotorbike = ScooterService.OwnsMotorbike(player),
 		MotorbikeCoinCost = ScooterService.MOTORBIKE_COIN_COST,
+		OwnsMafiaSedan = ScooterService.OwnsMafiaSedan(player),
+		MafiaSedanCost = ScooterService.SEDAN_COIN_COST,
+		GuardStance = BodyguardService.GetSquadStance(player),
+		VaultKeycards = tonumber(player:GetAttribute("VaultKeycards")) or 0,
 		RaiderCount = RaiderChefService.GetRaiderCount(player),
 		MaxRaiders = RaiderChefService.MAX_RAIDERS,
 		NextRaiderCost = RaiderChefService.GetNextCost(player),
@@ -1597,6 +1629,50 @@ function RestaurantService.PickBestAvailableRecipe(player: Player): string?
 	return nil
 end
 
+local function finishCookSlot(player: Player, slotNum: number, token: number, recipeId: string): ()
+	if not player.Parent then
+		return
+	end
+	local kitchen = ensureKitchen(player)
+	local wasBoosted = false
+	if slotNum == 1 then
+		if not kitchen.IsCooking or kitchen.Token1 ~= token then
+			return
+		end
+		wasBoosted = kitchen.Boosted1
+		kitchen.IsCooking = false
+		kitchen.CurrentRecipeId = nil
+		kitchen.CookEndsAt = 0
+		kitchen.Boosted1 = false
+	else
+		if not kitchen.IsCooking2 or kitchen.Token2 ~= token then
+			return
+		end
+		wasBoosted = kitchen.Boosted2
+		kitchen.IsCooking2 = false
+		kitchen.CurrentRecipeId2 = nil
+		kitchen.CookEndsAt2 = 0
+		kitchen.Boosted2 = false
+	end
+
+	kitchen.ReadyDishes[recipeId] = (kitchen.ReadyDishes[recipeId] or 0) + 1
+	if wasBoosted then
+		kitchen.MasterworkBonusCount += 1
+	end
+	if not kitchen.IsCooking and not kitchen.IsCooking2 then
+		setGrillCookingVisual(player, false, nil)
+	end
+	syncCounterPlatters(player)
+	if SPECIALTY_RECIPE_IDS[recipeId] then
+		specialtyCookCounts[player] = (specialtyCookCounts[player] or 0) + 1
+		SyndicateContractService.RecordProgress(player, "SpecialtyFeast", 1)
+	end
+	local recipe = RecipeConfig.Recipes[recipeId]
+	updateCustomerSpeech(player, "Food Ready! Sell Now!")
+	print(string.format("[RestaurantService] %s finished cooking %s (Stove #%d)!", player.Name, if recipe then recipe.DisplayName else recipeId, slotNum))
+	RestaurantService.PushStateToClient(player)
+end
+
 function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolean, string)
 	local recipe = RecipeConfig.Recipes[recipeId]
 	if not recipe then
@@ -1609,8 +1685,16 @@ function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolea
 	end
 
 	local kitchen = ensureKitchen(player)
-	if kitchen.IsCooking then
-		return false, "Already cooking a dish!"
+	local hasDual = profile.HasDualStove == true
+	local useSlot = 0
+	if not kitchen.IsCooking then
+		useSlot = 1
+	elseif hasDual and not kitchen.IsCooking2 then
+		useSlot = 2
+	else
+		return false, if hasDual
+			then "Both Stove Lines are busy! Use SEAR BOOST to speed up cooking!"
+			else "Stove is busy! Unlock Dual-Stove Line (650G) or press SEAR BOOST!"
 	end
 
 	if not WarehouseService.ConsumeIngredients(player, recipe.Ingredients) then
@@ -1621,9 +1705,23 @@ function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolea
 	local speedMult = tier.CookSpeedMultiplier * CrewService.GetCookSpeedMultiplier(player) * MonetizationService.GetCookSpeedMultiplier(player)
 	local duration = math.max(0.6, recipe.CookTime / speedMult)
 
-	kitchen.IsCooking = true
-	kitchen.CurrentRecipeId = recipeId
-	kitchen.CookEndsAt = os.clock() + duration
+	local myToken: number
+	if useSlot == 1 then
+		kitchen.Token1 += 1
+		myToken = kitchen.Token1
+		kitchen.IsCooking = true
+		kitchen.CurrentRecipeId = recipeId
+		kitchen.CookEndsAt = os.clock() + duration
+		kitchen.Boosted1 = false
+	else
+		kitchen.Token2 += 1
+		myToken = kitchen.Token2
+		kitchen.IsCooking2 = true
+		kitchen.CurrentRecipeId2 = recipeId
+		kitchen.CookEndsAt2 = os.clock() + duration
+		kitchen.Boosted2 = false
+	end
+
 	setGrillCookingVisual(player, true, DISH_COLORS[recipeId])
 	local cat = getPrimaryCategoryForRecipe(recipeId)
 	local activeChef = if MonetizationService.HasPass(player, "MasterProChef")
@@ -1634,25 +1732,82 @@ function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolea
 	RestaurantService.PushStateToClient(player)
 
 	task.delay(duration, function()
-		if not player.Parent then
-			return
-		end
-		kitchen.IsCooking = false
-		kitchen.CurrentRecipeId = nil
-		kitchen.CookEndsAt = 0
-		kitchen.ReadyDishes[recipeId] = (kitchen.ReadyDishes[recipeId] or 0) + 1
-		setGrillCookingVisual(player, false, nil)
-		syncCounterPlatters(player)
-		if SPECIALTY_RECIPE_IDS[recipeId] then
-			specialtyCookCounts[player] = (specialtyCookCounts[player] or 0) + 1
-			SyndicateContractService.RecordProgress(player, "SpecialtyFeast", 1)
-		end
-		updateCustomerSpeech(player, "Food Ready! Sell Now!")
-		print(string.format("[RestaurantService] %s finished cooking %s!", player.Name, recipe.DisplayName))
-		RestaurantService.PushStateToClient(player)
+		finishCookSlot(player, useSlot, myToken, recipeId)
 	end)
 
-	return true, string.format("Cooking %s (%.1fs)", recipe.DisplayName, duration)
+	return true, string.format("Stove #%d Cooking %s (%.1fs) — Press SEAR BOOST for Masterwork!", useSlot, recipe.DisplayName, duration)
+end
+
+-- Interactive Timing Sear Boost: Cuts remaining cook time by 40% and upgrades the dish to CHEF'S MASTERWORK (+50% Gold)!
+function RestaurantService.TrySearBoost(player: Player): (boolean, string)
+	local kitchen = ensureKitchen(player)
+	local now = os.clock()
+	if kitchen.IsCooking and not kitchen.Boosted1 then
+		local rem = math.max(0.4, (kitchen.CookEndsAt - now) * 0.60)
+		kitchen.Boosted1 = true
+		kitchen.Token1 += 1
+		local tok = kitchen.Token1
+		local recId = kitchen.CurrentRecipeId or "GrilledFish"
+		kitchen.CookEndsAt = now + rem
+		RestaurantService.PushStateToClient(player)
+		if RecipeConfig.Recipes[recId] then
+			task.delay(rem, function()
+				finishCookSlot(player, 1, tok, recId)
+			end)
+		end
+		return true, string.format("CHEF'S MASTERWORK SEAR! Stove #1 time cut to %.1fs (+50%% Gold Bonus)!", rem)
+	elseif kitchen.IsCooking2 and not kitchen.Boosted2 then
+		local rem = math.max(0.4, (kitchen.CookEndsAt2 - now) * 0.60)
+		kitchen.Boosted2 = true
+		kitchen.Token2 += 1
+		local tok = kitchen.Token2
+		local recId = kitchen.CurrentRecipeId2 or "GrilledFish"
+		kitchen.CookEndsAt2 = now + rem
+		RestaurantService.PushStateToClient(player)
+		if RecipeConfig.Recipes[recId] then
+			task.delay(rem, function()
+				finishCookSlot(player, 2, tok, recId)
+			end)
+		end
+		return true, string.format("CHEF'S MASTERWORK SEAR! Stove #2 time cut to %.1fs (+50%% Gold Bonus)!", rem)
+	elseif kitchen.IsCooking or kitchen.IsCooking2 then
+		return false, "Active dish is already Sear-Boosted to Chef's Masterwork!"
+	end
+	return false, "Start cooking a dish first, then trigger Sear Boost!"
+end
+
+function RestaurantService.TryBuyDualStove(player: Player): (boolean, string)
+	if not BaseService.GetPlayerBaseSlot(player) then
+		return false, "Claim your Restaurant Plaza Base first!"
+	end
+	local prof = PlayerDataService.GetProfile(player)
+	if prof.HasDualStove then
+		return true, "Dual-Stove Commercial Range is already installed!"
+	end
+	if not PlayerDataService.SpendCoins(player, 650) then
+		return false, "Need 650 Gold to install the 2nd Commercial Stove Line!"
+	end
+	PlayerDataService.SetHasDualStove(player, true)
+	SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1)
+	RestaurantService.PushStateToClient(player)
+	return true, "Installed 2nd Commercial Stove Line! Cook 2 dishes simultaneously!"
+end
+
+function RestaurantService.TryBuyVIPBooths(player: Player): (boolean, string)
+	if not BaseService.GetPlayerBaseSlot(player) then
+		return false, "Claim your Restaurant Plaza Base first!"
+	end
+	local prof = PlayerDataService.GetProfile(player)
+	if prof.HasVIPBooths then
+		return true, "VIP Private Dining Booths are already installed!"
+	end
+	if not PlayerDataService.SpendCoins(player, 850) then
+		return false, "Need 850 Gold to install VIP Private Dining Booths!"
+	end
+	PlayerDataService.SetHasVIPBooths(player, true)
+	SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1)
+	RestaurantService.PushStateToClient(player)
+	return true, "Installed Luxury VIP Private Dining Booths (+20% Dish Payout & +1 Star Rating)!"
 end
 
 function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string)
@@ -1684,9 +1839,14 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 		if recipe and qty > 0 then
 			servedCopy[recipeId] = qty
 			table.insert(dishNames, recipe.DisplayName)
-			totalCoins += math.floor(recipe.CoinsReward * tier.PayoutMultiplier * eventCoinsMult * passCoinsMult * waiterTipMult * starMult * rankMult) * qty
+			local mwCount = math.min(qty, kitchen.MasterworkBonusCount)
+			kitchen.MasterworkBonusCount = math.max(0, kitchen.MasterworkBonusCount - mwCount)
+			local normalCount = qty - mwCount
+			local baseCoin = recipe.CoinsReward * tier.PayoutMultiplier * eventCoinsMult * passCoinsMult * waiterTipMult * starMult * rankMult
+			totalCoins += math.floor(baseCoin) * normalCount + math.floor(baseCoin * 1.50) * mwCount
 			totalExp += recipe.ExpReward * qty
-			totalRep += math.floor(recipe.ReputationReward * eventRepMult * passRepMult * starMult) * qty
+			local baseRep = recipe.ReputationReward * eventRepMult * passRepMult * starMult
+			totalRep += math.floor(baseRep) * normalCount + math.floor(baseRep * 1.50) * mwCount
 		end
 	end
 
@@ -1887,11 +2047,21 @@ local function wireRestaurantPrompts(): ()
 	for _, cookPart in ipairs(CollectionService:GetTagged("CookingStation")) do
 		if cookPart:IsA("BasePart") then
 			local slotAttr = cookPart:GetAttribute("BaseSlot")
-			local prompt = ensurePrompt(cookPart, "CookPrompt", "Cook Best Recipe", "Cooking Station")
+			local prompt = ensurePrompt(cookPart, "CookPrompt", "Cook / Sear Boost [E]", "Commercial Chef's Range")
 			table.insert(
 				promptConnections,
 				prompt.Triggered:Connect(function(player)
 					if typeof(slotAttr) == "string" and BaseService.GetPlayerBaseSlot(player) ~= slotAttr then
+						return
+					end
+					local k = ensureKitchen(player)
+					if (k.IsCooking and not k.Boosted1) or (k.IsCooking2 and not k.Boosted2) then
+						local _, msg = RestaurantService.TrySearBoost(player)
+						local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+						local toastEv = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
+						if toastEv and toastEv:IsA("RemoteEvent") then
+							toastEv:FireClient(player, msg)
+						end
 						return
 					end
 					local best = RestaurantService.PickBestAvailableRecipe(player)
@@ -2061,6 +2231,24 @@ local function setupRemotes(): ()
 				ok, msg = SyndicateContractService.StartGangWarDrop(player)
 			elseif action == "TriggerBikeTurbo" then
 				ok, msg = ScooterService.TriggerTurbo(player)
+			elseif action == "BuyDualStove" then
+				ok, msg = RestaurantService.TryBuyDualStove(player)
+			elseif action == "BuyVIPBooths" then
+				ok, msg = RestaurantService.TryBuyVIPBooths(player)
+			elseif action == "SearBoostCook" then
+				ok, msg = RestaurantService.TrySearBoost(player)
+			elseif action == "SetGuardStance" then
+				ok, msg = if typeof(arg) == "string" and arg ~= "" then BodyguardService.SetSquadStance(player, arg) else BodyguardService.CycleSquadStance(player)
+			elseif action == "CrackTerritoryVault" then
+				ok, msg = ShipmentService.TryCrackTerritoryVault(player, if typeof(arg) == "string" then arg else nil)
+			elseif action == "BuyMafiaSedan" then
+				ok, msg = ScooterService.BuySedanWithCoins(player)
+			elseif action == "ToggleMafiaSedan" then
+				ok, msg = ScooterService.ToggleMafiaSedan(player)
+			elseif action == "BuyWeaponMod" and typeof(arg) == "table" and typeof(arg.WeaponId) == "string" and typeof(arg.ModId) == "string" then
+				ok, msg = BlackMarketService.BuyWeaponMod(player, arg.WeaponId, arg.ModId)
+			elseif action == "ClaimEmperorTribute" then
+				ok, msg = CentralEventService.TryClaimEmperorTribute(player)
 			elseif action == "TeleportSpinWheel" then
 				ok, msg = SpinEventService.TeleportToWheel(player)
 			elseif action == "SpinMarketWheel" then
@@ -2125,7 +2313,9 @@ function RestaurantService.Start(): ()
 	-- 1) Hired Chefs ONLY fetch ingredients from Warehouse & cook plated food onto Kitchen Counter!
 	CrewService.SetAutoCookOnlyHandler(function(player)
 		local kitchen = ensureKitchen(player)
-		if not kitchen.IsCooking and countReadyDishes(kitchen) < 6 then
+		local hasDual = PlayerDataService.GetProfile(player).HasDualStove == true
+		local canCookNow = (not kitchen.IsCooking) or (hasDual and not kitchen.IsCooking2)
+		if canCookNow and countReadyDishes(kitchen) < 6 then
 			local best = RestaurantService.PickBestAvailableRecipe(player)
 			if best then
 				RestaurantService.CookRecipe(player, best)

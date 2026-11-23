@@ -180,6 +180,33 @@ local function buildRivalUnitModel(
 	humanoid.Parent = model
 
 	humanoid.Died:Connect(function()
+		if faction.Id ~= "CrimsonDonEmpire" and root.Parent then
+			local deathPos = root.Position
+			local bestP: Player? = nil
+			local bestD = 160
+			for _, p in ipairs(Players:GetPlayers()) do
+				local ch = p.Character
+				local hrp = if ch then ch:FindFirstChild("HumanoidRootPart") else nil
+				if hrp and hrp:IsA("BasePart") then
+					local d = (hrp.Position - deathPos).Magnitude
+					if d < bestD then
+						bestD = d
+						bestP = p
+					end
+				elseif not bestP then
+					bestP = p
+				end
+			end
+			if bestP then
+				local cur = tonumber(bestP:GetAttribute("VaultKeycards")) or 0
+				bestP:SetAttribute("VaultKeycards", cur + 1)
+				local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+				local ev = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
+				if ev and ev:IsA("RemoteEvent") then
+					ev:FireClient(bestP, string.format("TERRITORY KEYCARD DROPPED (%d Owned)! Crack a Corner Supply Vault [E] for +440G & Rare Stock!", cur + 1))
+				end
+			end
+		end
 		MafiaVisualBuilder.PlayDeathSequence(model, isBossLeader, function(impactPos: Vector3)
 			BlackMarketService.BroadcastSFX("BodyDrop", impactPos)
 		end)
@@ -208,8 +235,10 @@ local function buildRivalUnitModel(
 		local frac = math.clamp(hp / maxH, 0, 1)
 		hpFill.Size = UDim2.fromScale(frac, 1)
 		hpText.Text = string.format("%d / %d HP", cur, maxH)
-		-- Squad Alert! If damaged, alert nearby faction allies & Boss Bodyguards within 95 studs!
-		if hp < prevHp and root.Parent then
+		-- Squad Alert! If damaged (and not hit by a Suppressed weapon), alert nearby faction allies & Boss Bodyguards within 95 studs!
+		local supAt = model:GetAttribute("SuppressedHitAt")
+		local isSuppressedHit = typeof(supAt) == "number" and (os.clock() - supAt) < 0.6
+		if hp < prevHp and root.Parent and not isSuppressedHit then
 			local hitOrigin = root.Position
 			for _, ally in ipairs(activeAgents) do
 				if ally.Faction.Id == faction.Id and ally.Root.Parent and (ally.Root.Position - hitOrigin).Magnitude <= 95 then

@@ -13,9 +13,12 @@ local MonetizationService = require("./MonetizationService")
 local ScooterService = {}
 
 ScooterService.MOTORBIKE_COIN_COST = 750
+ScooterService.SEDAN_COIN_COST = 1250
 
 local MOTORBIKE_WALK_SPEED = 44
 local MOTORBIKE_TURBO_SPEED = 66
+local SEDAN_WALK_SPEED = 50
+local SEDAN_TURBO_SPEED = 74
 local TURBO_DURATION = 4.5
 local TURBO_COOLDOWN = 9.0
 local NORMAL_WALK_SPEED = 16
@@ -38,6 +41,10 @@ function ScooterService.OwnsMotorbike(player: Player): boolean
 	return false
 end
 
+function ScooterService.OwnsMafiaSedan(player: Player): boolean
+	return PlayerDataService.GetProfile(player).OwnsMafiaSedan == true
+end
+
 local function unmountMotorbike(player: Player): ()
 	local existing = activeBikes[player]
 	if existing and existing.Parent then
@@ -49,6 +56,7 @@ local function unmountMotorbike(player: Player): ()
 	local char = player.Character
 	if char then
 		char:SetAttribute("RidingMotorbike", false)
+		char:SetAttribute("RidingMafiaSedan", false)
 		local hum = char:FindFirstChildOfClass("Humanoid")
 		if hum and hum.Health > 0 then
 			hum.WalkSpeed = NORMAL_WALK_SPEED
@@ -289,10 +297,135 @@ local function mountMotorbike(player: Player): (boolean, string)
 	activeBikes[player] = bike
 	player:SetAttribute("OnScooter", true)
 	char:SetAttribute("RidingMotorbike", true)
+	char:SetAttribute("RidingMafiaSedan", false)
 	char:SetAttribute("BikeTurboActive", false)
 	hum.WalkSpeed = MOTORBIKE_WALK_SPEED
 
 	return true, "Sport Motorbike Mounted! Press [LeftShift] for NITRO BOOST or [V] to dismount."
+end
+
+local function mountMafiaSedan(player: Player): (boolean, string)
+	if not ScooterService.OwnsMafiaSedan(player) then
+		return false, "LOCKED_SEDAN"
+	end
+
+	local char = player.Character
+	if not char then
+		return false, "Character not loaded"
+	end
+	local root = char:FindFirstChild("HumanoidRootPart")
+	local hum = char:FindFirstChildOfClass("Humanoid")
+	if not root or not root:IsA("BasePart") or not hum or hum.Health <= 0 then
+		return false, "Cannot drive right now"
+	end
+
+	unmountMotorbike(player)
+
+	local obsidian = Color3.fromRGB(16, 18, 22)
+	local darkSteel = Color3.fromRGB(30, 34, 42)
+	local brass = Color3.fromRGB(178, 144, 78)
+	local chrome = Color3.fromRGB(204, 210, 220)
+	local oxbloodLeather = Color3.fromRGB(72, 24, 28)
+
+	local sedan = Instance.new("Model")
+	sedan.Name = "FoodDeliveryMotorbike"
+
+	local groundY = -(root.Size.Y * 0.5 + hum.HipHeight)
+	local wheelY = groundY + WHEEL_RADIUS
+
+	local chassis = Instance.new("Part")
+	chassis.Name = "BikeChassis"
+	chassis.Size = Vector3.new(6.4, 1.2, 11.8)
+	chassis.CFrame = root.CFrame * CFrame.new(0, wheelY, 0)
+	chassis.Transparency = 1
+	chassis.CanCollide = false
+	chassis.CanTouch = false
+	chassis.CanQuery = false
+	chassis.Massless = true
+	chassis.CastShadow = false
+	chassis.Parent = sedan
+
+	local tiltJoint = Instance.new("Motor6D")
+	tiltJoint.Name = "BikeTiltJoint"
+	tiltJoint.Part0 = root
+	tiltJoint.Part1 = chassis
+	tiltJoint.C0 = CFrame.new(0, wheelY, 0)
+	tiltJoint.C1 = CFrame.new()
+	tiltJoint.Parent = chassis
+
+	-- 4 Spinning Spoked Alloy & Brass Wheels
+	buildSpinningWheel(sedan, chassis, "FrontWheelJoint", Vector3.new(-3.25, 0, -3.85), brass)
+	buildSpinningWheel(sedan, chassis, "FrontRightWheelJoint", Vector3.new(3.25, 0, -3.85), brass)
+	buildSpinningWheel(sedan, chassis, "RearWheelJoint", Vector3.new(-3.25, 0, 3.85), brass)
+	buildSpinningWheel(sedan, chassis, "RearRightWheelJoint", Vector3.new(3.25, 0, 3.85), brass)
+
+	-- Lower Armored Chassis, Running Boards, Sweeping Fenders & Long V8 Hood
+	createRigidPart(sedan, chassis, "LowerChassis", Vector3.new(6.1, 1.45, 11.6), CFrame.new(0, 0.9, 0), obsidian, Enum.Material.Metal, nil, nil)
+	createRigidPart(sedan, chassis, "RunningBoardL", Vector3.new(0.65, 0.35, 6.2), CFrame.new(-3.35, 0.35, 0.1), darkSteel, Enum.Material.Metal, nil, nil)
+	createRigidPart(sedan, chassis, "RunningBoardR", Vector3.new(0.65, 0.35, 6.2), CFrame.new(3.35, 0.35, 0.1), darkSteel, Enum.Material.Metal, nil, nil)
+	createRigidPart(sedan, chassis, "LongHood", Vector3.new(5.2, 1.65, 4.2), CFrame.new(0, 2.05, -3.7), obsidian, Enum.Material.SmoothPlastic, nil, nil)
+	createRigidPart(sedan, chassis, "BrassHoodTrim", Vector3.new(0.18, 0.18, 4.1), CFrame.new(0, 2.92, -3.7), brass, Enum.Material.Metal, nil, nil)
+	createRigidPart(sedan, chassis, "WaterfallGrille", Vector3.new(3.4, 1.85, 0.35), CFrame.new(0, 1.95, -5.85), chrome, Enum.Material.Metal, nil, nil)
+	createRigidPart(sedan, chassis, "FrontBumper", Vector3.new(6.6, 0.55, 0.55), CFrame.new(0, 0.85, -6.05), chrome, Enum.Material.Metal, nil, nil)
+	createRigidPart(sedan, chassis, "RearBumper", Vector3.new(6.6, 0.55, 0.55), CFrame.new(0, 0.85, 6.05), chrome, Enum.Material.Metal, nil, nil)
+	createRigidPart(sedan, chassis, "RearTrunk", Vector3.new(5.6, 1.65, 2.8), CFrame.new(0, 1.95, 4.45), obsidian, Enum.Material.SmoothPlastic, nil, nil)
+
+	-- Passenger Cabin Doors, Oxblood Leather Seats & Steering Wheel (Open visibility so you see your Bodyguards inside!)
+	createRigidPart(sedan, chassis, "DoorLeft", Vector3.new(0.45, 1.65, 5.8), CFrame.new(-2.95, 2.05, 0.45), obsidian, Enum.Material.SmoothPlastic, nil, nil)
+	createRigidPart(sedan, chassis, "DoorRight", Vector3.new(0.45, 1.65, 5.8), CFrame.new(2.95, 2.05, 0.45), obsidian, Enum.Material.SmoothPlastic, nil, nil)
+	createRigidPart(sedan, chassis, "BrassBeltlineL", Vector3.new(0.52, 0.14, 11.2), CFrame.new(-2.95, 2.82, 0), brass, Enum.Material.Metal, nil, nil)
+	createRigidPart(sedan, chassis, "BrassBeltlineR", Vector3.new(0.52, 0.14, 11.2), CFrame.new(2.95, 2.82, 0), brass, Enum.Material.Metal, nil, nil)
+	createRigidPart(sedan, chassis, "FrontBenchSeat", Vector3.new(5.1, 0.85, 1.8), CFrame.new(0, 1.65, -0.15), oxbloodLeather, Enum.Material.SmoothPlastic, nil, nil)
+	createRigidPart(sedan, chassis, "RearBenchSeat", Vector3.new(5.1, 0.95, 1.9), CFrame.new(0, 1.7, 2.35), oxbloodLeather, Enum.Material.SmoothPlastic, nil, nil)
+	createRigidPart(sedan, chassis, "SteeringWheel", Vector3.new(0.25, 1.25, 1.25), CFrame.new(-1.35, 2.85, -1.25) * CFrame.Angles(math.rad(25), math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder, nil)
+
+	-- Armored Cabin Roof, Pillars & Tinted Windshield
+	createRigidPart(sedan, chassis, "CabinRoof", Vector3.new(5.6, 0.35, 5.8), CFrame.new(0, 4.95, 0.55), obsidian, Enum.Material.SmoothPlastic, nil, nil)
+	createRigidPart(sedan, chassis, "Windshield", Vector3.new(5.2, 2.05, 0.22), CFrame.new(0, 3.85, -2.05) * CFrame.Angles(math.rad(-22), 0, 0), Color3.fromRGB(28, 34, 44), Enum.Material.Glass, nil, 0.52)
+	createRigidPart(sedan, chassis, "RearWindow", Vector3.new(5.0, 1.85, 0.22), CFrame.new(0, 3.85, 3.25) * CFrame.Angles(math.rad(20), 0, 0), Color3.fromRGB(28, 34, 44), Enum.Material.Glass, nil, 0.52)
+	for _, px in ipairs({ -2.65, 2.65 }) do
+		for _, pz in ipairs({ -1.75, 0.65, 3.05 }) do
+			createRigidPart(sedan, chassis, "RoofPillar", Vector3.new(0.28, 2.2, 0.28), CFrame.new(px, 3.85, pz), darkSteel, Enum.Material.Metal, nil, nil)
+		end
+	end
+
+	-- Dual Warm Headlights, Taillights & Twin Chrome Exhaust Pipes
+	local hlL = createRigidPart(sedan, chassis, "HeadlightL", Vector3.new(0.45, 0.95, 0.95), CFrame.new(-2.25, 2.1, -5.85) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(255, 240, 192), Enum.Material.Neon, Enum.PartType.Cylinder, nil)
+	createRigidPart(sedan, chassis, "HeadlightR", Vector3.new(0.45, 0.95, 0.95), CFrame.new(2.25, 2.1, -5.85) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(255, 240, 192), Enum.Material.Neon, Enum.PartType.Cylinder, nil)
+	local spot = Instance.new("SpotLight")
+	spot.Color = Color3.fromRGB(255, 242, 198)
+	spot.Brightness = 2.6
+	spot.Range = 48
+	spot.Face = Enum.NormalId.Front
+	spot.Shadows = false
+	spot.Parent = hlL
+
+	createRigidPart(sedan, chassis, "TailLightL", Vector3.new(1.1, 0.45, 0.28), CFrame.new(-2.15, 1.95, 5.88), Color3.fromRGB(218, 36, 42), Enum.Material.Neon, nil, nil)
+	createRigidPart(sedan, chassis, "TailLightR", Vector3.new(1.1, 0.45, 0.28), CFrame.new(2.15, 1.95, 5.88), Color3.fromRGB(218, 36, 42), Enum.Material.Neon, nil, nil)
+
+	createRigidPart(sedan, chassis, "ExhaustPipeL", Vector3.new(2.4, 0.42, 0.42), CFrame.new(-1.85, 0.45, 5.45) * CFrame.Angles(0, math.rad(90), 0), chrome, Enum.Material.Metal, Enum.PartType.Cylinder, nil)
+	local exhaustR = createRigidPart(sedan, chassis, "ExhaustPipeR", Vector3.new(2.4, 0.42, 0.42), CFrame.new(1.85, 0.45, 5.45) * CFrame.Angles(0, math.rad(90), 0), chrome, Enum.Material.Metal, Enum.PartType.Cylinder, nil)
+	local smoke = Instance.new("ParticleEmitter")
+	smoke.Name = "ExhaustSmoke"
+	smoke.Color = ColorSequence.new(Color3.fromRGB(210, 214, 222), Color3.fromRGB(150, 156, 168))
+	smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.45), NumberSequenceKeypoint.new(1, 1) })
+	smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.5), NumberSequenceKeypoint.new(1, 2.1) })
+	smoke.Lifetime = NumberRange.new(0.45, 0.85)
+	smoke.Rate = 6
+	smoke.Speed = NumberRange.new(3, 7)
+	smoke.EmissionDirection = Enum.NormalId.Right
+	smoke.Parent = exhaustR
+
+	sedan.PrimaryPart = chassis
+	sedan.Parent = char
+	activeBikes[player] = sedan
+	player:SetAttribute("OnScooter", true)
+	char:SetAttribute("RidingMotorbike", true)
+	char:SetAttribute("RidingMafiaSedan", true)
+	char:SetAttribute("BikeTurboActive", false)
+	hum.WalkSpeed = SEDAN_WALK_SPEED
+
+	return true, "Armored Black Mafia Sedan Mounted (50 Speed, Bodyguards riding inside)! Press [LeftShift] for V8 OVERDRIVE (74 Speed) or [J] to park."
 end
 
 function ScooterService.TriggerTurbo(player: Player): (boolean, string)
@@ -325,8 +458,9 @@ function ScooterService.TriggerTurbo(player: Player): (boolean, string)
 	local nextTok = (turboToken[player] or 0) + 1
 	turboToken[player] = nextTok
 
+	local isSedan = char:GetAttribute("RidingMafiaSedan") == true
 	char:SetAttribute("BikeTurboActive", true)
-	hum.WalkSpeed = MOTORBIKE_TURBO_SPEED
+	hum.WalkSpeed = if isSedan then SEDAN_TURBO_SPEED else MOTORBIKE_TURBO_SPEED
 
 	local exhaust = bike:FindFirstChild("ExhaustPipeR")
 	local smoke = if exhaust then exhaust:FindFirstChild("ExhaustSmoke") else nil
@@ -344,7 +478,8 @@ function ScooterService.TriggerTurbo(player: Player): (boolean, string)
 			char:SetAttribute("BikeTurboActive", false)
 		end
 		if ScooterService.IsOnScooter(player) and hum.Parent and hum.Health > 0 then
-			hum.WalkSpeed = MOTORBIKE_WALK_SPEED
+			local stillSedan = char:GetAttribute("RidingMafiaSedan") == true
+			hum.WalkSpeed = if stillSedan then SEDAN_WALK_SPEED else MOTORBIKE_WALK_SPEED
 		end
 		if smoke and smoke.Parent then
 			smoke.Color = ColorSequence.new(Color3.fromRGB(220, 224, 232), Color3.fromRGB(170, 176, 188))
@@ -353,7 +488,34 @@ function ScooterService.TriggerTurbo(player: Player): (boolean, string)
 		end
 	end)
 
+	if isSedan then
+		return true, "MAFIA SEDAN V8 OVERDRIVE ENGAGED (74 Speed for 4.5s)!"
+	end
 	return true, "MOTORBIKE NITRO OVERDRIVE ENGAGED (66 Speed for 4.5s)!"
+end
+
+function ScooterService.BuySedanWithCoins(player: Player): (boolean, string)
+	if ScooterService.OwnsMafiaSedan(player) then
+		return mountMafiaSedan(player)
+	end
+	if not PlayerDataService.SpendCoins(player, ScooterService.SEDAN_COIN_COST) then
+		return false, string.format("Need %d Gold to buy the Armored Black Mafia Sedan!", ScooterService.SEDAN_COIN_COST)
+	end
+	PlayerDataService.SetOwnsMafiaSedan(player, true)
+	mountMafiaSedan(player)
+	return true, "Purchased Armored Black Mafia Sedan! Your Bodyguards ride inside with you (Press [J] anytime)."
+end
+
+function ScooterService.ToggleMafiaSedan(player: Player): (boolean, string)
+	local char = player.Character
+	if activeBikes[player] and activeBikes[player].Parent and char and char:GetAttribute("RidingMafiaSedan") == true then
+		unmountMotorbike(player)
+		return true, "Armored Black Mafia Sedan Parked"
+	end
+	if not ScooterService.OwnsMafiaSedan(player) then
+		return false, string.format("Unlock the Armored Black Mafia Sedan (%d Gold) in Empire Upgrades (U) first!", ScooterService.SEDAN_COIN_COST)
+	end
+	return mountMafiaSedan(player)
 end
 
 function ScooterService.BuyWithCoins(player: Player): (boolean, string)

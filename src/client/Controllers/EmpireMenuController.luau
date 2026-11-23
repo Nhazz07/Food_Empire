@@ -265,22 +265,46 @@ local function renderKitchen(state: { [string]: any }): ()
 	)
 	starLbl.Parent = starBar
 
-	local banner = makeCard(scrollFrame, 56, C_BRASS)
+	local banner = makeCard(scrollFrame, 58, C_BRASS)
 	local statusLbl = Instance.new("TextLabel")
 	statusLbl.Position = UDim2.new(0, 16, 0, 8)
-	statusLbl.Size = UDim2.new(1, -172, 1, -16)
+	statusLbl.Size = UDim2.new(1, -296, 1, -16)
 	statusLbl.BackgroundTransparency = 1
 	statusLbl.Font = Enum.Font.GothamBold
 	statusLbl.TextXAlignment = Enum.TextXAlignment.Left
-	statusLbl.TextSize = 13
+	statusLbl.TextWrapped = true
+	statusLbl.TextSize = 12
 	statusLbl.TextColor3 = C_TEXT_PRIMARY
+	local stoveParts: { string } = {}
 	if kitchen.IsCooking and kitchen.CurrentRecipeId then
-		local r = RecipeConfig.Recipes[kitchen.CurrentRecipeId]
-		statusLbl.Text = string.format("COOKING %s  |  %.1fs REMAINING", string.upper(if r then r.DisplayName else kitchen.CurrentRecipeId), kitchen.TimeRemaining or 0)
+		local r1 = RecipeConfig.Recipes[kitchen.CurrentRecipeId]
+		table.insert(stoveParts, string.format("STOVE #1: %s (%.1fs)%s", string.upper(if r1 then r1.DisplayName else kitchen.CurrentRecipeId), kitchen.TimeRemaining or 0, if kitchen.Boosted1 then " [SEARED]" else ""))
+	end
+	if kitchen.IsCooking2 and kitchen.CurrentRecipeId2 then
+		local r2 = RecipeConfig.Recipes[kitchen.CurrentRecipeId2]
+		table.insert(stoveParts, string.format("STOVE #2: %s (%.1fs)%s", string.upper(if r2 then r2.DisplayName else kitchen.CurrentRecipeId2), kitchen.TimeRemaining2 or 0, if kitchen.Boosted2 then " [SEARED]" else ""))
+	end
+	if #stoveParts > 0 then
+		statusLbl.Text = table.concat(stoveParts, "  |  ")
 	else
-		statusLbl.Text = string.format("KITCHEN READY  |  %d DISHES READY TO SERVE", kitchen.ReadyTotal or 0)
+		local dualTag = if kitchen.HasDualStove then "DUAL-STOVE READY" else "KITCHEN READY"
+		statusLbl.Text = string.format("%s  |  %d DISHES READY TO SERVE", dualTag, kitchen.ReadyTotal or 0)
 	end
 	statusLbl.Parent = banner
+
+	local canSear = (kitchen.IsCooking and not kitchen.Boosted1) or (kitchen.IsCooking2 and not kitchen.Boosted2)
+	makeBtn(
+		banner,
+		if canSear then "SEAR BOOST" else "SEAR [E]",
+		if canSear then C_BRASS else C_DISABLED,
+		UDim2.new(1, -276, 0.5, -17),
+		UDim2.fromOffset(118, 34),
+		function()
+			if canSear and dispatchAction then
+				dispatchAction("SearBoostCook", nil)
+			end
+		end
+	)
 
 	makeBtn(
 		banner,
@@ -384,15 +408,16 @@ local function renderKitchen(state: { [string]: any }): ()
 			reqLbl.Text = "Requires: " .. table.concat(parts, ", ")
 			reqLbl.Parent = card
 
+			local allStovesBusy = kitchen.IsCooking and (not kitchen.HasDualStove or kitchen.IsCooking2)
 			local btnText = if restLevel < recipe.RequiredRestaurantLevel
 				then string.format("LOCKED HQ LV.%d", recipe.RequiredRestaurantLevel)
-				elseif kitchen.IsCooking then "BUSY"
+				elseif allStovesBusy then "BUSY"
 				else "COOK"
 
 			makeBtn(
 				card,
 				btnText,
-				if canAfford and not kitchen.IsCooking then C_OXBLOOD else C_DISABLED,
+				if canAfford and not allStovesBusy then C_OXBLOOD else C_DISABLED,
 				UDim2.new(1, -138, 0.5, -17),
 				UDim2.fromOffset(126, 34),
 				function()
@@ -587,6 +612,34 @@ local function renderUpgrades(state: { [string]: any }): ()
 		function() if dispatchAction then dispatchAction("UpgradeRestaurant", nil) end end
 	)
 
+	local hasDualStove = profile.HasDualStove == true
+	addUpgradeRow(
+		"STV",
+		if hasDualStove then "DUAL-STOVE KITCHEN LINE  |  INSTALLED" else "DUAL-STOVE KITCHEN LINE  |  2X SIMULTANEOUS COOKING",
+		"Installs a second commercial burner range so you and your Chefs can cook 2 dishes at the same time (+Star Rating).",
+		if hasDualStove then "INSTALLED" else "BUY  650G",
+		if hasDualStove then C_OWNED else C_OXBLOOD,
+		function()
+			if not hasDualStove and dispatchAction then
+				dispatchAction("BuyDualStove", nil)
+			end
+		end
+	)
+
+	local hasVIPBooths = profile.HasVIPBooths == true
+	addUpgradeRow(
+		"VIP",
+		if hasVIPBooths then "VIP PRIVATE DINING BOOTHS  |  INSTALLED" else "VIP PRIVATE DINING BOOTHS  |  +20% DISH PAYOUT",
+		"Builds luxury velvet & brass private syndicate booths inside your dining room (+20% Gold on all dishes & +Star Rating).",
+		if hasVIPBooths then "INSTALLED" else "BUY  850G",
+		if hasVIPBooths then C_OWNED else C_OXBLOOD,
+		function()
+			if not hasVIPBooths and dispatchAction then
+				dispatchAction("BuyVIPBooths", nil)
+			end
+		end
+	)
+
 	local canHire = crewCount < maxCrew
 	addUpgradeRow(
 		"CRW",
@@ -732,6 +785,48 @@ local function renderUpgrades(state: { [string]: any }): ()
 		function()
 			if dispatchAction then
 				dispatchAction(if ownsBike then "TriggerBikeTurbo" else "BuyMotorbikeCoins", nil)
+			end
+		end
+	)
+
+	local ownsSedan = state.OwnsMafiaSedan == true
+	local sedanCost = state.MafiaSedanCost or 1250
+	addUpgradeRow(
+		"SDN",
+		"ARMORED BLACK MAFIA SEDAN  |  KEY [J] + BODYGUARD CABIN",
+		"50-speed armored syndicate V8 sedan (74-speed Overdrive). Your Bodyguards physically sit inside and fire from the cabin!",
+		if ownsSedan then "DRIVE SEDAN [J]" else string.format("BUY  %dG", sedanCost),
+		if ownsSedan then C_OWNED else C_OXBLOOD,
+		function()
+			if dispatchAction then
+				dispatchAction(if ownsSedan then "ToggleMafiaSedan" else "BuyMafiaSedan", nil)
+			end
+		end
+	)
+
+	local keycards = tonumber(state.VaultKeycards) or 0
+	addUpgradeRow(
+		"VLT",
+		string.format("TERRITORY SUPPLY VAULT HEIST  |  KEYCARDS: %d", keycards),
+		"Crack a Corner Territory Supply Vault for +320G (+440G with Keycard from Territory Rivals), +55 Rep, +15 Stock & 1 Rare Catch!",
+		if keycards > 0 then "KEYCARD HEIST" else "CRACK VAULT",
+		C_OXBLOOD,
+		function()
+			if dispatchAction then
+				dispatchAction("CrackTerritoryVault", nil)
+			end
+		end
+	)
+
+	addUpgradeRow(
+		"EMP",
+		"FOOD EMPEROR SYNDICATE MONUMENT  |  CENTRAL PLAZA",
+		"Claim your live Food Emperor Tribute (+150G & +25 Rep as #1 Food Emperor, or +65G Syndicate Stipend) from the Central Monument.",
+		"CLAIM TRIBUTE",
+		C_BRASS,
+		function()
+			if dispatchAction then
+				dispatchAction("ClaimEmperorTribute", nil)
 			end
 		end
 	)
@@ -966,6 +1061,7 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 	local playerCoins = tonumber(profile.Coins) or 0
 	local bm = state.BlackMarket or {}
 	local ownedWeapons = bm.OwnedWeapons or {}
+	local weaponMods = bm.WeaponMods or {}
 	local ammoInv = bm.AmmoInventory or {}
 	local currentArmor = if typeof(bm.Armor) == "number" then bm.Armor else 0
 
@@ -1018,7 +1114,7 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 				local quickPack = if ammoSpec then ammoSpec.Packs[1] else nil
 				local rarityCol = RARITY_MUTED_COLORS[w.Rarity] or C_STEEL
 
-				local card = makeCard(scrollFrame, 114, if isOwned then C_OWNED else rarityCol)
+				local card = makeCard(scrollFrame, 146, if isOwned then C_OWNED else rarityCol)
 				ModelPreviewHelper.CreatePreview(card, "Weapon", wid, UDim2.fromOffset(82, 82), UDim2.new(0, 14, 0, 16), Color3.fromRGB(24, 26, 33))
 
 				local nameLbl = Instance.new("TextLabel")
@@ -1124,6 +1220,38 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 						end
 					end)
 					aBtn.TextSize = 10
+				end
+
+				-- Gunsmith Attachment Workbench Row (Suppressor, ExtendedMag, HeavyBarrel)
+				local modRow = Instance.new("Frame")
+				modRow.Position = UDim2.new(0, 108, 0, 108)
+				modRow.Size = UDim2.new(1, -120, 0, 28)
+				modRow.BackgroundTransparency = 1
+				modRow.Parent = card
+				local modLayout = Instance.new("UIListLayout")
+				modLayout.FillDirection = Enum.FillDirection.Horizontal
+				modLayout.Padding = UDim.new(0, 6)
+				modLayout.Parent = modRow
+
+				local myMods = if typeof(weaponMods[wid]) == "table" then weaponMods[wid] else {}
+				for _, modId in ipairs(WeaponConfig.GUNSMITH_MOD_ORDER) do
+					local mSpec = WeaponConfig.GUNSMITH_MODS[modId]
+					if mSpec then
+						local hasMod = myMods[modId] == true
+						local mTxt = if hasMod
+							then string.format("%s [ON]", mSpec.ShortLabel)
+							else string.format("+%s (%dG)", mSpec.ShortLabel, mSpec.Price)
+						local mCol = if hasMod
+							then C_OWNED
+							elseif isOwned and playerCoins >= mSpec.Price then C_BG_SUBTLE
+							else C_DISABLED
+						local mb = makeBtn(modRow, mTxt, mCol, UDim2.new(), UDim2.new(1 / 3, -4, 0, 26), function()
+							if not hasMod and dispatchAction then
+								dispatchAction("BuyWeaponMod", { WeaponId = wid, ModId = modId })
+							end
+						end)
+						mb.TextSize = 9
+					end
 				end
 			end
 		end
@@ -1281,7 +1409,54 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 	local ownedGear: { [string]: boolean } = bgState.OwnedGear or {}
 	local loadouts: { [string]: { [string]: string } } = bgState.Loadouts or {}
 	local maxSlots = tonumber(bgState.MaxSlots) or BodyguardConfig.MAX_ACTIVE_GUARDS
+	local currentStance = tostring(bgState.Stance or state.GuardStance or "Follow")
 	selectedGuardSlot = math.clamp(selectedGuardSlot, 1, maxSlots)
+
+	-- Squad Tactical Command Bar (Follow Me, Guard Central Park Bistro, Patrol Base, Free-Fire Aggressive)
+	local stanceCard = makeCard(scrollFrame, 68, C_BRASS)
+	local stHead = Instance.new("TextLabel")
+	stHead.Position = UDim2.new(0, 14, 0, 6)
+	stHead.Size = UDim2.new(1, -24, 0, 16)
+	stHead.BackgroundTransparency = 1
+	stHead.Font = Enum.Font.GothamBlack
+	stHead.TextXAlignment = Enum.TextXAlignment.Left
+	stHead.TextSize = 11
+	stHead.TextColor3 = C_BRASS
+	stHead.Text = string.format("BODYGUARD SQUAD TACTICAL ORDER [KEY X]  —  ACTIVE: %s", string.upper(tostring(bgState.StanceLabel or currentStance)))
+	stHead.Parent = stanceCard
+
+	local stRow = Instance.new("Frame")
+	stRow.Position = UDim2.new(0, 14, 0, 26)
+	stRow.Size = UDim2.new(1, -28, 0, 32)
+	stRow.BackgroundTransparency = 1
+	stRow.Parent = stanceCard
+	local stl = Instance.new("UIListLayout")
+	stl.FillDirection = Enum.FillDirection.Horizontal
+	stl.Padding = UDim.new(0, 6)
+	stl.Parent = stRow
+
+	local stances = {
+		{ Id = "Follow", Label = "FOLLOW ME" },
+		{ Id = "GuardBistro", Label = "GUARD BISTRO" },
+		{ Id = "PatrolBase", Label = "PATROL BASE" },
+		{ Id = "Aggressive", Label = "AGGRESSIVE" },
+	}
+	for _, stOpt in ipairs(stances) do
+		local isAct = (currentStance == stOpt.Id)
+		local sb = makeBtn(
+			stRow,
+			stOpt.Label,
+			if isAct then C_OWNED else C_BG_SUBTLE,
+			UDim2.new(),
+			UDim2.new(0.25, -5, 0, 30),
+			function()
+				if dispatchAction then
+					dispatchAction("SetGuardStance", stOpt.Id)
+				end
+			end
+		)
+		sb.TextSize = 10
+	end
 
 	-- Active 4-Slot Squad Selector
 	local squadCard = makeCard(scrollFrame, 78, C_STEEL)

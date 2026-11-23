@@ -53,9 +53,46 @@ local BodyguardService = {}
 
 BodyguardService.MAX_BODYGUARDS = BodyguardConfig.MAX_ACTIVE_GUARDS
 BodyguardService.COSTS = { [1] = 280, [2] = 620, [3] = 780, [4] = 1180 }
+BodyguardService.STANCE_ORDER = { "Follow", "GuardBistro", "PatrolBase", "Aggressive" }
+BodyguardService.STANCE_LABELS = {
+	Follow = "FOLLOW ME",
+	GuardBistro = "GUARD CENTRAL PARK BISTRO",
+	PatrolBase = "PATROL BASE & WAREHOUSES",
+	Aggressive = "FREE-FIRE AGGRESSIVE",
+}
 
 local PROTECT_RADIUS = 52
 local RESPAWN_DELAY = 12
+
+function BodyguardService.GetSquadStance(player: Player): string
+	local prof = PlayerDataService.GetProfile(player)
+	local st = prof.GuardStance
+	if typeof(st) == "string" and BodyguardService.STANCE_LABELS[st] then
+		return st
+	end
+	return "Follow"
+end
+
+function BodyguardService.SetSquadStance(player: Player, stance: string): (boolean, string)
+	if not BodyguardService.STANCE_LABELS[stance] then
+		return false, "Unknown Tactical Order!"
+	end
+	PlayerDataService.SetGuardStance(player, stance)
+	local label = BodyguardService.STANCE_LABELS[stance]
+	return true, string.format("Squad Tactical Order: %s", label)
+end
+
+function BodyguardService.CycleSquadStance(player: Player): (boolean, string)
+	local cur = BodyguardService.GetSquadStance(player)
+	local nextStance = "Follow"
+	for idx, st in ipairs(BodyguardService.STANCE_ORDER) do
+		if st == cur then
+			nextStance = BodyguardService.STANCE_ORDER[(idx % #BodyguardService.STANCE_ORDER) + 1]
+			break
+		end
+	end
+	return BodyguardService.SetSquadStance(player, nextStance)
+end
 
 local isRunning = false
 local guardFolder: Folder? = nil
@@ -171,6 +208,19 @@ local function getOwnerAnchorPos(owner: Player, slotIndex: number): Vector3
 		Vector3.new(9.5, 0, 9.5),
 	}
 	local off = offsets[slotIndex] or offsets[1]
+	local stance = BodyguardService.GetSquadStance(owner)
+	if stance == "GuardBistro" then
+		return Vector3.new(48 + off.X, 3.8, 86 + off.Z)
+	elseif stance == "PatrolBase" then
+		local slot = BaseService.GetPlayerBaseSlot(owner)
+		if slot then
+			local base = BaseService.GetBaseModel(slot)
+			local sp = if base then base:FindFirstChild("BaseSpawn") else nil
+			if sp and sp:IsA("BasePart") then
+				return sp.Position + Vector3.new(off.X * 1.5, 3.8, off.Z * 1.5)
+			end
+		end
+	end
 	local char = owner.Character
 	local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
 	if root and root:IsA("BasePart") then
@@ -539,6 +589,8 @@ function BodyguardService.GetBodyguardPayload(player: Player): { [string]: any }
 		UnlockedClasses = prof.UnlockedGuardClasses,
 		OwnedGear = prof.OwnedGuardGear,
 		Loadouts = prof.GuardLoadouts,
+		Stance = BodyguardService.GetSquadStance(player),
+		StanceLabel = BodyguardService.STANCE_LABELS[BodyguardService.GetSquadStance(player)] or "FOLLOW ME",
 	}
 end
 
@@ -585,8 +637,9 @@ local function findBestHostileForGuard(owner: Player, anchor: Vector3, radius: n
 				local r = unit:FindFirstChild("HumanoidRootPart")
 				local h = unit:FindFirstChildOfClass("Humanoid")
 				if r and r:IsA("BasePart") and h and h.Health > 0 then
-					local inCentralSpinZone = (math.abs(r.Position.X) <= 175 and math.abs(r.Position.Z) <= 175)
-						or (unit:GetAttribute("RivalFactionId") == "CrimsonDonEmpire")
+					local isEventRaider = (unit.Name == "BistroExtortionEnforcer") or (string.find(unit.Name, "GangWarEnforcer") ~= nil)
+					local inCentralSpinZone = (not isEventRaider) and ((math.abs(r.Position.X) <= 175 and math.abs(r.Position.Z) <= 175)
+						or (unit:GetAttribute("RivalFactionId") == "CrimsonDonEmpire"))
 					-- Respect Central Park Spin Event peace truce unless owner stole a shipment!
 					if not inCentralSpinZone or ownerStoleShipment then
 						local d = (r.Position - anchor).Magnitude
@@ -641,13 +694,9 @@ local function stepGuard(agent: BodyguardAgent): ()
 	local ownerPos = ownerRoot.Position
 	local guardPos = agent.Root.Position
 	local stats = agent.Stats
-
-	-- Regroup smoothly if owner sped away on Motorbike / teleported!
-	if (ownerPos - guardPos).Magnitude > 125 then
-		local snap = getOwnerAnchorPos(owner, agent.SlotIndex)
-		agent.Model:PivotTo(CFrame.new(snap))
-		return
-	end
+	local stance = BodyguardService.GetSquadStance(owner)
+	local anchorPos = getOwnerAnchorPos(owner, agent.SlotIndex)
+	local ridingSedan = (char ~= nil and char:GetAttribute("RidingMafiaSedan") == true) and (stance == "Follow" or stance == "Aggressive")
 
 	-- Field Medic Aura (TacticalGuard or Squad Trauma Med-Kit): heals owner's Base HP & self every 5s!
 	if stats.HealAura > 0 and (now - agent.LastHealAt) >= 5.0 then
@@ -660,11 +709,45 @@ local function stepGuard(agent: BodyguardAgent): ()
 		end
 	end
 
-	-- Intelligent Target Selection (Snipers prioritize Boss/Elite targets up to their long range!)
-	local alertRadius = math.max(stats.Range, if (playerUnderAttackUntil[owner] or 0) > now then 74 else PROTECT_RADIUS)
-	local targetHum, targetRoot, targetModel = findBestHostileForGuard(owner, ownerPos, alertRadius, agent.ClassSpec.CombatStyle == "Sniper")
+	-- Armored Black Mafia Sedan Passenger Mode: Bodyguards physically sit inside the vehicle cabin and provide drive-by fire!
+	if ridingSedan then
+		local passengerSeats = {
+			CFrame.new(1.55, -0.35, -0.25),
+			CFrame.new(-1.55, -0.35, 2.25),
+			CFrame.new(1.55, -0.35, 2.25),
+			CFrame.new(0, -0.35, 2.45),
+		}
+		local seatCF = passengerSeats[agent.SlotIndex] or passengerSeats[1]
+		agent.Model:PivotTo(ownerRoot.CFrame * seatCF)
+		agent.StatusLabel.Text = string.format("%s  |  IN SEDAN", string.upper(agent.ClassSpec.DisplayName))
+		agent.StatusLabel.TextColor3 = Color3.fromRGB(224, 186, 114)
+		if stats.IsRanged and (now - agent.LastAttackAt) >= stats.Cooldown then
+			local tHum, tRoot, tModel = findBestHostileForGuard(owner, ownerPos, stats.Range, agent.ClassSpec.CombatStyle == "Sniper")
+			if tHum and tRoot and tModel then
+				agent.LastAttackAt = now
+				local finalDmg = math.floor(stats.Damage * (if hasBossAuraNearby(owner, agent.Root.Position) then 1.20 else 1.0))
+				tHum:TakeDamage(finalDmg)
+				local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
+				local tracerCol = if agent.ClassSpec.Id == "BossBodyguard" then Color3.fromRGB(255, 206, 56) else Color3.fromRGB(92, 228, 255)
+				BlackMarketService.SpawnBulletTracer(fromPos, tRoot.Position, tracerCol)
+				BlackMarketService.BroadcastSFX("SMGShot", fromPos)
+			end
+		end
+		return
+	end
 
-	if not targetHum then
+	-- Regroup smoothly if owner sped away or stance redeployed to Bistro / Base!
+	if (anchorPos - guardPos).Magnitude > 125 then
+		agent.Model:PivotTo(CFrame.new(anchorPos))
+		return
+	end
+
+	-- Intelligent Target Selection (Snipers prioritize Boss/Elite targets up to their long range!)
+	local baseAlert = if stance == "Aggressive" then 88 elseif (playerUnderAttackUntil[owner] or 0) > now then 74 else PROTECT_RADIUS
+	local alertRadius = math.max(stats.Range + (if stance == "Aggressive" then 24 else 0), baseAlert)
+	local targetHum, targetRoot, targetModel = findBestHostileForGuard(owner, anchorPos, alertRadius, agent.ClassSpec.CombatStyle == "Sniper")
+
+	if not targetHum and (stance == "Follow" or stance == "Aggressive") then
 		local runnerPos = DeliveryRunnerService.GetActiveRunnerPosition(owner)
 		if runnerPos and (runnerPos - ownerPos).Magnitude < 120 then
 			targetHum, targetRoot, targetModel = findBestHostileForGuard(owner, runnerPos, 46, false)
@@ -737,10 +820,14 @@ local function stepGuard(agent: BodyguardAgent): ()
 		return
 	end
 
-	-- Calm Escort Mode: walk in formation alongside Boss!
-	agent.StatusLabel.Text = string.format("%s  #%d", string.upper(agent.ClassSpec.DisplayName), agent.SlotIndex)
+	-- Calm Escort / Stationed Guard Mode
+	local stanceBadge = if stance == "GuardBistro" then "  |  BISTRO"
+		elseif stance == "PatrolBase" then "  |  PATROL"
+		elseif stance == "Aggressive" then "  |  AGGRO"
+		else ""
+	agent.StatusLabel.Text = string.format("%s  #%d%s", string.upper(agent.ClassSpec.DisplayName), agent.SlotIndex, stanceBadge)
 	agent.StatusLabel.TextColor3 = Color3.fromRGB(224, 222, 216)
-	local escortPos = getOwnerAnchorPos(owner, agent.SlotIndex)
+	local escortPos = anchorPos
 	if (escortPos - guardPos).Magnitude > 5.5 then
 		agent.Humanoid:MoveTo(escortPos)
 	end

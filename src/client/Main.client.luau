@@ -71,9 +71,9 @@ local function sendAction(action: string, arg: any?): ()
 		AudioController.PlayError()
 	elseif action == "ServeFood" or action == "BuyAmmo" then
 		AudioController.PlayCoins()
-	elseif action == "CookRecipe" or action == "ServeCustomerOrder" then
+	elseif action == "CookRecipe" or action == "ServeCustomerOrder" or action == "SearBoostCook" then
 		AudioController.PlayCook()
-	elseif action == "BuyRobuxItem" or action == "BuyMotorbikeCoins" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireWaiter" or action == "HireCourier" or action == "BuyCentralParkBranch" or action == "ToggleCentralParkStaff" or action == "DefendCentralParkBranch" or action == "StartSmugglerConvoy" or action == "StartGangWarDrop" or action == "TriggerBikeTurbo" or action == "ClaimSyndicateContract" or action == "HireRaider" or action == "HireBodyguard" or action == "RecruitBodyguard" or action == "BuyGuardGear" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
+	elseif action == "BuyRobuxItem" or action == "BuyMotorbikeCoins" or action == "BuyDualStove" or action == "BuyVIPBooths" or action == "BuyMafiaSedan" or action == "ToggleMafiaSedan" or action == "CrackTerritoryVault" or action == "ClaimEmperorTribute" or action == "BuyWeaponMod" or action == "SetGuardStance" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireWaiter" or action == "HireCourier" or action == "BuyCentralParkBranch" or action == "ToggleCentralParkStaff" or action == "DefendCentralParkBranch" or action == "StartSmugglerConvoy" or action == "StartGangWarDrop" or action == "TriggerBikeTurbo" or action == "ClaimSyndicateContract" or action == "HireRaider" or action == "HireBodyguard" or action == "RecruitBodyguard" or action == "BuyGuardGear" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
 		AudioController.PlayFanfare()
 	elseif action ~= "GetState" and action ~= "SetSprint" then
 		AudioController.PlayClick()
@@ -154,6 +154,10 @@ UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: 
 		sendAction("ReturnHome", nil)
 	elseif input.KeyCode == Enum.KeyCode.V then
 		sendAction("ToggleScooter", nil)
+	elseif input.KeyCode == Enum.KeyCode.J then
+		sendAction("ToggleMafiaSedan", nil)
+	elseif input.KeyCode == Enum.KeyCode.X then
+		sendAction("SetGuardStance", nil)
 	elseif input.KeyCode == Enum.KeyCode.G then
 		local on = WaypointController.Toggle()
 		HUDController.ShowToast(if on then "Objective Guide Arrow: ON" else "Objective Guide Arrow: OFF", false)

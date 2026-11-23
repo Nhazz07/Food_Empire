@@ -1459,7 +1459,8 @@ local function tryShoot(): ()
 	lastClientFire = now
 
 	-- 1. IMMEDIATE 0ms gunshot audio response! (Preloaded & pooled, zero server-RTT delay!)
-	AudioController.PlayWeaponFire(wid, 1.0)
+	local hasSuppressor = tool:GetAttribute("Mod_Suppressor") == true
+	AudioController.PlayWeaponFire(wid, if hasSuppressor then 0.52 else 1.0)
 
 	-- 2. Optimistic client magazine decrement (sequence-tracked for flicker-free server sync)
 	st.Mag = math.max(0, st.Mag - 1)
@@ -1468,9 +1469,10 @@ local function tryShoot(): ()
 	lastSentSeqByWeapon[wid] = seq
 	lastShotTimeByWeapon[wid] = now
 
-	-- 3. Moderate, realistic weapon-specific 2-axis recoil impulse (tighter when ADS or Crouched!)
+	-- 3. Moderate, realistic weapon-specific 2-axis recoil impulse (tighter when ADS, Crouched, or with Heavy Barrel!)
 	sprintBlend = 0
-	local stabilityMult = (1 - 0.28 * adsBlend) * (1 - 0.30 * crouchBlend)
+	local heavyBarrelMult = if tool:GetAttribute("Mod_HeavyBarrel") == true then 0.75 else 1.0
+	local stabilityMult = (1 - 0.28 * adsBlend) * (1 - 0.30 * crouchBlend) * heavyBarrelMult
 	recoilYawSign = -recoilYawSign
 	recoilBack = math.min(profile.MaxBack, recoilBack + profile.KickBack * stabilityMult)
 	recoilUp = math.min(0.22, recoilUp + profile.KickUp * stabilityMult)
