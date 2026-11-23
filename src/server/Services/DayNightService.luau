@@ -115,27 +115,31 @@ local function fixWorldMapLayout(): ()
 		if not bm:FindFirstChild("AlleyDriveway") then
 			local drive = Instance.new("Part")
 			drive.Name = "AlleyDriveway"
-			drive.Size = Vector3.new(72, 0.34, 18)
-			drive.CFrame = CFrame.new(-246, 1.14, 130)
+			drive.Size = Vector3.new(74, 0.34, 18)
+			drive.CFrame = CFrame.new(-250, 1.13, 130)
 			drive.Color = Color3.fromRGB(54, 58, 68)
 			drive.Material = Enum.Material.Asphalt
 			drive.Anchored = true
+			drive.TopSurface = Enum.SurfaceType.Smooth
+			drive.BottomSurface = Enum.SurfaceType.Smooth
 			drive.Parent = bm
 
-			for _, cz in ipairs({ 120.4, 139.6 }) do
+			for _, cz in ipairs({ 120.0, 140.0 }) do
 				local curb = Instance.new("Part")
 				curb.Name = "AlleyCurb"
-				curb.Size = Vector3.new(72, 0.55, 1.4)
-				curb.CFrame = CFrame.new(-246, 1.24, cz)
-				curb.Color = Color3.fromRGB(148, 152, 162)
+				curb.Size = Vector3.new(70, 0.54, 2.0)
+				curb.CFrame = CFrame.new(-251, 1.27, cz)
+				curb.Color = Color3.fromRGB(164, 168, 176)
 				curb.Material = Enum.Material.Concrete
 				curb.Anchored = true
+				curb.TopSurface = Enum.SurfaceType.Smooth
+				curb.BottomSurface = Enum.SurfaceType.Smooth
 				curb.Parent = bm
 			end
 		end
 	end
 
-	-- 2. Rebuild TerritoryHighways with clean split segments & Circular Roundabout Plazas so NO stripes or curbs poke across intersections!
+	-- 2. Rebuild TerritoryHighways with unified heights, split CrossStreet curbs & clean Circular Roundabout Plazas!
 	local roads = map:FindFirstChild("Roads")
 	if roads then
 		local oldTh = roads:FindFirstChild("TerritoryHighways")
@@ -145,6 +149,16 @@ local function fixWorldMapLayout(): ()
 		local thFolder = Instance.new("Folder")
 		thFolder.Name = "TerritoryHighways"
 		thFolder.Parent = roads
+
+		local ASPHALT_COL = Color3.fromRGB(54, 58, 68)
+		local ROUNDABOUT_COL = Color3.fromRGB(50, 54, 64)
+		local CURB_COL = Color3.fromRGB(164, 168, 176)
+		local DASH_COL = Color3.fromRGB(246, 206, 72)
+		local ASPHALT_Y, ASPHALT_H = 1.13, 0.34
+		local PAD_Y, PAD_H = 1.134, 0.34
+		local ROUNDABOUT_Y, ROUNDABOUT_H = 1.16, 0.42
+		local CURB_Y, CURB_H = 1.27, 0.54
+		local DASH_Y, DASH_H = 1.310, 0.05
 
 		local function makeRoadPart(parent: Instance, name: string, sz: Vector3, cf: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
 			local p = Instance.new("Part")
@@ -162,23 +176,21 @@ local function fixWorldMapLayout(): ()
 		end
 
 		local function addRoundabout(parent: Instance, name: string, x: number, z: number): ()
-			-- Smooth dark asphalt circular roundabout covering the junction cleanly above crossing dashes
 			makeRoadPart(
 				parent,
 				name .. "_Asphalt",
-				Vector3.new(0.42, 42, 42),
-				CFrame.new(x, 1.22, z) * CFrame.Angles(0, 0, math.rad(90)),
-				Color3.fromRGB(52, 56, 66),
+				Vector3.new(ROUNDABOUT_H, 42, 42),
+				CFrame.new(x, ROUNDABOUT_Y, z) * CFrame.Angles(0, 0, math.rad(90)),
+				ROUNDABOUT_COL,
 				Enum.Material.Asphalt,
 				Enum.PartType.Cylinder
 			)
-			-- Center stone island with glowing warm night bollard lantern!
 			makeRoadPart(
 				parent,
 				name .. "_Island",
-				Vector3.new(0.75, 8.5, 8.5),
-				CFrame.new(x, 1.48, z) * CFrame.Angles(0, 0, math.rad(90)),
-				Color3.fromRGB(162, 166, 176),
+				Vector3.new(0.65, 8.5, 8.5),
+				CFrame.new(x, 1.54, z) * CFrame.Angles(0, 0, math.rad(90)),
+				CURB_COL,
 				Enum.Material.Concrete,
 				Enum.PartType.Cylinder
 			)
@@ -186,7 +198,7 @@ local function fixWorldMapLayout(): ()
 				parent,
 				name .. "_LanternGlass",
 				Vector3.new(2.4, 2.4, 2.4),
-				CFrame.new(x, 3.1, z),
+				CFrame.new(x, 3.10, z),
 				Color3.fromRGB(255, 224, 132),
 				Enum.Material.Neon,
 				Enum.PartType.Ball
@@ -200,27 +212,57 @@ local function fixWorldMapLayout(): ()
 			pl.Parent = orb
 		end
 
-		local function addCleanHighwaySegment(parent: Instance, p1: Vector3, p2: Vector3, withCheckpoint: boolean): ()
+		local function addCleanHighwaySegment(parent: Instance, p1: Vector3, p2: Vector3, isInner: boolean): ()
 			local delta = p2 - p1
-			local len = delta.Magnitude
-			if len < 10 then return end
-			local mid = (p1 + p2) * 0.5
-			local cf = CFrame.lookAt(mid, p2)
+			local fullDist = delta.Magnitude
+			if fullDist < 28 then return end
+			local dir = delta.Unit
+			local rightVec = dir:Cross(Vector3.new(0, 1, 0)).Unit
 
-			makeRoadPart(parent, "Asphalt", Vector3.new(20, 0.34, len), cf * CFrame.new(0, 1.12, 0), Color3.fromRGB(54, 58, 68), Enum.Material.Asphalt, nil)
-			makeRoadPart(parent, "Curb_L", Vector3.new(1.3, 0.55, len - 8), cf * CFrame.new(-10.65, 1.24, 0), Color3.fromRGB(152, 156, 166), Enum.Material.Concrete, nil)
-			makeRoadPart(parent, "Curb_R", Vector3.new(1.3, 0.55, len - 8), cf * CFrame.new(10.65, 1.24, 0), Color3.fromRGB(152, 156, 166), Enum.Material.Concrete, nil)
+			local startS = 18.0
+			local endS = if isInner then (fullDist - 18.0) else fullDist
+			local segLen = endS - startS
+			local midPos = p1 + dir * ((startS + endS) * 0.5)
+			local cf = CFrame.lookAt(Vector3.new(midPos.X, ASPHALT_Y, midPos.Z), Vector3.new(midPos.X + dir.X, ASPHALT_Y, midPos.Z + dir.Z))
 
-			local numDashes = math.floor((len - 24) / 24)
-			for i = 1, numDashes do
-				local zOff = -len * 0.5 + 12 + (i - 0.5) * 24
-				local dash = makeRoadPart(parent, "Dash", Vector3.new(0.75, 0.06, 9.5), cf * CFrame.new(0, 1.31, zOff), Color3.fromRGB(246, 206, 72), Enum.Material.SmoothPlastic, nil)
-				dash.CanCollide = false
+			makeRoadPart(parent, "Asphalt", Vector3.new(20, ASPHALT_H, segLen), cf, ASPHALT_COL, Enum.Material.Asphalt, nil)
+
+			local curbSegs: { { number } } = if isInner
+				then { { 18.6, 187.74 }, { 213.19, fullDist - 24.5 } }
+				else { { 21.5, fullDist - 2.0 } }
+
+			for _, side in ipairs({ { Name = "Curb_L", Off = -10.9 }, { Name = "Curb_R", Off = 10.9 } }) do
+				for _, seg in ipairs(curbSegs) do
+					local cLen = seg[2] - seg[1]
+					if cLen > 1 then
+						local midS = (seg[1] + seg[2]) * 0.5
+						local cPos = p1 + dir * midS + rightVec * side.Off
+						local cCF = CFrame.lookAt(Vector3.new(cPos.X, CURB_Y, cPos.Z), Vector3.new(cPos.X + dir.X, CURB_Y, cPos.Z + dir.Z))
+						makeRoadPart(parent, side.Name, Vector3.new(1.8, CURB_H, cLen), cCF, CURB_COL, Enum.Material.Concrete, nil)
+					end
+				end
 			end
 
-			if withCheckpoint then
-				local cpCF = cf * CFrame.new(0, 0, -len * 0.15)
-				for _, sx in ipairs({ -11.8, 11.8 }) do
+			local s = 32.0
+			while s <= endS - 14.0 do
+				local blocked = isInner and (s + 5 >= 184.0 and s - 5 <= 220.0)
+				if not blocked then
+					local dp = p1 + dir * s
+					local dCF = CFrame.lookAt(Vector3.new(dp.X, DASH_Y, dp.Z), Vector3.new(dp.X + dir.X, DASH_Y, dp.Z + dir.Z))
+					local dash = makeRoadPart(parent, "Dash", Vector3.new(0.75, DASH_H, 9.5), dCF, DASH_COL, Enum.Material.SmoothPlastic, nil)
+					dash.CanCollide = false
+				end
+				s += 24.0
+			end
+
+			if isInner then
+				local jPos = p1 + dir * 201.75
+				local jCF = CFrame.lookAt(Vector3.new(jPos.X, PAD_Y, jPos.Z), Vector3.new(jPos.X + dir.X, PAD_Y, jPos.Z + dir.Z))
+				makeRoadPart(parent, "CrossStreet_JunctionPad", Vector3.new(20.4, PAD_H, 28.0), jCF, ASPHALT_COL, Enum.Material.Asphalt, nil)
+
+				local cpPos = p1 + dir * (startS + segLen * 0.65)
+				local cpCF = CFrame.lookAt(Vector3.new(cpPos.X, 0, cpPos.Z), Vector3.new(cpPos.X + dir.X, 0, cpPos.Z + dir.Z))
+				for _, sx in ipairs({ -12.0, 12.0 }) do
 					makeRoadPart(parent, "MafiaPost", Vector3.new(2.2, 14, 2.2), cpCF * CFrame.new(sx, 8.2, 0), Color3.fromRGB(36, 38, 46), Enum.Material.Metal, nil)
 					local beacon = makeRoadPart(parent, "MafiaBeacon", Vector3.new(1.5, 1.5, 1.5), cpCF * CFrame.new(sx, 15.7, 0), Color3.fromRGB(238, 48, 58), Enum.Material.Neon, Enum.PartType.Ball)
 					local bLight = Instance.new("PointLight")
@@ -294,8 +336,7 @@ local function fixWorldMapLayout(): ()
 			end
 
 			if math.abs(h) < 0.25 then
-				local dir = delta.Unit
-				addCleanHighwaySegment(parent, flatMid + dir * 18, flatTarget, false)
+				addCleanHighwaySegment(parent, flatMid, flatTarget, false)
 				return
 			end
 
@@ -346,9 +387,9 @@ local function fixWorldMapLayout(): ()
 				makeRoadPart(
 					parent,
 					"Asphalt",
-					Vector3.new(segWidth, 0.34, segLen),
-					segCF * CFrame.new(0, 1.12 + yStagger, if i == numSegs then -0.15 else 0),
-					Color3.fromRGB(54, 58, 68),
+					Vector3.new(segWidth, ASPHALT_H, segLen),
+					segCF * CFrame.new(0, ASPHALT_Y + yStagger, if i == numSegs then -0.15 else 0),
+					ASPHALT_COL,
 					Enum.Material.Asphalt,
 					nil
 				)
@@ -369,15 +410,15 @@ local function fixWorldMapLayout(): ()
 
 				local halfW0 = 10 + (targetWidth * 0.5 - 10) * t0
 				local halfW1 = 10 + (targetWidth * 0.5 - 10) * t1
-				local cw0 = 1.3 + (0.9 - 1.3) * t0
-				local cw1 = 1.3 + (0.9 - 1.3) * t1
+				local cw0 = 1.8 + (0.9 - 1.8) * t0
+				local cw1 = 1.8 + (0.9 - 1.8) * t1
 				local off0 = halfW0 + cw0 * 0.5 - 0.05 * t0
 				local off1 = halfW1 + cw1 * 0.5 - 0.05 * t1
 
 				local cwMid = (cw0 + cw1) * 0.5
 				local tMid = (t0 + t1) * 0.5
-				local curbH = 0.55 + (0.50 - 0.55) * tMid
-				local curbY = 1.24 + (1.12 - 1.24) * tMid
+				local curbH = CURB_H + (0.50 - CURB_H) * tMid
+				local curbY = CURB_Y + (1.12 - CURB_Y) * tMid
 
 				for _, side in ipairs({ { Name = "Curb_L", Sign = -1 }, { Name = "Curb_R", Sign = 1 } }) do
 					local q0 = p0 + r0 * (off0 * side.Sign)
@@ -390,7 +431,7 @@ local function fixWorldMapLayout(): ()
 						side.Name,
 						Vector3.new(cwMid, curbH, qLen),
 						qCF * CFrame.new(0, curbY, 0),
-						Color3.fromRGB(152, 156, 166),
+						CURB_COL,
 						Enum.Material.Concrete,
 						nil
 					)
@@ -407,9 +448,9 @@ local function fixWorldMapLayout(): ()
 				local dash = makeRoadPart(
 					parent,
 					"Dash",
-					Vector3.new(0.75, 0.06, 9.5),
-					dCF * CFrame.new(0, 1.31, 0),
-					Color3.fromRGB(246, 206, 72),
+					Vector3.new(0.75, DASH_H, 9.5),
+					dCF * CFrame.new(0, DASH_Y, 0),
+					DASH_COL,
 					Enum.Material.SmoothPlastic,
 					nil
 				)
@@ -433,8 +474,7 @@ local function fixWorldMapLayout(): ()
 			addRoundabout(hModel, "InnerRoundabout", hs.Inner1.X, hs.Inner1.Z)
 			addRoundabout(hModel, "MidRoundabout", hs.Mid.X, hs.Mid.Z)
 
-			local dir1 = (hs.Mid - hs.Inner1).Unit
-			addCleanHighwaySegment(hModel, hs.Inner1 + dir1 * 18, hs.Mid - dir1 * 18, true)
+			addCleanHighwaySegment(hModel, hs.Inner1, hs.Mid, true)
 
 			if hs.Name == "Highway_FishingPort_SE" then
 				local sectors = map:FindFirstChild("Sectors")
@@ -466,8 +506,7 @@ local function fixWorldMapLayout(): ()
 					addCurvedHighwayToEntry(hModel, hs.Mid, hs.Outer2, Vector3.new(1, 0, 1).Unit, 18)
 				end
 			else
-				local dir2 = (hs.Outer2 - hs.Mid).Unit
-				addCleanHighwaySegment(hModel, hs.Mid + dir2 * 18, hs.Outer2, false)
+				addCleanHighwaySegment(hModel, hs.Mid, hs.Outer2, false)
 			end
 
 			-- 3. Rebuild the Corner Territory Entrance Gate (TerritoryArch) high above the road with posts outside the curbs!
