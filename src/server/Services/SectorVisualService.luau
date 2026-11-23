@@ -1,141 +1,164 @@
+--!strict
 
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local ServerScriptService = game:GetService("ServerScriptService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local CollectionService = game:GetService("CollectionService")
 
-local SectorService = require(
-    ServerScriptService:WaitForChild("Services")
-        :WaitForChild("SectorService")
+local SectorConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("SectorConfig")
 )
+local SectorService = require("./SectorService")
 
 local SectorVisualService = {}
 
-local zonesFolder = Workspace:WaitForChild("SectorZones")
 local isRunning = false
+local unsubscribeSectorChanged: (() -> ())? = nil
+local addedConnection: RBXScriptConnection? = nil
 
-local COLORS = {
-    Neutral = Color3.fromRGB(150, 150, 150),
-    Player = Color3.fromRGB(45, 190, 100),
-    Rival = Color3.fromRGB(220, 65, 65),
-}
+local function getFactionColor(factionId: string?): Color3
+	if not factionId or factionId == "Neutral" then
+		return SectorConfig.FactionColors.Neutral
+	end
+	if factionId == "Rival" then
+		return SectorConfig.FactionColors.Rival
+	end
 
-local function getOwnerDisplay(owner)
-    if owner == "Neutral" then
-        return "NEUTRAL TERRITORY", COLORS.Neutral
-    end
+	local userIdStr = string.match(factionId, "^Player_(%d+)$")
+	if userIdStr then
+		local player = Players:GetPlayerByUserId(tonumber(userIdStr) or 0)
+		if player then
+			local baseSlot = player:GetAttribute("BaseSlot")
+			if typeof(baseSlot) == "string" and SectorConfig.FactionColors[baseSlot] then
+				return SectorConfig.FactionColors[baseSlot]
+			end
+		end
+		return SectorConfig.FactionColors.Player
+	end
 
-    if owner == "Rival" then
-        return "RIVAL TERRITORY", COLORS.Rival
-    end
-
-    local userId = string.match(owner, "^Player_(%d+)$")
-
-    if userId then
-        local player = Players:GetPlayerByUserId(tonumber(userId))
-
-        if player then
-            return "CONTROLLED BY " .. string.upper(player.DisplayName), COLORS.Player
-        end
-
-        return "PLAYER-OWNED TERRITORY", COLORS.Player
-    end
-
-    return string.upper(owner) .. " TERRITORY", COLORS.Rival
+	return SectorConfig.FactionColors.Rival
 end
 
-local function createLabel(zone)
-    local existing = zone:FindFirstChild("SectorBillboard")
+local function getOwnerLabel(sector: SectorService.SectorData): (string, Color3)
+	if sector.Status == "Contested" then
+		return "CONTESTED!", SectorConfig.FactionColors.Contested
+	end
 
-    if existing then
-        return existing
-    end
+	if sector.Owner == "Neutral" then
+		return "NEUTRAL SUPPLY HUB", SectorConfig.FactionColors.Neutral
+	end
 
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "SectorBillboard"
-    billboard.Adornee = zone
-    billboard.Size = UDim2.fromOffset(260, 70)
-    billboard.StudsOffset = Vector3.new(0, zone.Size.Y / 2 + 4, 0)
-    billboard.AlwaysOnTop = true
-    billboard.MaxDistance = 250
-    billboard.Parent = zone
+	if sector.Owner == "Rival" then
+		return "RIVAL TERRITORY", SectorConfig.FactionColors.Rival
+	end
 
-    local title = Instance.new("TextLabel")
-    title.Name = "SectorName"
-    title.Size = UDim2.new(1, 0, 0.5, 0)
-    title.BackgroundTransparency = 1
-    title.Font = Enum.Font.GothamBold
-    title.TextScaled = true
-    title.TextColor3 = Color3.new(1, 1, 1)
-    title.TextStrokeTransparency = 0.3
-    title.Parent = billboard
+	local userIdStr = string.match(sector.Owner, "^Player_(%d+)$")
+	if userIdStr then
+		local player = Players:GetPlayerByUserId(tonumber(userIdStr) or 0)
+		local color = getFactionColor(sector.Owner)
+		if player then
+			return "OWNED BY " .. string.upper(player.DisplayName), color
+		end
+		return "PLAYER TERRITORY", color
+	end
 
-    local ownerLabel = Instance.new("TextLabel")
-    ownerLabel.Name = "SectorOwner"
-    ownerLabel.Position = UDim2.new(0, 0, 0.5, 0)
-    ownerLabel.Size = UDim2.new(1, 0, 0.5, 0)
-    ownerLabel.BackgroundColor3 = COLORS.Neutral
-    ownerLabel.BackgroundTransparency = 0.15
-    ownerLabel.Font = Enum.Font.GothamBold
-    ownerLabel.TextScaled = true
-    ownerLabel.TextColor3 = Color3.new(1, 1, 1)
-    ownerLabel.Parent = billboard
-
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 8)
-    corner.Parent = ownerLabel
-
-    return billboard
+	return string.upper(sector.Owner) .. " TERRITORY", SectorConfig.FactionColors.Rival
 end
 
-local function updateZone(zone)
-    local sector = SectorService.GetSector(zone.Name)
+local function applySectorVisuals(root: Instance, sector: SectorService.SectorData): ()
+	local rig = root:FindFirstChild("TerritoryCaptureRig") or root
+	local ownerText, ownerColor = getOwnerLabel(sector)
 
-    if not sector then
-        warn("[SectorVisual] No sector configuration for zone:", zone.Name)
-        return
-    end
+	-- Recolor all TeamColorPart visuals inside the TerritoryCaptureRig (FlagBanner + ZoneRing borders)
+	for _, desc in ipairs(rig:GetDescendants()) do
+		if desc:IsA("BasePart") and CollectionService:HasTag(desc, "TeamColorPart") then
+			desc.Color = ownerColor
+		end
+	end
 
-    local billboard = createLabel(zone)
-    local title = billboard:FindFirstChild("SectorName")
-    local ownerLabel = billboard:FindFirstChild("SectorOwner")
+	-- Update BillboardGui (SectorName, SectorOwner & live capture ProgressFill)
+	local billboard = rig:FindFirstChild("SectorBillboard", true)
+	if billboard and billboard:IsA("BillboardGui") then
+		local nameLabel = billboard:FindFirstChild("SectorName")
+		if nameLabel and nameLabel:IsA("TextLabel") then
+			nameLabel.Text = string.upper(sector.DisplayName)
+		end
 
-    local ownerText, ownerColor = getOwnerDisplay(sector.Owner)
+		local ownerLabel = billboard:FindFirstChild("SectorOwner")
+		if ownerLabel and ownerLabel:IsA("TextLabel") then
+			ownerLabel.Text = ownerText
+			ownerLabel.BackgroundColor3 = ownerColor
+		end
 
-    title.Text = string.upper(sector.DisplayName)
-    ownerLabel.Text = ownerText
-    ownerLabel.BackgroundColor3 = ownerColor
+		local progressBar = billboard:FindFirstChild("ProgressBar")
+		if progressBar then
+			local fill = progressBar:FindFirstChild("ProgressFill")
+			if fill and fill:IsA("Frame") then
+				fill.Size = UDim2.new(math.clamp(sector.CaptureProgress, 0, 1), 0, 1, 0)
+				fill.BackgroundColor3 = if sector.CapturingFaction
+					then getFactionColor(sector.CapturingFaction)
+					else ownerColor
+			end
+		end
+	end
 end
 
-function SectorVisualService.Start()
-    if isRunning then
-        return
-    end
-
-    isRunning = true
-
-    for _, zone in ipairs(zonesFolder:GetChildren()) do
-        if zone:IsA("BasePart") then
-            updateZone(zone)
-        end
-    end
-
-    print("Food Empires: Sector visuals started!")
-
-    task.spawn(function()
-        while isRunning do
-            task.wait(1)
-
-            for _, zone in ipairs(zonesFolder:GetChildren()) do
-                if zone:IsA("BasePart") then
-                    updateZone(zone)
-                end
-            end
-        end
-    end)
+local function refreshSectorById(sectorId: string, sector: SectorService.SectorData): ()
+	for _, root in ipairs(CollectionService:GetTagged("SectorVisualRoot")) do
+		if root:GetAttribute("SectorId") == sectorId then
+			applySectorVisuals(root, sector)
+		end
+	end
 end
 
-function SectorVisualService.Stop()
-    isRunning = false
+function SectorVisualService.RefreshAll(): ()
+	for _, root in ipairs(CollectionService:GetTagged("SectorVisualRoot")) do
+		local sectorIdAttr = root:GetAttribute("SectorId")
+		if typeof(sectorIdAttr) == "string" then
+			local sector = SectorService.GetSector(sectorIdAttr)
+			if sector then
+				applySectorVisuals(root, sector)
+			end
+		end
+	end
+end
+
+function SectorVisualService.Start(): ()
+	if isRunning then
+		return
+	end
+
+	isRunning = true
+	SectorVisualService.RefreshAll()
+
+	unsubscribeSectorChanged = SectorService.OnSectorChanged(function(sectorId, sector)
+		refreshSectorById(sectorId, sector)
+	end)
+
+	addedConnection = CollectionService:GetInstanceAddedSignal("SectorVisualRoot"):Connect(function(root)
+		local sectorIdAttr = root:GetAttribute("SectorId")
+		if typeof(sectorIdAttr) == "string" then
+			local sector = SectorService.GetSector(sectorIdAttr)
+			if sector then
+				applySectorVisuals(root, sector)
+			end
+		end
+	end)
+
+	print("[Food Empire] SectorVisualService started (real-time flags, rings & progress bars)!")
+end
+
+function SectorVisualService.Stop(): ()
+	isRunning = false
+
+	if unsubscribeSectorChanged then
+		unsubscribeSectorChanged()
+		unsubscribeSectorChanged = nil
+	end
+
+	if addedConnection then
+		addedConnection:Disconnect()
+		addedConnection = nil
+	end
 end
 
 return SectorVisualService

@@ -1,0 +1,531 @@
+--!strict
+
+-- DayNightService: Live server-wide Day/Night cycle for Food Empire.
+--  * Smoothly animates Lighting (sun, sky, ambient, atmosphere, bloom, color grade) between Day and Night.
+--  * Switches ON every street light, restaurant lantern & warehouse light at dusk (brighter & wider at night).
+--  * Night gameplay: +35% Gold on food (Night Market), Mafia hunt from farther away,
+--    but your Stealth Delivery Runner is much harder to spot in the dark.
+--  * Exposes ReplicatedStorage attributes: IsNight (bool), GameClock (number), DayPhase (string).
+
+local Lighting = game:GetService("Lighting")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
+
+local DayNightService = {}
+
+-- Real-time lengths: daytime (06:00 -> 18:00) lasts 7 minutes, night (18:00 -> 06:00) lasts 4 minutes.
+local DAY_REAL_SECONDS = 420
+local NIGHT_REAL_SECONDS = 240
+local TICK = 0.2
+local START_CLOCK = 19.8
+local SKIP_COOLDOWN = 1.5
+
+type LightingSnapshot = {
+	Brightness: number,
+	Ambient: Color3,
+	OutdoorAmbient: Color3,
+	Exposure: number,
+	EnvDiffuse: number,
+	EnvSpecular: number,
+}
+
+local isRunning = false
+local loopThread: thread? = nil
+local clock = START_CLOCK
+local lightsAreOn: boolean? = nil
+local lastIsNight: boolean? = nil
+local lastSkipAt: { [Player]: number } = {}
+local daySnap: LightingSnapshot? = nil
+local effectDay: { [Instance]: { [string]: any } } = {}
+local syncEv: RemoteEvent? = nil
+
+local NIGHT_LIGHTING = {
+	Brightness = 1.15,
+	Ambient = Color3.fromRGB(62, 70, 104),
+	OutdoorAmbient = Color3.fromRGB(78, 90, 132),
+	Exposure = -0.05,
+	EnvDiffuse = 0.35,
+	EnvSpecular = 0.45,
+}
+
+local function lerpNumber(a: number, b: number, t: number): number
+	return a + (b - a) * t
+end
+
+local function smoothstep(e0: number, e1: number, x: number): number
+	local t = math.clamp((x - e0) / (e1 - e0), 0, 1)
+	return t * t * (3 - 2 * t)
+end
+
+-- 0 = full day, 1 = full night. Dusk ramps 17:00 -> 19:30, dawn ramps 05:00 -> 07:00.
+local function getNightFactor(c: number): number
+	if c >= 12 then
+		return smoothstep(17.0, 19.5, c)
+	end
+	return 1 - smoothstep(5.0, 7.0, c)
+end
+
+local function getPhaseName(c: number): string
+	if c >= 5 and c < 7 then
+		return "Dawn"
+	elseif c >= 7 and c < 17 then
+		return "Day"
+	elseif c >= 17 and c < 19.5 then
+		return "Dusk"
+	end
+	return "Night"
+end
+
+local function captureDaySnapshot(): ()
+	daySnap = {
+		Brightness = Lighting.Brightness,
+		Ambient = Lighting.Ambient,
+		OutdoorAmbient = Lighting.OutdoorAmbient,
+		Exposure = Lighting.ExposureCompensation,
+		EnvDiffuse = Lighting.EnvironmentDiffuseScale,
+		EnvSpecular = Lighting.EnvironmentSpecularScale,
+	}
+	for _, child in ipairs(Lighting:GetChildren()) do
+		if child:IsA("ColorCorrectionEffect") then
+			effectDay[child] = { TintColor = child.TintColor, Saturation = child.Saturation, Contrast = child.Contrast, Brightness = child.Brightness }
+		elseif child:IsA("BloomEffect") then
+			effectDay[child] = { Intensity = child.Intensity, Threshold = child.Threshold, Size = child.Size }
+		elseif child:IsA("SunRaysEffect") then
+			effectDay[child] = { Intensity = child.Intensity }
+		elseif child:IsA("Atmosphere") then
+			effectDay[child] = { Color = child.Color, Decay = child.Decay, Density = child.Density, Glare = child.Glare, Haze = child.Haze }
+		elseif child:IsA("Sky") then
+			effectDay[child] = { StarCount = child.StarCount }
+		end
+	end
+end
+
+-- Automatically fixes Black Market off-road placement, seamless Roundabout Road Intersections, and Territory Arch alignment!
+local function fixWorldMapLayout(): ()
+	local map = Workspace:FindFirstChild("FoodEmpireMap")
+	if not map then
+		return
+	end
+
+	-- 1. Move BlackMarketOutpost OFF the SW diagonal highway onto its own paved side-lot at (-295, 1.6, 130) facing East (+X) toward Ring_West!
+	local bm = map:FindFirstChild("BlackMarketOutpost")
+	if bm and bm:IsA("Model") then
+		bm:PivotTo(CFrame.lookAt(Vector3.new(-295, 1.6, 130), Vector3.new(-204, 1.6, 130)))
+		if not bm:FindFirstChild("AlleyDriveway") then
+			local drive = Instance.new("Part")
+			drive.Name = "AlleyDriveway"
+			drive.Size = Vector3.new(72, 0.34, 18)
+			drive.CFrame = CFrame.new(-246, 1.14, 130)
+			drive.Color = Color3.fromRGB(54, 58, 68)
+			drive.Material = Enum.Material.Asphalt
+			drive.Anchored = true
+			drive.Parent = bm
+
+			for _, cz in ipairs({ 120.4, 139.6 }) do
+				local curb = Instance.new("Part")
+				curb.Name = "AlleyCurb"
+				curb.Size = Vector3.new(72, 0.55, 1.4)
+				curb.CFrame = CFrame.new(-246, 1.24, cz)
+				curb.Color = Color3.fromRGB(148, 152, 162)
+				curb.Material = Enum.Material.Concrete
+				curb.Anchored = true
+				curb.Parent = bm
+			end
+		end
+	end
+
+	-- 2. Rebuild TerritoryHighways with clean split segments & Circular Roundabout Plazas so NO stripes or curbs poke across intersections!
+	local roads = map:FindFirstChild("Roads")
+	if roads then
+		local oldTh = roads:FindFirstChild("TerritoryHighways")
+		if oldTh then
+			oldTh:Destroy()
+		end
+		local thFolder = Instance.new("Folder")
+		thFolder.Name = "TerritoryHighways"
+		thFolder.Parent = roads
+
+		local function makeRoadPart(parent: Instance, name: string, sz: Vector3, cf: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
+			local p = Instance.new("Part")
+			p.Name = name
+			p.Size = sz
+			p.CFrame = cf
+			p.Color = col
+			p.Material = mat
+			if shape then p.Shape = shape end
+			p.Anchored = true
+			p.TopSurface = Enum.SurfaceType.Smooth
+			p.BottomSurface = Enum.SurfaceType.Smooth
+			p.Parent = parent
+			return p
+		end
+
+		local function addRoundabout(parent: Instance, name: string, x: number, z: number): ()
+			-- Smooth dark asphalt circular roundabout covering the junction cleanly above crossing dashes
+			makeRoadPart(
+				parent,
+				name .. "_Asphalt",
+				Vector3.new(0.42, 42, 42),
+				CFrame.new(x, 1.22, z) * CFrame.Angles(0, 0, math.rad(90)),
+				Color3.fromRGB(52, 56, 66),
+				Enum.Material.Asphalt,
+				Enum.PartType.Cylinder
+			)
+			-- Center stone island with glowing warm night bollard lantern!
+			makeRoadPart(
+				parent,
+				name .. "_Island",
+				Vector3.new(0.75, 8.5, 8.5),
+				CFrame.new(x, 1.48, z) * CFrame.Angles(0, 0, math.rad(90)),
+				Color3.fromRGB(162, 166, 176),
+				Enum.Material.Concrete,
+				Enum.PartType.Cylinder
+			)
+			local orb = makeRoadPart(
+				parent,
+				name .. "_LanternGlass",
+				Vector3.new(2.4, 2.4, 2.4),
+				CFrame.new(x, 3.1, z),
+				Color3.fromRGB(255, 224, 132),
+				Enum.Material.Neon,
+				Enum.PartType.Ball
+			)
+			orb.CanCollide = false
+			local pl = Instance.new("PointLight")
+			pl.Color = Color3.fromRGB(255, 214, 120)
+			pl.Brightness = 1.6
+			pl.Range = 32
+			pl.Shadows = false
+			pl.Parent = orb
+		end
+
+		local function addCleanHighwaySegment(parent: Instance, p1: Vector3, p2: Vector3, withCheckpoint: boolean): ()
+			local delta = p2 - p1
+			local len = delta.Magnitude
+			if len < 10 then return end
+			local mid = (p1 + p2) * 0.5
+			local cf = CFrame.lookAt(mid, p2)
+
+			makeRoadPart(parent, "Asphalt", Vector3.new(20, 0.34, len), cf * CFrame.new(0, 1.12, 0), Color3.fromRGB(54, 58, 68), Enum.Material.Asphalt, nil)
+			makeRoadPart(parent, "Curb_L", Vector3.new(1.3, 0.55, len - 8), cf * CFrame.new(-10.65, 1.24, 0), Color3.fromRGB(152, 156, 166), Enum.Material.Concrete, nil)
+			makeRoadPart(parent, "Curb_R", Vector3.new(1.3, 0.55, len - 8), cf * CFrame.new(10.65, 1.24, 0), Color3.fromRGB(152, 156, 166), Enum.Material.Concrete, nil)
+
+			local numDashes = math.floor((len - 24) / 24)
+			for i = 1, numDashes do
+				local zOff = -len * 0.5 + 12 + (i - 0.5) * 24
+				local dash = makeRoadPart(parent, "Dash", Vector3.new(0.75, 0.06, 9.5), cf * CFrame.new(0, 1.31, zOff), Color3.fromRGB(246, 206, 72), Enum.Material.SmoothPlastic, nil)
+				dash.CanCollide = false
+			end
+
+			if withCheckpoint then
+				local cpCF = cf * CFrame.new(0, 0, -len * 0.15)
+				for _, sx in ipairs({ -11.8, 11.8 }) do
+					makeRoadPart(parent, "MafiaPost", Vector3.new(2.2, 14, 2.2), cpCF * CFrame.new(sx, 8.2, 0), Color3.fromRGB(36, 38, 46), Enum.Material.Metal, nil)
+					local beacon = makeRoadPart(parent, "MafiaBeacon", Vector3.new(1.5, 1.5, 1.5), cpCF * CFrame.new(sx, 15.7, 0), Color3.fromRGB(238, 48, 58), Enum.Material.Neon, Enum.PartType.Ball)
+					local bLight = Instance.new("PointLight")
+					bLight.Color = Color3.fromRGB(255, 64, 72)
+					bLight.Brightness = 1.5
+					bLight.Range = 26
+					bLight.Parent = beacon
+				end
+				makeRoadPart(parent, "MafiaCheckpointBeam", Vector3.new(26, 2.5, 1.4), cpCF * CFrame.new(0, 13.8, 0), Color3.fromRGB(186, 34, 44), Enum.Material.Metal, nil)
+			end
+		end
+
+		local function buildCleanTerritoryArch(parent: Instance, pos: Vector3, lookTarget: Vector3, titleText: string, accentCol: Color3): ()
+			local old = parent:FindFirstChild("TerritoryArch")
+			if old then old:Destroy() end
+
+			local arch = Instance.new("Model")
+			arch.Name = "TerritoryArch"
+			local cf = CFrame.lookAt(Vector3.new(pos.X, 1.2, pos.Z), Vector3.new(lookTarget.X, 1.2, lookTarget.Z))
+			local woodDark = Color3.fromRGB(108, 68, 38)
+			local woodMid = Color3.fromRGB(142, 92, 52)
+
+			-- Tall posts placed at X = ±13.2 (completely OUTSIDE the 20-stud road + curbs!)
+			for _, sx in ipairs({ -13.2, 13.2 }) do
+				makeRoadPart(arch, "PostBase", Vector3.new(3.4, 1.6, 3.4), cf * CFrame.new(sx, 0.8, 0), Color3.fromRGB(146, 150, 160), Enum.Material.Concrete, nil)
+				makeRoadPart(arch, "Post", Vector3.new(2.4, 16.5, 2.4), cf * CFrame.new(sx, 9.5, 0), woodDark, Enum.Material.Wood, nil)
+				local lantern = makeRoadPart(arch, "Lantern", Vector3.new(1.3, 1.6, 1.3), cf * CFrame.new(sx * 0.86, 12.2, 0), Color3.fromRGB(255, 224, 148), Enum.Material.SmoothPlastic, nil)
+				local pl = Instance.new("PointLight")
+				pl.Color = Color3.fromRGB(255, 214, 132)
+				pl.Brightness = 0.85
+				pl.Range = 22
+				pl.Shadows = false
+				pl.Parent = lantern
+			end
+
+			-- Overhead crossbeam & pitched roof high above trucks & motorbikes (Y = 17.5..19.4)
+			makeRoadPart(arch, "Beam", Vector3.new(30.5, 2.4, 2.8), cf * CFrame.new(0, 17.6, 0), woodMid, Enum.Material.Wood, nil)
+			makeRoadPart(arch, "Roof", Vector3.new(32.5, 1.2, 4.4), cf * CFrame.new(0, 19.3, 0), accentCol, Enum.Material.SmoothPlastic, nil)
+
+			local signPart = makeRoadPart(arch, "Sign", Vector3.new(22.5, 3.6, 1.0), cf * CFrame.new(0, 15.2, 0), Color3.fromRGB(32, 26, 22), Enum.Material.SmoothPlastic, nil)
+			for _, face in ipairs({ Enum.NormalId.Front, Enum.NormalId.Back }) do
+				local sg = Instance.new("SurfaceGui")
+				sg.Face = face
+				sg.SizingMode = Enum.SurfaceGuiSizingMode.PixelsPerStud
+				sg.PixelsPerStud = 28
+				sg.Parent = signPart
+				local lbl = Instance.new("TextLabel")
+				lbl.Size = UDim2.fromScale(1, 1)
+				lbl.BackgroundTransparency = 1
+				lbl.Font = Enum.Font.GothamBlack
+				lbl.Text = titleText
+				lbl.TextSize = 52
+				lbl.TextColor3 = Color3.fromRGB(255, 234, 142)
+				lbl.Parent = sg
+			end
+
+			arch.Parent = parent
+		end
+
+		local highwaySpecs = {
+			{ Name = "Highway_VegetableFarm_NW", Inner1 = Vector3.new(-204, 0, -204), Mid = Vector3.new(-490, 0, -490), Outer2 = Vector3.new(-685, 0, -685), ArchTerritory = "VegetableFarm_Territory", ArchPos = Vector3.new(-625, 1.2, -625), ArchTitle = "🥕 VEGETABLE FARM", ArchCol = Color3.fromRGB(76, 178, 74) },
+			{ Name = "Highway_Ranch_NE",         Inner1 = Vector3.new(204, 0, -204),  Mid = Vector3.new(490, 0, -490),  Outer2 = Vector3.new(685, 0, -685),  ArchTerritory = "Ranch_Territory",         ArchPos = Vector3.new(625, 1.2, -625),  ArchTitle = "🥩 MEAT RANCH",     ArchCol = Color3.fromRGB(196, 78, 54) },
+			{ Name = "Highway_FruitOrchard_SW",  Inner1 = Vector3.new(-204, 0, 204),  Mid = Vector3.new(-490, 0, 490),  Outer2 = Vector3.new(-685, 0, 685),  ArchTerritory = "FruitOrchard_Territory",  ArchPos = Vector3.new(-625, 1.2, 625),  ArchTitle = "🍎 FRUIT ORCHARD",  ArchCol = Color3.fromRGB(218, 134, 42) },
+			{ Name = "Highway_FishingPort_SE",   Inner1 = Vector3.new(204, 0, 204),   Mid = Vector3.new(490, 0, 490),   Outer2 = Vector3.new(665, 0, 680),   ArchTerritory = nil,                       ArchPos = nil,                          ArchTitle = "",                  ArchCol = Color3.fromRGB(64, 156, 214) },
+		}
+
+		for _, hs in ipairs(highwaySpecs) do
+			local hModel = Instance.new("Model")
+			hModel.Name = hs.Name
+			hModel.Parent = thFolder
+
+			addRoundabout(hModel, "InnerRoundabout", hs.Inner1.X, hs.Inner1.Z)
+			addRoundabout(hModel, "MidRoundabout", hs.Mid.X, hs.Mid.Z)
+
+			local dir1 = (hs.Mid - hs.Inner1).Unit
+			addCleanHighwaySegment(hModel, hs.Inner1 + dir1 * 18, hs.Mid - dir1 * 18, true)
+
+			local dir2 = (hs.Outer2 - hs.Mid).Unit
+			addCleanHighwaySegment(hModel, hs.Mid + dir2 * 18, hs.Outer2, false)
+
+			-- 3. Rebuild the Corner Territory Entrance Gate (TerritoryArch) high above the road with posts outside the curbs!
+			if hs.ArchTerritory and hs.ArchPos then
+				local terr = map:FindFirstChild(hs.ArchTerritory, true)
+				local rich = if terr then terr:FindFirstChild("TerritoryRichUpgrade") else nil
+				if rich then
+					buildCleanTerritoryArch(rich, hs.ArchPos, hs.Outer2, hs.ArchTitle, hs.ArchCol)
+				end
+			end
+		end
+	end
+end
+
+local function applyLighting(nf: number): ()
+	local d = daySnap
+	if not d then
+		return
+	end
+	Lighting.Brightness = lerpNumber(d.Brightness, NIGHT_LIGHTING.Brightness, nf)
+	Lighting.Ambient = d.Ambient:Lerp(NIGHT_LIGHTING.Ambient, nf)
+	Lighting.OutdoorAmbient = d.OutdoorAmbient:Lerp(NIGHT_LIGHTING.OutdoorAmbient, nf)
+	Lighting.ExposureCompensation = lerpNumber(d.Exposure, NIGHT_LIGHTING.Exposure, nf)
+	Lighting.EnvironmentDiffuseScale = lerpNumber(d.EnvDiffuse, NIGHT_LIGHTING.EnvDiffuse, nf)
+	Lighting.EnvironmentSpecularScale = lerpNumber(d.EnvSpecular, NIGHT_LIGHTING.EnvSpecular, nf)
+
+	for inst, props in pairs(effectDay) do
+		if inst.Parent then
+			if inst:IsA("ColorCorrectionEffect") then
+				inst.TintColor = (props.TintColor :: Color3):Lerp(Color3.fromRGB(196, 210, 255), nf)
+				inst.Saturation = lerpNumber(props.Saturation, -0.08, nf)
+				inst.Contrast = lerpNumber(props.Contrast, 0.12, nf)
+			elseif inst:IsA("BloomEffect") then
+				-- Gentle, non-blinding bloom at night so nothing glares or washes out the screen
+				inst.Intensity = lerpNumber(props.Intensity, 0.22, nf)
+				inst.Threshold = lerpNumber(props.Threshold, 1.75, nf)
+				inst.Size = math.floor(lerpNumber(props.Size, 14, nf))
+			elseif inst:IsA("SunRaysEffect") then
+				inst.Intensity = lerpNumber(props.Intensity, 0, nf)
+			elseif inst:IsA("Atmosphere") then
+				inst.Color = (props.Color :: Color3):Lerp(Color3.fromRGB(58, 72, 118), nf)
+				inst.Decay = (props.Decay :: Color3):Lerp(Color3.fromRGB(34, 40, 78), nf)
+				inst.Density = lerpNumber(props.Density, math.max(props.Density, 0.34), nf)
+				inst.Glare = lerpNumber(props.Glare, 0, nf)
+				inst.Haze = lerpNumber(props.Haze, math.max(props.Haze, 1.6), nf)
+			elseif inst:IsA("Sky") then
+				inst.StarCount = math.floor(lerpNumber(props.StarCount, 5000, nf))
+			end
+		end
+	end
+end
+
+local function isCharacterOrTransient(inst: Instance): boolean
+	local model = inst:FindFirstAncestorOfClass("Model")
+	if model and Players:GetPlayerFromCharacter(model) then
+		return true
+	end
+	return false
+end
+
+-- Turns all city lights ON (bright & wide) at night and back to soft daytime glow at sunrise.
+local function setCityLights(on: boolean): ()
+	if lightsAreOn == on then
+		return
+	end
+	lightsAreOn = on
+	task.spawn(function()
+		local count = 0
+		for _, d in ipairs(Workspace:GetDescendants()) do
+			if (d:IsA("PointLight") or d:IsA("SpotLight") or d:IsA("SurfaceLight")) and not isCharacterOrTransient(d) then
+				if d:GetAttribute("DayBrightness") == nil then
+					d:SetAttribute("DayBrightness", d.Brightness)
+					d:SetAttribute("DayRange", d.Range)
+					d:SetAttribute("DayEnabled", d.Enabled)
+				end
+				local dayB = d:GetAttribute("DayBrightness") :: number
+				local dayR = d:GetAttribute("DayRange") :: number
+				if on then
+					d.Enabled = true
+					d.Brightness = math.min(1.05, math.max(dayB * 1.1, 0.85))
+					d.Range = math.min(34, math.max(dayR * 1.15, 16))
+					d.Shadows = false
+				else
+					d.Enabled = d:GetAttribute("DayEnabled") ~= false
+					d.Brightness = dayB
+					d.Range = dayR
+				end
+				count += 1
+				if count % 400 == 0 then
+					task.wait()
+				end
+			elseif d:IsA("BasePart") and d.Name == "LanternGlass" then
+				d.Material = Enum.Material.SmoothPlastic
+				d.Color = Color3.fromRGB(255, 224, 150)
+				d.Transparency = 0.08
+			end
+		end
+	end)
+end
+
+local function broadcastToast(msg: string): ()
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	local toastEv = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
+	if toastEv and toastEv:IsA("RemoteEvent") then
+		toastEv:FireAllClients(msg)
+	end
+end
+
+local function step(dt: number): ()
+	-- Advance clock: daytime hours run faster than night hours (night lasts 4 real minutes)
+	local isDayHours = clock >= 6 and clock < 18
+	local hoursPerSecond = if isDayHours then (12 / DAY_REAL_SECONDS) else (12 / NIGHT_REAL_SECONDS)
+	clock = (clock + hoursPerSecond * dt) % 24
+
+	local nf = getNightFactor(clock)
+	Lighting.ClockTime = clock
+	applyLighting(nf)
+	setCityLights(nf >= 0.3)
+
+	local isNight = nf >= 0.5
+	local phaseName = getPhaseName(clock)
+	ReplicatedStorage:SetAttribute("GameClock", clock)
+	ReplicatedStorage:SetAttribute("DayPhase", phaseName)
+	ReplicatedStorage:SetAttribute("NightFactor", nf)
+	if syncEv then
+		syncEv:FireAllClients(isNight, clock, phaseName, nf)
+	end
+	if isNight ~= lastIsNight then
+		ReplicatedStorage:SetAttribute("IsNight", isNight)
+		if lastIsNight ~= nil then
+			if isNight then
+				broadcastToast("🌙 NIGHT HAS FALLEN! Night Market +35% Gold • Mafia hunt farther • Delivery Runners sneak easier!")
+			else
+				broadcastToast("☀️ SUNRISE! A new day in the Food Empire — Mafia vision back to normal.")
+			end
+		end
+		lastIsNight = isNight
+	end
+end
+
+function DayNightService.IsNight(): boolean
+	return ReplicatedStorage:GetAttribute("IsNight") == true
+end
+
+function DayNightService.GetClock(): number
+	return clock
+end
+
+-- Jump globally to the next phase (Day -> Night, Night -> Day) for ALL players on the server!
+function DayNightService.SkipPhase(player: Player?): (boolean, string)
+	if player then
+		local now = os.clock()
+		local last = lastSkipAt[player]
+		if last and (now - last) < SKIP_COOLDOWN then
+			return false, string.format("Wait %ds before changing time again!", math.ceil(SKIP_COOLDOWN - (now - last)))
+		end
+		lastSkipAt[player] = now
+	end
+	local who = if player then player.DisplayName else "Server"
+	if DayNightService.IsNight() then
+		clock = 13.5
+		step(0)
+		broadcastToast("☀️ " .. who .. " switched the island to GLOBAL DAY MODE!")
+		return true, "☀️ Global Day Mode activated for all players!"
+	end
+	clock = 20.2
+	step(0)
+	broadcastToast("🌙 " .. who .. " switched the island to GLOBAL NIGHT MODE (+35% Gold)!")
+	return true, "🌙 Global Night Mode activated for all players!"
+end
+
+function DayNightService.Start(): ()
+	if isRunning then
+		return
+	end
+	isRunning = true
+
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	if not remotes then
+		local f = Instance.new("Folder")
+		f.Name = "Remotes"
+		f.Parent = ReplicatedStorage
+		remotes = f
+	end
+	local ev = remotes:FindFirstChild("DayNightSync")
+	if ev and ev:IsA("RemoteEvent") then
+		syncEv = ev
+	else
+		local created = Instance.new("RemoteEvent")
+		created.Name = "DayNightSync"
+		created.Parent = remotes
+		syncEv = created
+	end
+	if syncEv then
+		syncEv.OnServerEvent:Connect(function(player: Player)
+			DayNightService.SkipPhase(player)
+		end)
+	end
+
+	pcall(fixWorldMapLayout)
+	captureDaySnapshot()
+	clock = START_CLOCK
+	step(0)
+
+	loopThread = task.spawn(function()
+		local last = os.clock()
+		while isRunning do
+			task.wait(TICK)
+			local now = os.clock()
+			step(now - last)
+			last = now
+		end
+	end)
+
+	Players.PlayerRemoving:Connect(function(p)
+		lastSkipAt[p] = nil
+	end)
+
+	print("[Food Empire] DayNightService started (Live Day/Night cycle, city street lights & Night Market active)!")
+end
+
+function DayNightService.Stop(): ()
+	isRunning = false
+	if loopThread then
+		task.cancel(loopThread)
+		loopThread = nil
+	end
+end
+
+return DayNightService

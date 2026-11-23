@@ -1,122 +1,157 @@
+--!strict
 
 local Players = game:GetService("Players")
-local Workspace = game:GetService("Workspace")
-local ServerScriptService = game:GetService("ServerScriptService")
+local CollectionService = game:GetService("CollectionService")
 
-local SectorService = require(
-    ServerScriptService:WaitForChild("Services")
-        :WaitForChild("SectorService")
-)
+local SectorService = require("./SectorService")
 
 local SectorCaptureService = {}
 
-local CAPTURE_TIME = 5
 local CHECK_INTERVAL = 0.2
+local DECAY_PER_SECOND = 0.25
+local EXTRA_UNIT_SPEED_BONUS = 0.25
 
-local zonesFolder = Workspace:WaitForChild("SectorZones")
-
--- progress[sectorId][userId] = time the player entered
-local progress = {}
 local isRunning = false
+local captureThread: thread? = nil
 
-local function isPlayerInsideZone(player, zone)
-    local character = player.Character
-    if not character then
-        return false
-    end
+local function isPositionInsideZone(position: Vector3, zone: BasePart): boolean
+	local localPos = zone.CFrame:PointToObjectSpace(position)
+	local half = zone.Size * 0.5
 
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-    local root = character:FindFirstChild("HumanoidRootPart")
-
-    if not humanoid or humanoid.Health <= 0 or not root then
-        return false
-    end
-
-    -- Works even if the zone part is rotated.
-    local localPosition = zone.CFrame:PointToObjectSpace(root.Position)
-    local halfSize = zone.Size / 2
-
-    return math.abs(localPosition.X) <= halfSize.X
-        and math.abs(localPosition.Y) <= halfSize.Y
-        and math.abs(localPosition.Z) <= halfSize.Z
+	return math.abs(localPos.X) <= half.X
+		and math.abs(localPos.Y) <= half.Y
+		and math.abs(localPos.Z) <= half.Z
 end
 
-local function tryCapture(player, sectorId)
-    local sector = SectorService.GetSector(sectorId)
+local function getLivingRoot(model: Model?): BasePart?
+	if not model then
+		return nil
+	end
 
-    if not sector or sector.Owner ~= "Neutral" then
-        return false
-    end
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	local root = model:FindFirstChild("HumanoidRootPart")
+	if not humanoid or humanoid.Health <= 0 or not root or not root:IsA("BasePart") then
+		return nil
+	end
 
-    -- Ownership is stored on the server.
-    local ownerId = "Player_" .. player.UserId
-
-    local success = SectorService.SetOwner(sectorId, ownerId)
-
-    if success then
-        print(
-            "[Capture] " .. player.Name
-                .. " captured " .. sector.DisplayName .. "!"
-        )
-
-        -- Clear progress for everyone once the sector is captured.
-        progress[sectorId] = nil
-    end
-
-    return success
+	return root
 end
 
-function SectorCaptureService.Start()
-    if isRunning then
-        return
-    end
+local function collectOccupants(zone: BasePart): { [string]: number }
+	local factionCounts: { [string]: number } = {}
 
-    isRunning = true
-    print("Food Empires: Sector capture started!")
+	-- 1. Live Players
+	for _, player in ipairs(Players:GetPlayers()) do
+		local root = getLivingRoot(player.Character)
+		if root and isPositionInsideZone(root.Position, zone) then
+			local factionId = "Player_" .. tostring(player.UserId)
+			factionCounts[factionId] = (factionCounts[factionId] or 0) + 1
+		end
+	end
 
-    task.spawn(function()
-        while isRunning do
-            task.wait(CHECK_INTERVAL)
+	-- 2. Live Player Raider Chefs (capture territories for their owner!)
+	for _, unit in ipairs(CollectionService:GetTagged("PlayerRaiderUnit")) do
+		if unit:IsA("Model") then
+			local root = getLivingRoot(unit)
+			if root and isPositionInsideZone(root.Position, zone) then
+				local factionAttr = unit:GetAttribute("Faction")
+				if typeof(factionAttr) == "string" then
+					factionCounts[factionAttr] = (factionCounts[factionAttr] or 0) + 1
+				end
+			end
+		end
+	end
 
-            local now = os.clock()
+	-- 3. Live Rival AI Units
+	for _, unit in ipairs(CollectionService:GetTagged("RivalAIUnit")) do
+		if unit:IsA("Model") then
+			local root = getLivingRoot(unit)
+			if root and isPositionInsideZone(root.Position, zone) then
+				local factionAttr = unit:GetAttribute("Faction")
+				local factionId = if typeof(factionAttr) == "string" then factionAttr else "Rival"
+				factionCounts[factionId] = (factionCounts[factionId] or 0) + 1
+			end
+		end
+	end
 
-            for _, zone in ipairs(zonesFolder:GetChildren()) do
-                if zone:IsA("BasePart") then
-                    local sectorId = zone.Name
-                    local sector = SectorService.GetSector(sectorId)
-
-                    if sector and sector.Owner == "Neutral" then
-                        progress[sectorId] = progress[sectorId] or {}
-
-                        for _, player in ipairs(Players:GetPlayers()) do
-                            local userId = player.UserId
-
-                            if isPlayerInsideZone(player, zone) then
-                                progress[sectorId][userId] =
-                                    progress[sectorId][userId] or now
-
-                                local elapsed =
-                                    now - progress[sectorId][userId]
-
-                                if elapsed >= CAPTURE_TIME then
-                                    tryCapture(player, sectorId)
-                                    break
-                                end
-                            else
-                                progress[sectorId][userId] = nil
-                            end
-                        end
-                    else
-                        progress[sectorId] = nil
-                    end
-                end
-            end
-        end
-    end)
+	return factionCounts
 end
 
-function SectorCaptureService.Stop()
-    isRunning = false
+local function stepZone(zone: BasePart, dt: number): ()
+	local sectorIdAttr = zone:GetAttribute("SectorId")
+	if typeof(sectorIdAttr) ~= "string" then
+		return
+	end
+
+	local sector = SectorService.GetSector(sectorIdAttr)
+	if not sector then
+		return
+	end
+
+	local occupants = collectOccupants(zone)
+	local uniqueFactions: { string } = {}
+	for factionId in pairs(occupants) do
+		table.insert(uniqueFactions, factionId)
+	end
+
+	-- Case 1: Multiple factions inside zone -> Contested standoff
+	if #uniqueFactions > 1 then
+		SectorService.SetCaptureState(sectorIdAttr, sector.CapturingFaction, sector.CaptureProgress, true)
+		return
+	end
+
+	-- Case 2: Exactly one faction inside zone
+	if #uniqueFactions == 1 then
+		local activeFaction = uniqueFactions[1]
+		local unitCount = occupants[activeFaction]
+
+		-- Already owns this territory: clear any leftover enemy capture progress
+		if sector.Owner == activeFaction then
+			if sector.CaptureProgress > 0 or sector.Status == "Contested" then
+				local healed = math.max(0, sector.CaptureProgress - DECAY_PER_SECOND * 2 * dt)
+				local capFaction = if healed > 0 then sector.CapturingFaction else nil
+				SectorService.SetCaptureState(sectorIdAttr, capFaction, healed, false)
+			end
+			return
+		end
+
+		-- Different faction starts capturing -> reset progress first if switching capturer
+		local currentProgress = if sector.CapturingFaction == activeFaction then sector.CaptureProgress else 0
+		local speedMultiplier = 1 + math.max(0, unitCount - 1) * EXTRA_UNIT_SPEED_BONUS
+		local nextProgress = currentProgress + (dt / math.max(1, sector.CaptureTime)) * speedMultiplier
+
+		if nextProgress >= 1 then
+			SectorService.SetOwner(sectorIdAttr, activeFaction)
+		else
+			SectorService.SetCaptureState(sectorIdAttr, activeFaction, nextProgress, false)
+		end
+		return
+	end
+
+	-- Case 3: Empty zone -> decay any partial capture progress back to 0
+	if sector.CaptureProgress > 0 or sector.Status == "Contested" then
+		local decayed = math.max(0, sector.CaptureProgress - DECAY_PER_SECOND * dt)
+		local capFaction = if decayed > 0 then sector.CapturingFaction else nil
+		SectorService.SetCaptureState(sectorIdAttr, capFaction, decayed, false)
+	end
+end
+
+function SectorCaptureService.Start(): ()
+	if isRunning then
+		return
+	end
+
+	isRunning = true
+	-- All 4 map corners are True Neutral, uninteractable supply origins (Shipments depart to Central District).
+	print("[Food Empire] SectorCaptureService active (4 corners locked as True Neutral Supply Hubs)!")
+end
+
+function SectorCaptureService.Stop(): ()
+	isRunning = false
+	if captureThread then
+		task.cancel(captureThread)
+		captureThread = nil
+	end
 end
 
 return SectorCaptureService
