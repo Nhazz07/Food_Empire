@@ -68,6 +68,7 @@ function BountyService.PlacePlayerBounty(placer: Player, targetName: string?, am
 		return false, string.format("Need %d Gold to post a Syndicate Bounty!", amount)
 	end
 	playerBounties[target] = (playerBounties[target] or 0) + amount
+	target:SetAttribute("SyndicateBounty", playerBounties[target])
 	sendToast(nil, string.format("BOUNTY POSTED: %d Gold on %s's head (posted by %s)!", playerBounties[target], target.DisplayName, placer.DisplayName))
 	return true, string.format("Posted %d Gold Syndicate Bounty on %s!", amount, target.DisplayName)
 end
@@ -194,6 +195,7 @@ function BountyService.Start(): ()
 		if victimP and (playerBounties[victimP] or 0) > 0 then
 			local amt = playerBounties[victimP]
 			playerBounties[victimP] = nil
+			victimP:SetAttribute("SyndicateBounty", nil)
 			PlayerDataService.AddRewards(killer, amt, 100, 45)
 			sendToast(nil, string.format("%s claimed the %d Gold Bounty on %s!", killer.DisplayName, amt, victimP.DisplayName))
 		end
