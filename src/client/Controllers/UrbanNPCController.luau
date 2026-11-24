@@ -1,7 +1,7 @@
 --!strict
 
--- UrbanNPCController: 48 authentic Roblox R15 MeshPart friendly neighborhood citizens
--- across all 16 Urban Turf Districts. Reacts realistically to nearby gunshots, mafia fights,
+-- UrbanNPCController: Authentic Roblox R15 MeshPart friendly neighborhood citizens
+-- across all 28 Urban Turf Districts (Mid-Town + 4 Expanded Corner Neighborhoods). Reacts realistically to nearby gunshots, mafia fights,
 -- and turf wars: panicked scream, hands raised / head-shielding sprint directly away from
 -- combat, shaky nervous cooldown glancing around, then calm return to neighborhood sidewalks!
 
@@ -364,7 +364,30 @@ end
 local function getBlockWalkRoutes(spec: TurfConfig.TurfBlockSpec): { { Vector3 } }
 	local uv = TurfConfig.UVToWorld
 	local w = spec.Wedge
-	if spec.Ring == "Inner" then
+	if spec.Ring == "Corner" then
+		local px, pz = spec.PlazaPos.X, spec.PlazaPos.Z
+		local plazaLoop = {
+			Vector3.new(px - 30, SIDEWALK_Y, pz - 30),
+			Vector3.new(px + 30, SIDEWALK_Y, pz - 30),
+			Vector3.new(px + 30, SIDEWALK_Y, pz + 30),
+			Vector3.new(px - 30, SIDEWALK_Y, pz + 30),
+		}
+		local alleyLoop = {
+			Vector3.new(px - 86, SIDEWALK_Y, pz),
+			Vector3.new(px - 30, SIDEWALK_Y, pz),
+			Vector3.new(px, SIDEWALK_Y, pz - 30),
+			Vector3.new(px, SIDEWALK_Y, pz - 86),
+			Vector3.new(px, SIDEWALK_Y, pz - 30),
+			Vector3.new(px + 30, SIDEWALK_Y, pz),
+			Vector3.new(px + 86, SIDEWALK_Y, pz),
+			Vector3.new(px + 30, SIDEWALK_Y, pz),
+			Vector3.new(px, SIDEWALK_Y, pz + 30),
+			Vector3.new(px, SIDEWALK_Y, pz + 86),
+			Vector3.new(px, SIDEWALK_Y, pz + 30),
+			Vector3.new(px - 30, SIDEWALK_Y, pz),
+		}
+		return { plazaLoop, alleyLoop }
+	elseif spec.Ring == "Inner" then
 		if w == "WSW" then
 			local loopA = {
 				uv(w, 186, 274, SIDEWALK_Y),
@@ -523,9 +546,9 @@ function UrbanNPCController.Start(): ()
 					nextPos = c.HomeCenter + fromHome.Unit * 118
 				end
 				c.CurrentPos = Vector3.new(
-					math.clamp(nextPos.X, -515, 515),
+					math.clamp(nextPos.X, -940, 940),
 					SIDEWALK_Y,
-					math.clamp(nextPos.Z, -515, 515)
+					math.clamp(nextPos.Z, -940, 940)
 				)
 
 				local desiredYaw = math.atan2(-fleeDir.X, -fleeDir.Z)

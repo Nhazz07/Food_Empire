@@ -28,6 +28,7 @@ type CornerRoute = {
 	DisplayName: string,
 	Category: WarehouseConfig.WarehouseCategory,
 	OriginPos: Vector3,
+	VaultPos: Vector3,
 	MidPos: Vector3,
 	BayPos: Vector3,
 	InitialDelay: number,
@@ -54,36 +55,40 @@ local CLAIM_BONUS_EXP = 12
 local ROUTES: { CornerRoute } = {
 	{
 		SectorId = "FishingPort",
-		DisplayName = "Fishing Port",
+		DisplayName = "Obsidian Wharf",
 		Category = "Fish",
-		OriginPos = Vector3.new(752, 2.2, 797),
+		OriginPos = Vector3.new(730, 2.2, 730),
+		VaultPos = Vector3.new(648, 1.52, 696),
 		MidPos = Vector3.new(490, 2.2, 490),
 		BayPos = Vector3.new(66, 2.2, 66),
 		InitialDelay = 4, -- First Fish shipment goes out almost right away!
 	},
 	{
 		SectorId = "VegetableFarm",
-		DisplayName = "Vegetable Farm",
+		DisplayName = "Iron Citadel",
 		Category = "Vegetable",
-		OriginPos = Vector3.new(-725, 2.2, -725),
+		OriginPos = Vector3.new(-730, 2.2, -730),
+		VaultPos = Vector3.new(-648, 1.52, -696),
 		MidPos = Vector3.new(-490, 2.2, -490),
 		BayPos = Vector3.new(-66, 2.2, -66),
 		InitialDelay = 10,
 	},
 	{
 		SectorId = "FruitOrchard",
-		DisplayName = "Fruit Orchard",
+		DisplayName = "Velvet Promenade",
 		Category = "Fruit",
-		OriginPos = Vector3.new(-725, 2.2, 725),
+		OriginPos = Vector3.new(-730, 2.2, 730),
+		VaultPos = Vector3.new(-648, 1.52, 696),
 		MidPos = Vector3.new(-490, 2.2, 490),
 		BayPos = Vector3.new(-66, 2.2, 66),
 		InitialDelay = 16,
 	},
 	{
 		SectorId = "Ranch",
-		DisplayName = "Ranch Territory",
+		DisplayName = "Viper Exchange",
 		Category = "Meat",
-		OriginPos = Vector3.new(725, 2.2, -725),
+		OriginPos = Vector3.new(730, 2.2, -730),
+		VaultPos = Vector3.new(648, 1.52, -696),
 		MidPos = Vector3.new(490, 2.2, -490),
 		BayPos = Vector3.new(66, 2.2, -66),
 		InitialDelay = 22,
@@ -625,10 +630,8 @@ local function buildTerritorySupplyVaults(): ()
 		local cat = route.Category
 		local spec = WarehouseConfig.Specs[cat]
 		local accent = if spec then spec.AccentColor else Color3.fromRGB(184, 146, 78)
-		local signX = if route.OriginPos.X >= 0 then -1 else 1
-		local signZ = if route.OriginPos.Z >= 0 then -1 else 1
-		local vaultPos = route.OriginPos + Vector3.new(signX * 22, 0, signZ * 14)
-		local vaultCF = CFrame.lookAt(vaultPos, Vector3.new(0, vaultPos.Y, 0))
+		local vaultPos = route.VaultPos
+		local vaultCF = CFrame.lookAt(vaultPos, Vector3.new(route.OriginPos.X, vaultPos.Y, route.OriginPos.Z))
 
 		local vm = Instance.new("Model")
 		vm.Name = "TerritorySupplyVault_" .. cat

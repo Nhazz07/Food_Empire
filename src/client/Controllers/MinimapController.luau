@@ -159,13 +159,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	addClickableMarker(ocean,  820, 0, 24, SectorConfig.FactionColors.East, "E", "East Restaurant Base")
 	addClickableMarker(ocean, -820, 0, 24, SectorConfig.FactionColors.West, "W", "West Restaurant Base")
 
-	-- 4 Clickable Corner Territories
-	sectorMarkers.VegetableFarm = addClickableMarker(ocean, -725, -725, 24, SectorConfig.FactionColors.Neutral, "VEG", "Vegetable Farm")
-	sectorMarkers.Ranch = addClickableMarker(ocean,  725, -725, 26, SectorConfig.FactionColors.Neutral, "MEAT", "Meat Ranch")
-	sectorMarkers.FruitOrchard = addClickableMarker(ocean, -725,  725, 24, SectorConfig.FactionColors.Neutral, "FRT", "Fruit Orchard")
-	sectorMarkers.FishingPort = addClickableMarker(ocean,  755,  795, 24, SectorConfig.FactionColors.Neutral, "FSH", "Fishing Port")
-
-	-- 16 Clickable Mid-Town Urban Territory Block Tiles (live base-color synced!)
+	-- 28 Clickable Urban Territory Block Tiles (16 Mid-Town + 12 Expanded Corner Turf, live base-color synced!)
 	table.clear(turfMarkers)
 	table.clear(turfStrokes)
 	for _, blockId in ipairs(TurfConfig.BlockOrder) do
@@ -331,7 +325,7 @@ function MinimapController.Update(state: { [string]: any }): ()
 		end
 	end
 
-	-- Sync all 16 Mid-Town Urban Territory Blocks to controlling faction Base Color!
+	-- Sync all 28 Urban Territory Blocks to controlling faction Base Color!
 	local turf = state.Turf
 	if typeof(turf) == "table" and typeof(turf.Blocks) == "table" then
 		for blockId, tile in pairs(turfMarkers) do

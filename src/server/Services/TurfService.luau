@@ -1026,8 +1026,10 @@ local function payPassiveTurfIncome(): ()
 		local totalRep = 0
 		local ownedCount = 0
 		local quadCounts: { [string]: number } = { NW = 0, NE = 0, SW = 0, SE = 0 }
+		local quadTotals: { [string]: number } = { NW = 0, NE = 0, SW = 0, SE = 0 }
 
 		for _, st in pairs(blockStates) do
+			quadTotals[st.Spec.Quadrant] = (quadTotals[st.Spec.Quadrant] or 0) + 1
 			if st.Owner == factionId then
 				ownedCount += 1
 				totalGold += st.Spec.IncomeGold
@@ -1038,8 +1040,9 @@ local function payPassiveTurfIncome(): ()
 
 		if ownedCount > 0 then
 			local monopolies = 0
-			for _, c in pairs(quadCounts) do
-				if c >= 4 then
+			for quad, c in pairs(quadCounts) do
+				local needed = quadTotals[quad] or 7
+				if needed > 0 and c >= needed then
 					monopolies += 1
 				end
 			end
@@ -1201,11 +1204,13 @@ function TurfService.GetSnapshotForPlayer(player: Player): { [string]: any }
 	local ownedCount = 0
 	local totalIncome = 0
 	local quadCounts: { [string]: number } = { NW = 0, NE = 0, SW = 0, SE = 0 }
+	local quadTotals: { [string]: number } = { NW = 0, NE = 0, SW = 0, SE = 0 }
 	local now = os.clock()
 
 	for _, blockId in ipairs(TurfConfig.BlockOrder) do
 		local st = blockStates[blockId]
 		if st then
+			quadTotals[st.Spec.Quadrant] = (quadTotals[st.Spec.Quadrant] or 0) + 1
 			local col = TurfConfig.ResolveFactionColor(st.Owner)
 			local capCol = if st.CapturingFaction then TurfConfig.ResolveFactionColor(st.CapturingFaction) else col
 			local isUnderAttack = (now < st.UnderAttackUntil) or (st.Status == "Contested")
@@ -1241,8 +1246,9 @@ function TurfService.GetSnapshotForPlayer(player: Player): { [string]: any }
 	end
 
 	local monopolies = 0
-	for _, c in pairs(quadCounts) do
-		if c >= 4 then monopolies += 1 end
+	for quad, c in pairs(quadCounts) do
+		local needed = quadTotals[quad] or 7
+		if needed > 0 and c >= needed then monopolies += 1 end
 	end
 
 	return {
@@ -1312,7 +1318,7 @@ function TurfService.Start(): ()
 
 	indexWorldInstances()
 
-	-- Initialize all 16 urban blocks owned by The Main Mafia Factions!
+	-- Initialize all urban blocks owned by The Main Mafia Factions!
 	table.clear(blockStates)
 	local now = os.clock()
 	for _, blockId in ipairs(TurfConfig.BlockOrder) do
@@ -1451,7 +1457,7 @@ function TurfService.Start(): ()
 		end
 	end)
 
-	print("[Food Empire] TurfService started (16 Urban Territory Blocks • 4 Main Mafia Factions • Dynamic Raids & Base-Color Ownership live)!")
+	print(string.format("[Food Empire] TurfService started (%d Urban Territory Blocks • 4 Main Mafia Factions • Dynamic Raids & Base-Color Ownership live)!", #TurfConfig.BlockOrder))
 end
 
 function TurfService.Stop(): ()

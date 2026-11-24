@@ -220,7 +220,7 @@ local function fixWorldMapLayout(): ()
 			local rightVec = dir:Cross(Vector3.new(0, 1, 0)).Unit
 
 			local startS = 18.0
-			local endS = if isInner then (fullDist - 18.0) else fullDist
+			local endS = fullDist - 18.0
 			local segLen = endS - startS
 			local midPos = p1 + dir * ((startS + endS) * 0.5)
 			local cf = CFrame.lookAt(Vector3.new(midPos.X, ASPHALT_Y, midPos.Z), Vector3.new(midPos.X + dir.X, ASPHALT_Y, midPos.Z + dir.Z))
@@ -229,7 +229,7 @@ local function fixWorldMapLayout(): ()
 
 			local curbSegs: { { number } } = if isInner
 				then { { 18.6, 187.74 }, { 213.19, fullDist - 24.5 } }
-				else { { 21.5, fullDist - 2.0 } }
+				else { { 21.5, fullDist - 21.5 } }
 
 			for _, side in ipairs({ { Name = "Curb_L", Off = -10.9 }, { Name = "Curb_R", Off = 10.9 } }) do
 				for _, seg in ipairs(curbSegs) do
@@ -460,10 +460,10 @@ local function fixWorldMapLayout(): ()
 		end
 
 		local highwaySpecs = {
-			{ Name = "Highway_VegetableFarm_NW", Inner1 = Vector3.new(-204, 0, -204), Mid = Vector3.new(-490, 0, -490), Outer2 = Vector3.new(-685, 0, -685), ArchTerritory = "VegetableFarm_Territory", ArchPos = Vector3.new(-625, 1.2, -625), ArchTitle = "🥕 VEGETABLE FARM", ArchCol = Color3.fromRGB(76, 178, 74) },
-			{ Name = "Highway_Ranch_NE",         Inner1 = Vector3.new(204, 0, -204),  Mid = Vector3.new(490, 0, -490),  Outer2 = Vector3.new(685, 0, -685),  ArchTerritory = "Ranch_Territory",         ArchPos = Vector3.new(625, 1.2, -625),  ArchTitle = "🥩 MEAT RANCH",     ArchCol = Color3.fromRGB(196, 78, 54) },
-			{ Name = "Highway_FruitOrchard_SW",  Inner1 = Vector3.new(-204, 0, 204),  Mid = Vector3.new(-490, 0, 490),  Outer2 = Vector3.new(-685, 0, 685),  ArchTerritory = "FruitOrchard_Territory",  ArchPos = Vector3.new(-625, 1.2, 625),  ArchTitle = "🍎 FRUIT ORCHARD",  ArchCol = Color3.fromRGB(218, 134, 42) },
-			{ Name = "Highway_FishingPort_SE",   Inner1 = Vector3.new(204, 0, 204),   Mid = Vector3.new(490, 0, 490),   Outer2 = Vector3.new(627.75, 0, 671.75), ArchTerritory = nil,                     ArchPos = nil,                          ArchTitle = "",                  ArchCol = Color3.fromRGB(64, 156, 214) },
+			{ Name = "Highway_VegetableFarm_NW", Inner1 = Vector3.new(-204, 0, -204), Mid = Vector3.new(-490, 0, -490), Outer2 = Vector3.new(-730, 0, -730) },
+			{ Name = "Highway_Ranch_NE",         Inner1 = Vector3.new(204, 0, -204),  Mid = Vector3.new(490, 0, -490),  Outer2 = Vector3.new(730, 0, -730) },
+			{ Name = "Highway_FruitOrchard_SW",  Inner1 = Vector3.new(-204, 0, 204),  Mid = Vector3.new(-490, 0, 490),  Outer2 = Vector3.new(-730, 0, 730) },
+			{ Name = "Highway_FishingPort_SE",   Inner1 = Vector3.new(204, 0, 204),   Mid = Vector3.new(490, 0, 490),   Outer2 = Vector3.new(730, 0, 730) },
 		}
 
 		for _, hs in ipairs(highwaySpecs) do
@@ -473,50 +473,10 @@ local function fixWorldMapLayout(): ()
 
 			addRoundabout(hModel, "InnerRoundabout", hs.Inner1.X, hs.Inner1.Z)
 			addRoundabout(hModel, "MidRoundabout", hs.Mid.X, hs.Mid.Z)
+			addRoundabout(hModel, "CornerRoundabout", hs.Outer2.X, hs.Outer2.Z)
 
 			addCleanHighwaySegment(hModel, hs.Inner1, hs.Mid, true)
-
-			if hs.Name == "Highway_FishingPort_SE" then
-				local sectors = map:FindFirstChild("Sectors")
-				local fpTerr = if sectors then sectors:FindFirstChild("FishingPort_Territory") else nil
-				local entryInst = if fpTerr then fpTerr:FindFirstChild("HarborRoad_Entry") else nil
-				if entryInst and entryInst:IsA("BasePart") then
-					local look = Vector3.new(entryInst.CFrame.LookVector.X, 0, entryInst.CFrame.LookVector.Z).Unit
-					local entryNW = Vector3.new(entryInst.Position.X, 0, entryInst.Position.Z) - look * (entryInst.Size.Z * 0.5)
-					-- Trim protruding RoadEmbankment curbs so they end cleanly flush with HarborRoad_Entry
-					local upgrade = fpTerr:FindFirstChild("FishingPort_HarborUpgrade")
-					local emb = if upgrade then upgrade:FindFirstChild("RoadEmbankment") else nil
-					if emb then
-						for _, curb in ipairs(emb:GetChildren()) do
-							if curb:IsA("BasePart") then
-								local cLook = Vector3.new(curb.CFrame.LookVector.X, 0, curb.CFrame.LookVector.Z).Unit
-								local seEnd = curb.Position + cLook * (curb.Size.Z * 0.5)
-								local flatSE = Vector3.new(seEnd.X, 0, seEnd.Z)
-								local desiredLen = (flatSE - entryNW):Dot(cLook)
-								if desiredLen > 10 then
-									local newCenter = seEnd - cLook * (desiredLen * 0.5)
-									curb.Size = Vector3.new(curb.Size.X, curb.Size.Y, desiredLen)
-									curb.CFrame = (curb.CFrame - curb.CFrame.Position) + newCenter
-								end
-							end
-						end
-					end
-					addCurvedHighwayToEntry(hModel, hs.Mid, entryNW, look, entryInst.Size.X)
-				else
-					addCurvedHighwayToEntry(hModel, hs.Mid, hs.Outer2, Vector3.new(1, 0, 1).Unit, 18)
-				end
-			else
-				addCleanHighwaySegment(hModel, hs.Mid, hs.Outer2, false)
-			end
-
-			-- 3. Rebuild the Corner Territory Entrance Gate (TerritoryArch) high above the road with posts outside the curbs!
-			if hs.ArchTerritory and hs.ArchPos then
-				local terr = map:FindFirstChild(hs.ArchTerritory, true)
-				local rich = if terr then terr:FindFirstChild("TerritoryRichUpgrade") else nil
-				if rich then
-					buildCleanTerritoryArch(rich, hs.ArchPos, hs.Outer2, hs.ArchTitle, hs.ArchCol)
-				end
-			end
+			addCleanHighwaySegment(hModel, hs.Mid, hs.Outer2, false)
 		end
 	end
 end

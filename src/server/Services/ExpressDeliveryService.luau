@@ -41,8 +41,12 @@ local DROP_POINTS: { DropPoint } = {
 	{ Name = "Jade Tea Arcade",      Pos = Vector3.new(158, 2.2, -266) },
 	{ Name = "Sunset Cafe Strip",    Pos = Vector3.new(-158, 2.2, 266) },
 	{ Name = "Harborview Bistro",    Pos = Vector3.new(158, 2.2, 266) },
-	{ Name = "Black Market Row",     Pos = Vector3.new(-288, 2.2, 216) },
-	{ Name = "Spice Bazaar Square",  Pos = Vector3.new(282, 2.2, -142) },
+	{ Name = "Black Market Row",       Pos = Vector3.new(-288, 2.2, 216) },
+	{ Name = "Spice Bazaar Square",    Pos = Vector3.new(282, 2.2, -142) },
+	{ Name = "Shogun Market Terrace",  Pos = Vector3.new(-610, 2.2, -792) },
+	{ Name = "Viper Exchange Square",  Pos = Vector3.new(838, 2.2, -792) },
+	{ Name = "Blossom Boulevard",      Pos = Vector3.new(-792, 2.2, 610) },
+	{ Name = "Pierhead Bistro Row",    Pos = Vector3.new(610, 2.2, 792) },
 }
 
 local EXPRESS_MEALS: { { Name: string, Gold: number, Rep: number, Time: number } } = {

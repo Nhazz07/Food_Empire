@@ -1114,7 +1114,7 @@ function HUDController.Update(state: { [string]: any }): ()
 	if typeof(turf) == "table" then
 		latestTurfState = turf
 		local owned = tonumber(turf.OwnedCount) or 0
-		local total = tonumber(turf.TotalBlocks) or 16
+		local total = tonumber(turf.TotalBlocks) or 28
 		local inc = tonumber(turf.IncomePerCycle) or 0
 		local mono = tonumber(turf.Monopolies) or 0
 		if turfSummaryLabel then
@@ -1134,10 +1134,10 @@ function HUDController.Update(state: { [string]: any }): ()
 				turfAlertLabel.Text = "RAID ACTIVE: " .. string.upper(underAttackName)
 				turfAlertLabel.TextColor3 = Color3.fromRGB(218, 96, 102)
 			elseif owned == 0 then
-				turfAlertLabel.Text = "Engage Mafia in Mid-Town blocks"
+				turfAlertLabel.Text = "Engage Mafia across 28 urban blocks"
 				turfAlertLabel.TextColor3 = C_ASH
 			else
-				turfAlertLabel.Text = "Hold all 4 in a quadrant for +50%"
+				turfAlertLabel.Text = "Hold all 7 in a quadrant for +50%"
 				turfAlertLabel.TextColor3 = Color3.fromRGB(154, 198, 166)
 			end
 		end
