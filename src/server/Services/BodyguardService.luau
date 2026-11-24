@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local CollectionService = game:GetService("CollectionService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
 
 local SectorConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("SectorConfig")
@@ -522,6 +523,50 @@ function BodyguardService.TryRecruitClass(player: Player, classId: string, targe
 	end
 
 	BodyguardService.RebuildGuardsForPlayer(player)
+
+	-- In-world 3D Syndicate Brass Crest Ring + Rising Gold Embers & Full-Screen Bodyguard Welcome Cinematic!
+	local anchorPos = getOwnerAnchorPos(player, finalSlotIdx)
+	local crest = Instance.new("Part")
+	crest.Name = "BodyguardArrivalCrest"
+	crest.Shape = Enum.PartType.Cylinder
+	crest.Size = Vector3.new(0.24, 3.2, 3.2)
+	crest.CFrame = CFrame.new(anchorPos.X, math.max(1.5, anchorPos.Y - 2.4), anchorPos.Z) * CFrame.Angles(0, 0, math.rad(90))
+	crest.Color = Color3.fromRGB(196, 158, 82)
+	crest.Material = Enum.Material.Metal
+	crest.Transparency = 0.22
+	crest.Anchored = true
+	crest.CanCollide = false
+	crest.Parent = Workspace
+	TweenService:Create(crest, TweenInfo.new(0.65, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
+		Size = Vector3.new(0.16, 15.0, 15.0),
+		Transparency = 0.90,
+	}):Play()
+	local embers = Instance.new("ParticleEmitter")
+	embers.Color = ColorSequence.new(Color3.fromRGB(252, 220, 128), Color3.fromRGB(172, 142, 76))
+	embers.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 0) })
+	embers.Lifetime = NumberRange.new(0.8, 1.4)
+	embers.Speed = NumberRange.new(7, 15)
+	embers.SpreadAngle = Vector2.new(95, 95)
+	embers.Parent = crest
+	embers:Emit(26)
+	task.delay(1.8, function()
+		if crest.Parent then crest:Destroy() end
+	end)
+
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	local welcomeEv = if remotes then remotes:FindFirstChild("PlayUnitWelcome") else nil
+	if welcomeEv and welcomeEv:IsA("RemoteEvent") then
+		welcomeEv:FireClient(player, {
+			Kind = "Bodyguard",
+			Badge = if alreadyUnlocked
+				then string.format("SQUAD SLOT #%d REDEPLOYED", finalSlotIdx)
+				else string.format("NEW BODYGUARD RECRUITED  |  SLOT #%d", finalSlotIdx),
+			Title = spec.DisplayName,
+			Subtitle = string.format("%s — Sworn to guard your Empire! Press [Y] to Attack or [Z] to Recall.", spec.Role),
+			PreviewId = spec.Id,
+		})
+	end
+
 	local verb = if alreadyUnlocked then "Assigned" else "Recruited"
 	return true, string.format("%s %s (%s) to Guard Slot #%d", verb, spec.DisplayName, spec.Role, finalSlotIdx)
 end
@@ -668,13 +713,13 @@ local function findBestHostileForGuard(owner: Player, anchor: Vector3, radius: n
 				local r = unit:FindFirstChild("HumanoidRootPart")
 				local h = unit:FindFirstChildOfClass("Humanoid")
 				if r and r:IsA("BasePart") and h and h.Health > 0 then
-					local isEventRaider = (unit.Name == "BistroExtortionEnforcer") or (string.find(unit.Name, "GangWarEnforcer") ~= nil) or (tagName == "ApexMafiaUnit") or (tagName == "PenthouseBossUnit")
-					local isCentralParkSamurai = (tagName == "RivalSamuraiUnit")
+					local isEventRaider = (unit.Name == "BistroExtortionEnforcer") or (string.find(unit.Name, "GangWarEnforcer") ~= nil) or (tagName == "PenthouseBossUnit") or (unit:GetAttribute("UnderRevenge") == true)
+					local isCentralParkSamurai = (tagName == "RivalSamuraiUnit") or (tagName == "ApexMafiaUnit")
 					local isProvoked = unit:GetAttribute("Provoked") == true
 					local inCentralSpinZone = (not isEventRaider) and (isCentralParkSamurai
-						or (math.abs(r.Position.X) <= 175 and math.abs(r.Position.Z) <= 175)
+						or (math.abs(r.Position.X) <= 195 and math.abs(r.Position.Z) <= 195)
 						or (unit:GetAttribute("RivalFactionId") == "CrimsonDonEmpire"))
-					-- Respect Central Park Peace Truce (both Spin Zone & Central Park Samurai/Ninja Mafia) unless owner stole a shipment, they are provoked, or owner pressed ATTACK ALL [Y]!
+					-- Respect Central Market Peace Truce (Rivals, Mafia Restaurants & Samurai/Ninja) unless owner stole a shipment, they are provoked, or owner pressed ATTACK ALL [Y]!
 					local allowEngage = (not inCentralSpinZone) or ownerStoleShipment or isProvoked or (isCentralParkSamurai and hasAttackOrder)
 					if allowEngage then
 						local d = (r.Position - anchor).Magnitude
@@ -808,6 +853,7 @@ local function stepGuard(agent: BodyguardAgent): ()
 		if dist <= stats.Range then
 			if (now - agent.LastAttackAt) >= stats.Cooldown then
 				agent.LastAttackAt = now
+				MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
 				local hitDir = targetRoot.Position - guardPos
 				if hitDir.Magnitude > 0.05 then
 					targetModel:SetAttribute("LastHitDir", hitDir.Unit)

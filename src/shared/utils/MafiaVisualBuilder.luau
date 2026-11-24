@@ -455,6 +455,65 @@ local function attachNPCWeapon(rig: RigHandle, kind: "Crowbar" | "Pistol" | "Sho
 	end
 end
 
+-- Helper: Sculpted layered tactical & tailored combatant polish (zero neon!)
+-- Upgrades ALL Rival NPCs & Comrade NPCs with fierce brows, structured shoulders, wrist cuffs/bracers,
+-- belt pouches/holsters, knee guards & tailored boots so every fighter looks sharp up close!
+local function addCombatantDetail(
+	rig: RigHandle,
+	archetype: "Suited" | "Tactical" | "Street" | "Samurai" | "Ninja",
+	combatStyle: "Katana" | "DualNinja" | "Melee" | "Pistol" | "Rifle" | "Shield",
+	accentCol: Color3
+): ()
+	local add = rig.AddPart
+	rig.Model:SetAttribute("CombatStyle", combatStyle)
+
+	-- Fierce determined eyebrows on Head (gives every fighter sharp, intense expression!)
+	if archetype ~= "Ninja" then
+		add(rig.Head, "BrowL", Vector3.new(0.28, 0.06, 0.08), CFrame.new(-0.22, 0.22, -0.56) * CFrame.Angles(0, 0, math.rad(-14)), P.HairDark, Enum.Material.SmoothPlastic, nil)
+		add(rig.Head, "BrowR", Vector3.new(0.28, 0.06, 0.08), CFrame.new(0.22, 0.22, -0.56) * CFrame.Angles(0, 0, math.rad(14)), P.HairDark, Enum.Material.SmoothPlastic, nil)
+	end
+
+	-- Sculpted combat boots / tailored dress shoes with sole trim
+	add(rig.LeftFoot, "BootToeL", Vector3.new(0.96, 0.34, 1.18), CFrame.new(0, -0.06, -0.10), P.Obsidian, Enum.Material.Leather, nil)
+	add(rig.RightFoot, "BootToeR", Vector3.new(0.96, 0.34, 1.18), CFrame.new(0, -0.06, -0.10), P.Obsidian, Enum.Material.Leather, nil)
+
+	if archetype == "Suited" then
+		-- Tailored Mafia / Bodyguard details: lapel brass pin, crisp white shirt cuffs, luxury gold watch, hip holster
+		add(rig.Torso, "SyndicateLapelPin", Vector3.new(0.14, 0.14, 0.08), CFrame.new(-0.46, 0.44, -0.56), accentCol, Enum.Material.Metal, nil)
+		add(rig.LeftLowerArm, "ShirtCuffL", Vector3.new(0.98, 0.14, 0.98), CFrame.new(0, -0.34, 0), P.OffWhite, Enum.Material.Fabric, nil)
+		add(rig.RightLowerArm, "ShirtCuffR", Vector3.new(0.98, 0.14, 0.98), CFrame.new(0, -0.34, 0), P.OffWhite, Enum.Material.Fabric, nil)
+		add(rig.LeftLowerArm, "GoldWatch", Vector3.new(1.02, 0.12, 1.02), CFrame.new(0, -0.24, 0), P.TarnishedBrass, Enum.Material.Metal, nil)
+		add(rig.LowerTorso, "ConcealedHolster", Vector3.new(0.24, 0.48, 0.40), CFrame.new(1.06, -0.06, 0.06), P.Obsidian, Enum.Material.Leather, nil)
+	elseif archetype == "Tactical" then
+		-- Armored kneepads, forearm tactical bracers, drop-leg pouch, shoulder morale patch
+		add(rig.LeftLowerLeg, "KneePadL", Vector3.new(0.98, 0.42, 0.24), CFrame.new(0, 0.32, -0.46), P.Obsidian, Enum.Material.Metal, nil)
+		add(rig.RightLowerLeg, "KneePadR", Vector3.new(0.98, 0.42, 0.24), CFrame.new(0, 0.32, -0.46), P.Obsidian, Enum.Material.Metal, nil)
+		add(rig.LeftLowerArm, "TacBracerL", Vector3.new(1.02, 0.48, 1.02), CFrame.new(0, -0.06, 0), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.RightLowerArm, "TacBracerR", Vector3.new(1.02, 0.48, 1.02), CFrame.new(0, -0.06, 0), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.RightArm, "ShoulderPatch", Vector3.new(0.10, 0.34, 0.46), CFrame.new(0.50, 0.16, 0), accentCol, Enum.Material.Fabric, nil)
+		add(rig.RightLeg, "DropLegPouch", Vector3.new(0.26, 0.56, 0.52), CFrame.new(0.54, 0.02, 0), P.Charcoal, Enum.Material.Fabric, nil)
+	elseif archetype == "Street" then
+		-- Wrist wraps, belt chain, knee reinforcement
+		add(rig.LeftLowerArm, "WristWrapL", Vector3.new(1.00, 0.30, 1.00), CFrame.new(0, -0.24, 0), P.OffWhite, Enum.Material.Fabric, nil)
+		add(rig.RightLowerArm, "WristWrapR", Vector3.new(1.00, 0.30, 1.00), CFrame.new(0, -0.24, 0), P.OffWhite, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "BeltPouch", Vector3.new(0.32, 0.36, 0.34), CFrame.new(-0.98, 0.02, -0.18), P.WornLeather, Enum.Material.Leather, nil)
+	elseif archetype == "Samurai" then
+		-- Layered Suneate armored shin plates, brass hip buckle, crimson-gold crest trim
+		add(rig.LeftLowerLeg, "SuneateL", Vector3.new(1.04, 0.96, 0.24), CFrame.new(0, 0.02, -0.46), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.RightLowerLeg, "SuneateR", Vector3.new(1.04, 0.96, 0.24), CFrame.new(0, 0.02, -0.46), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.LeftLowerLeg, "SuneateTrimL", Vector3.new(1.08, 0.14, 0.28), CFrame.new(0, 0.34, -0.47), P.TarnishedBrass, Enum.Material.Metal, nil)
+		add(rig.RightLowerLeg, "SuneateTrimR", Vector3.new(1.08, 0.14, 0.28), CFrame.new(0, 0.34, -0.47), P.TarnishedBrass, Enum.Material.Metal, nil)
+		add(rig.LowerTorso, "ObiKnot", Vector3.new(0.42, 0.42, 0.24), CFrame.new(0, 0.04, -0.60), P.TarnishedBrass, Enum.Material.Metal, nil)
+	elseif archetype == "Ninja" then
+		-- Shinobi kunai thigh holster, red waist sash knot, steel shoulder guards
+		add(rig.LeftArm, "ShinobiGuardL", Vector3.new(1.06, 0.38, 1.06), CFrame.new(-0.04, 0.28, 0), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.RightArm, "ShinobiGuardR", Vector3.new(1.06, 0.38, 1.06), CFrame.new(0.04, 0.28, 0), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.LowerTorso, "ShinobiSash", Vector3.new(2.12, 0.26, 1.14), CFrame.new(0, 0.04, 0), P.DeepRed, Enum.Material.Fabric, nil)
+		add(rig.RightLeg, "KunaiHolster", Vector3.new(0.24, 0.56, 0.44), CFrame.new(0.52, 0.06, 0), P.Obsidian, Enum.Material.Leather, nil)
+		add(rig.RightLeg, "SpareKunai", Vector3.new(0.10, 0.52, 0.10), CFrame.new(0.62, 0.24, -0.06), P.BrushedSteel, Enum.Material.Metal, nil)
+	end
+end
+
 -- ============================================================================
 -- 1. RIVAL FACTION CHARACTER MODELS (5 Unique R15 Criminal-to-Don Designs)
 -- ============================================================================
@@ -482,6 +541,7 @@ function MafiaVisualBuilder.BuildRivalRig(
 		add(rig.Head, "BeanieCuff", Vector3.new(1.34, 0.22, 1.34), CFrame.new(0, 0.28, 0.02) * CFrame.Angles(math.rad(-10), 0, math.rad(4)), P.Obsidian, Enum.Material.Fabric, nil)
 		add(rig.Head, "CheekScar", Vector3.new(0.05, 0.26, 0.05), CFrame.new(-0.30, -0.06, -0.57) * CFrame.Angles(0, 0, math.rad(18)), Color3.fromRGB(134, 62, 58), Enum.Material.SmoothPlastic, nil)
 		attachNPCWeapon(rig, "Crowbar", nil)
+		addCombatantDetail(rig, "Street", "Melee", P.DeepRed)
 		return rig
 
 	elseif factionId == "HarborHookCartel" then
@@ -501,6 +561,7 @@ function MafiaVisualBuilder.BuildRivalRig(
 		add(rig.Head, "Shades", Vector3.new(1.12, 0.24, 0.14), CFrame.new(0, 0.08, -0.56), P.Obsidian, Enum.Material.Glass, nil)
 		add(rig.Head, "JawStubble", Vector3.new(0.76, 0.28, 0.30), CFrame.new(0, -0.32, -0.44), Color3.fromRGB(48, 38, 34), Enum.Material.Fabric, nil)
 		attachNPCWeapon(rig, "Pistol", P.Gunmetal)
+		addCombatantDetail(rig, "Street", "Pistol", P.TarnishedBrass)
 		return rig
 
 	elseif factionId == "IronCleaverSyndicate" then
@@ -521,6 +582,7 @@ function MafiaVisualBuilder.BuildRivalRig(
 		add(rig.Head, "TacBrim", Vector3.new(1.10, 0.08, 0.54), CFrame.new(0, 0.32, -0.70) * CFrame.Angles(math.rad(6), 0, 0), P.Obsidian, Enum.Material.Fabric, nil)
 		add(rig.Head, "CommsCup", Vector3.new(0.18, 0.32, 0.28), CFrame.new(-0.64, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil)
 		attachNPCWeapon(rig, "SMG", P.Gunmetal)
+		addCombatantDetail(rig, "Tactical", "Rifle", P.DeepRed)
 		return rig
 
 	elseif factionId == "ObsidianKnifeOrder" then
@@ -542,6 +604,7 @@ function MafiaVisualBuilder.BuildRivalRig(
 		addHairStyle(rig, "Slick", P.HairDark)
 		add(rig.Head, "Aviators", Vector3.new(1.12, 0.26, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil)
 		attachNPCWeapon(rig, "Carbine", P.Obsidian)
+		addCombatantDetail(rig, "Suited", "Rifle", P.DeepRed)
 		return rig
 
 	else
@@ -561,6 +624,7 @@ function MafiaVisualBuilder.BuildRivalRig(
 			add(rig.Head, "FedoraCrown", Vector3.new(0.58, 1.32, 1.32), CFrame.new(0, 0.82, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
 			add(rig.Head, "FedoraBand", Vector3.new(0.14, 1.38, 1.38), CFrame.new(0, 0.62, 0) * CFrame.Angles(0, 0, math.rad(90)), P.DeepRed, Enum.Material.Fabric, Enum.PartType.Cylinder)
 			attachNPCWeapon(rig, "SMG", P.Gunmetal)
+			addCombatantDetail(rig, "Suited", "Rifle", P.DeepRed)
 			return rig
 		else
 			-- THE CRIMSON DON: Obsidian Mafia Greatcoat, Fur Collar, Oxblood Silk Tie, Brass Clip, Silver Beard, Classic Fedora
@@ -585,6 +649,7 @@ function MafiaVisualBuilder.BuildRivalRig(
 			add(rig.Head, "DonFedoraCrown", Vector3.new(0.66, 1.40, 1.40), CFrame.new(0, 0.88, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
 			add(rig.Head, "DonFedoraRibbon", Vector3.new(0.16, 1.46, 1.46), CFrame.new(0, 0.64, 0) * CFrame.Angles(0, 0, math.rad(90)), P.DeepRed, Enum.Material.Fabric, Enum.PartType.Cylinder)
 			attachNPCWeapon(rig, "BossRifle", P.Obsidian)
+			addCombatantDetail(rig, "Suited", "Rifle", P.TarnishedBrass)
 			return rig
 		end
 	end
@@ -628,6 +693,7 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 		add(rig.LeftLowerArm, "BallisticShield", Vector3.new(0.22, 2.24, 1.44), CFrame.new(-0.62, -0.05, -0.18), P.Gunmetal, Enum.Material.Metal, nil)
 		add(rig.LeftLowerArm, "ShieldViewport", Vector3.new(0.26, 0.30, 0.78), CFrame.new(-0.62, 0.58, -0.18), Color3.fromRGB(36, 44, 52), Enum.Material.Glass, nil)
 		attachNPCWeapon(rig, "Shotgun", ov.WeaponColor or P.Gunmetal)
+		addCombatantDetail(rig, "Tactical", "Shield", P.TarnishedBrass)
 		return rig
 
 	elseif classId == "AssaultGuard" then
@@ -648,6 +714,7 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 		add(rig.Head, "HeadsetL", Vector3.new(0.18, 0.34, 0.28), CFrame.new(-0.64, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil)
 		add(rig.Head, "HeadsetR", Vector3.new(0.18, 0.34, 0.28), CFrame.new(0.64, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil)
 		attachNPCWeapon(rig, "Carbine", ov.WeaponColor or P.Gunmetal)
+		addCombatantDetail(rig, "Tactical", "Rifle", P.TarnishedBrass)
 		return rig
 
 	elseif classId == "SniperGuard" then
@@ -667,6 +734,7 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 		add(rig.Head, "FaceWrap", Vector3.new(1.18, 0.46, 1.18), CFrame.new(0, -0.26, -0.02), P.Obsidian, Enum.Material.Fabric, nil)
 		add(rig.Head, "RangefinderLens", Vector3.new(0.24, 0.24, 0.32), CFrame.new(0.24, 0.08, -0.62), P.Gunmetal, Enum.Material.Metal, nil)
 		attachNPCWeapon(rig, "Sniper", ov.WeaponColor or P.Gunmetal)
+		addCombatantDetail(rig, "Tactical", "Rifle", P.TarnishedBrass)
 		return rig
 
 	elseif classId == "TacticalGuard" then
@@ -683,6 +751,7 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 		add(rig.Head, "TacHelmet", Vector3.new(1.36, 0.68, 1.38), CFrame.new(0, 0.44, 0.04), helmCol, Enum.Material.Metal, nil)
 		add(rig.Head, "CommsMic", Vector3.new(0.08, 0.08, 0.52), CFrame.new(-0.52, -0.18, -0.40) * CFrame.Angles(0, math.rad(28), 0), P.Obsidian, Enum.Material.Metal, nil)
 		attachNPCWeapon(rig, "Carbine", ov.WeaponColor or P.Gunmetal)
+		addCombatantDetail(rig, "Tactical", "Rifle", P.DeepRed)
 		return rig
 
 	elseif classId == "EliteGuard" then
@@ -704,6 +773,7 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 			add(rig.Head, "EliteHelm", Vector3.new(1.36, 0.60, 1.38), CFrame.new(0, 0.48, 0.04), ov.HelmetColor, Enum.Material.Metal, nil)
 		end
 		attachNPCWeapon(rig, "Carbine", ov.WeaponColor or P.Obsidian)
+		addCombatantDetail(rig, "Suited", "Rifle", P.TarnishedBrass)
 		return rig
 
 	elseif classId == "BossBodyguard" then
@@ -727,6 +797,7 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 		add(rig.Head, "BorsalinoCrown", Vector3.new(0.64, 1.38, 1.38), CFrame.new(0, 0.86, 0) * CFrame.Angles(0, 0, math.rad(90)), hatCol, Enum.Material.Fabric, Enum.PartType.Cylinder)
 		add(rig.Head, "BorsalinoBand", Vector3.new(0.14, 1.44, 1.44), CFrame.new(0, 0.64, 0) * CFrame.Angles(0, 0, math.rad(90)), P.TarnishedBrass, Enum.Material.Fabric, Enum.PartType.Cylinder)
 		attachNPCWeapon(rig, "BossRifle", ov.WeaponColor or P.Obsidian)
+		addCombatantDetail(rig, "Suited", "Rifle", P.TarnishedBrass)
 		return rig
 
 	else
@@ -751,6 +822,7 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 			add(rig.LeftLowerArm, "CompactShield", Vector3.new(0.20, 1.95, 1.28), CFrame.new(-0.56, -0.05, -0.16), P.Gunmetal, Enum.Material.Metal, nil)
 		end
 		attachNPCWeapon(rig, if ov.IsRanged then "SMG" else "Pistol", ov.WeaponColor or P.Gunmetal)
+		addCombatantDetail(rig, "Suited", if ov.HasRiotPlate then "Shield" elseif ov.IsRanged then "Rifle" else "Pistol", P.TarnishedBrass)
 		return rig
 	end
 end
@@ -1172,6 +1244,15 @@ function MafiaVisualBuilder.PlayDeathSequence(
 	end)
 end
 
+-- Triggers a synchronized 60 FPS realistic weapon-matched fighting animation (3-hit Katana/Ninja combos,
+-- rifle/pistol recoil kicks, or cleaver swings) on ANY Rival or Comrade NPC!
+function MafiaVisualBuilder.TriggerAttackAnim(model: Model): ()
+	if not model.Parent then return end
+	local nextStep = ((tonumber(model:GetAttribute("AttackCombo")) or 0) % 3) + 1
+	model:SetAttribute("AttackCombo", nextStep)
+	model:SetAttribute("LastAttackAt", Workspace:GetServerTimeNow())
+end
+
 -- ============================================================================
 -- 5. ELITE R15 SYNDICATE SPECIALISTS (Samurai Mafia, Ninja Assassin, Warlord, Assassin)
 -- ============================================================================
@@ -1227,34 +1308,54 @@ function MafiaVisualBuilder.BuildSyndicateSpecialistRig(
 		add(rig.RightHand, "KatanaWrap", Vector3.new(0.18, 0.20, 0.18), CFrame.new(0, 0.02, -0.10), P.DeepRed, Enum.Material.Fabric, nil, true)
 		add(rig.RightHand, "KatanaTsuba", Vector3.new(0.44, 0.44, 0.09), CFrame.new(0, 0.02, -0.82), P.TarnishedBrass, Enum.Material.Metal, nil, true)
 		add(rig.RightHand, "KatanaBlade", Vector3.new(0.07, 0.18, 3.35), CFrame.new(0, 0.04, -2.52), P.BrushedSteel, Enum.Material.Metal, nil, true)
+		addCombatantDetail(rig, "Samurai", "Katana", P.TarnishedBrass)
 
 	elseif isNinja then
 		-- KAGE NINJA ASSASSIN MAFIA (Authentic R15 Shadow Shinobi):
-		-- Matte-graphite shinobi wrap hood leaving focused Roblox eyes visible, steel forehead headband plate,
-		-- flowing oxblood shinobi scarf with rear tails, ballistic harness, shin/forearm wraps, back ninjato & dual forged tanto blades!
+		-- Matte-black shinobi cowl + crimson hachimaki headband with riveted steel clan plate & sweeping tails,
+		-- fierce narrowed warrior eyes through the cowl slit, layered cloth face mask, crossed twin back katanas,
+		-- ballistic harness, shin/forearm wraps & dual forged tanto blades!
 		add(rig.Torso, "StealthHarness", Vector3.new(2.04, 1.44, 1.14), CFrame.new(0, 0.04, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
 		add(rig.Torso, "HarnessStrapL", Vector3.new(0.22, 1.54, 1.20), CFrame.new(-0.54, 0.04, 0), P.Gunmetal, Enum.Material.Leather, nil, false)
 		add(rig.Torso, "HarnessStrapR", Vector3.new(0.22, 1.54, 1.20), CFrame.new(0.54, 0.04, 0), P.Gunmetal, Enum.Material.Leather, nil, false)
+		add(rig.Torso, "ChestKunai1", Vector3.new(0.10, 0.48, 0.08), CFrame.new(-0.34, 0.16, -0.62) * CFrame.Angles(0, 0, math.rad(-18)), P.BrushedSteel, Enum.Material.Metal, nil, false)
+		add(rig.Torso, "ChestKunai2", Vector3.new(0.10, 0.48, 0.08), CFrame.new(-0.14, 0.16, -0.62) * CFrame.Angles(0, 0, math.rad(-18)), P.BrushedSteel, Enum.Material.Metal, nil, false)
 		add(rig.Torso, "CrimsonScarf", Vector3.new(1.56, 0.32, 1.24), CFrame.new(0, 0.78, 0), P.DeepRed, Enum.Material.Fabric, nil, false)
-		add(rig.Torso, "ScarfTailL", Vector3.new(0.26, 1.28, 0.10), CFrame.new(-0.34, 0.22, 0.68) * CFrame.Angles(math.rad(14), 0, math.rad(-10)), P.DeepRed, Enum.Material.Fabric, nil, false)
-		add(rig.Torso, "ScarfTailR", Vector3.new(0.24, 1.06, 0.10), CFrame.new(0.24, 0.30, 0.66) * CFrame.Angles(math.rad(12), 0, math.rad(12)), P.DeepRed, Enum.Material.Fabric, nil, false)
-		add(rig.Torso, "BackNinjato", Vector3.new(0.14, 2.85, 0.20), CFrame.new(0.12, 0.20, 0.64) * CFrame.Angles(0, 0, math.rad(-26)), P.Gunmetal, Enum.Material.Metal, nil, false)
-		add(rig.Torso, "NinjatoHilt", Vector3.new(0.18, 0.62, 0.22), CFrame.new(0.76, 1.48, 0.64) * CFrame.Angles(0, 0, math.rad(-26)), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "ScarfTailL", Vector3.new(0.26, 1.32, 0.10), CFrame.new(-0.36, 0.20, 0.68) * CFrame.Angles(math.rad(16), 0, math.rad(-12)), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "ScarfTailR", Vector3.new(0.24, 1.12, 0.10), CFrame.new(0.28, 0.28, 0.66) * CFrame.Angles(math.rad(14), 0, math.rad(14)), P.DeepRed, Enum.Material.Fabric, nil, false)
+		-- Crossed Twin Back Katanas (Iconic X-Silhouette behind shoulders!)
+		add(rig.Torso, "BackNinjatoR", Vector3.new(0.14, 2.95, 0.18), CFrame.new(0.08, 0.18, 0.64) * CFrame.Angles(0, 0, math.rad(-32)), P.Obsidian, Enum.Material.Metal, nil, false)
+		add(rig.Torso, "NinjatoTsubaR", Vector3.new(0.36, 0.10, 0.36), CFrame.new(0.76, 1.24, 0.64) * CFrame.Angles(0, 0, math.rad(-32)), P.TarnishedBrass, Enum.Material.Metal, nil, false)
+		add(rig.Torso, "NinjatoHiltR", Vector3.new(0.16, 0.66, 0.20), CFrame.new(0.98, 1.58, 0.64) * CFrame.Angles(0, 0, math.rad(-32)), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "BackNinjatoL", Vector3.new(0.14, 2.95, 0.18), CFrame.new(-0.08, 0.18, 0.68) * CFrame.Angles(0, 0, math.rad(32)), P.Obsidian, Enum.Material.Metal, nil, false)
+		add(rig.Torso, "NinjatoTsubaL", Vector3.new(0.36, 0.10, 0.36), CFrame.new(-0.76, 1.24, 0.68) * CFrame.Angles(0, 0, math.rad(32)), P.TarnishedBrass, Enum.Material.Metal, nil, false)
+		add(rig.Torso, "NinjatoHiltL", Vector3.new(0.16, 0.66, 0.20), CFrame.new(-0.98, 1.58, 0.68) * CFrame.Angles(0, 0, math.rad(32)), P.DeepRed, Enum.Material.Fabric, nil, false)
 		-- Forearm & Shin Stealth Wraps
 		add(rig.LeftLowerArm, "ArmWrapL", Vector3.new(1.06, 0.84, 1.06), CFrame.new(0, 0, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
 		add(rig.RightLowerArm, "ArmWrapR", Vector3.new(1.06, 0.84, 1.06), CFrame.new(0, 0, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
 		add(rig.LeftLowerLeg, "ShinWrapL", Vector3.new(1.04, 0.92, 1.04), CFrame.new(0, 0, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
 		add(rig.RightLowerLeg, "ShinWrapR", Vector3.new(1.04, 0.92, 1.04), CFrame.new(0, 0, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
-		-- Shinobi Cowl leaving eye slit visible + Metallic Forehead Plate + Lower Cloth Mask
+		-- Shinobi Cowl + Crimson Hachimaki Headband + Riveted Steel Clan Plate + Fierce Eyes + Face Mask
 		add(rig.Head, "CowlTop", Vector3.new(1.26, 0.56, 1.28), CFrame.new(0, 0.42, 0.04), P.Obsidian, Enum.Material.Fabric, nil, false)
-		add(rig.Head, "CowlBack", Vector3.new(1.24, 1.06, 0.72), CFrame.new(0, 0.02, 0.34), P.Obsidian, Enum.Material.Fabric, nil, false)
-		add(rig.Head, "HeadbandPlate", Vector3.new(0.76, 0.24, 0.12), CFrame.new(0, 0.36, -0.60), P.BrushedSteel, Enum.Material.Metal, nil, false)
-		add(rig.Head, "StealthMask", Vector3.new(1.22, 0.54, 0.52), CFrame.new(0, -0.24, -0.38), P.Charcoal, Enum.Material.Fabric, nil, false)
-		-- Dual Obsidian Tanto Blades gripped directly in R15 RightHand & LeftHand!
+		add(rig.Head, "CowlBack", Vector3.new(1.24, 1.08, 0.74), CFrame.new(0, 0.02, 0.34), P.Obsidian, Enum.Material.Fabric, nil, false)
+		add(rig.Head, "HachimakiBand", Vector3.new(1.30, 0.24, 1.32), CFrame.new(0, 0.34, 0.02), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Head, "HeadbandPlate", Vector3.new(0.74, 0.24, 0.12), CFrame.new(0, 0.34, -0.63), P.BrushedSteel, Enum.Material.Metal, nil, false)
+		add(rig.Head, "BandTailL", Vector3.new(0.18, 0.78, 0.08), CFrame.new(-0.22, 0.16, 0.74) * CFrame.Angles(math.rad(28), 0, math.rad(-22)), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Head, "BandTailR", Vector3.new(0.16, 0.64, 0.08), CFrame.new(0.18, 0.22, 0.74) * CFrame.Angles(math.rad(24), 0, math.rad(18)), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Head, "StealthMask", Vector3.new(1.24, 0.56, 0.56), CFrame.new(0, -0.24, -0.38), P.Obsidian, Enum.Material.Fabric, nil, false)
+		-- Sharp focused shinobi eyes inside cowl slit (SmoothPlastic — zero Neon!)
+		add(rig.Head, "ShinobiEyeL", Vector3.new(0.24, 0.10, 0.08), CFrame.new(-0.22, 0.10, -0.58) * CFrame.Angles(0, 0, math.rad(-10)), Color3.fromRGB(252, 248, 236), Enum.Material.SmoothPlastic, nil, false)
+		add(rig.Head, "ShinobiEyeR", Vector3.new(0.24, 0.10, 0.08), CFrame.new(0.22, 0.10, -0.58) * CFrame.Angles(0, 0, math.rad(10)), Color3.fromRGB(252, 248, 236), Enum.Material.SmoothPlastic, nil, false)
+		add(rig.Head, "ShinobiIrisL", Vector3.new(0.10, 0.09, 0.09), CFrame.new(-0.22, 0.10, -0.59), Color3.fromRGB(214, 34, 48), Enum.Material.SmoothPlastic, nil, false)
+		add(rig.Head, "ShinobiIrisR", Vector3.new(0.10, 0.09, 0.09), CFrame.new(0.22, 0.10, -0.59), Color3.fromRGB(214, 34, 48), Enum.Material.SmoothPlastic, nil, false)
+		-- Dual Forged Tanto Blades gripped directly in R15 RightHand & LeftHand!
 		add(rig.RightHand, "TantoGripR", Vector3.new(0.14, 0.16, 0.68), CFrame.new(0, 0, -0.28), P.Obsidian, Enum.Material.SmoothPlastic, nil, true)
-		add(rig.RightHand, "TantoBladeR", Vector3.new(0.07, 0.17, 1.82), CFrame.new(0, 0, -1.46), P.BrushedSteel, Enum.Material.Metal, nil, true)
+		add(rig.RightHand, "TantoGuardR", Vector3.new(0.28, 0.28, 0.08), CFrame.new(0, 0, -0.62), P.TarnishedBrass, Enum.Material.Metal, nil, true)
+		add(rig.RightHand, "TantoBladeR", Vector3.new(0.07, 0.17, 1.82), CFrame.new(0, 0, -1.52), P.BrushedSteel, Enum.Material.Metal, nil, true)
 		add(rig.LeftHand, "TantoGripL", Vector3.new(0.14, 0.16, 0.68), CFrame.new(0, 0, -0.28), P.Obsidian, Enum.Material.SmoothPlastic, nil, true)
-		add(rig.LeftHand, "TantoBladeL", Vector3.new(0.07, 0.17, 1.72), CFrame.new(0, 0, -1.40), P.BrushedSteel, Enum.Material.Metal, nil, true)
+		add(rig.LeftHand, "TantoGuardL", Vector3.new(0.28, 0.28, 0.08), CFrame.new(0, 0, -0.62), P.TarnishedBrass, Enum.Material.Metal, nil, true)
+		add(rig.LeftHand, "TantoBladeL", Vector3.new(0.07, 0.17, 1.72), CFrame.new(0, 0, -1.46), P.BrushedSteel, Enum.Material.Metal, nil, true)
+		addCombatantDetail(rig, "Ninja", "DualNinja", P.DeepRed)
 
 	elseif isWarlord then
 		-- APEX SYNDICATE WARLORD COMMANDER (Authentic R15 Boss Mobster + Drum Tommy Gun!)
@@ -1267,6 +1368,7 @@ function MafiaVisualBuilder.BuildSyndicateSpecialistRig(
 		add(rig.Head, "FedoraBand", Vector3.new(0.16, 1.40, 1.40), CFrame.new(0, 0.64, 0) * CFrame.Angles(0, 0, math.rad(90)), P.DeepRed, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
 		add(rig.Head, "DarkShades", Vector3.new(1.12, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil, false)
 		attachNPCWeapon(rig, "TommyDrum", P.Gunmetal)
+		addCombatantDetail(rig, "Suited", "Rifle", P.DeepRed)
 
 	else
 		-- APEX ASSASSIN MAFIA (Authentic R15 Shadow Hitman + Suppressed Assassin Rifle!)
@@ -1277,6 +1379,7 @@ function MafiaVisualBuilder.BuildSyndicateSpecialistRig(
 		add(rig.Head, "AssassinMask", Vector3.new(1.22, 0.52, 0.46), CFrame.new(0, -0.24, -0.40), P.Obsidian, Enum.Material.Metal, nil, false)
 		add(rig.Head, "AssassinShades", Vector3.new(1.10, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil, false)
 		attachNPCWeapon(rig, "AssassinRifle", P.Gunmetal)
+		addCombatantDetail(rig, "Tactical", "Rifle", P.DeepRed)
 	end
 
 	return rig

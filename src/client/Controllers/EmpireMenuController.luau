@@ -4,7 +4,10 @@
 -- Minimalist, intimidating obsidian/charcoal palette, crisp typographic hierarchy,
 -- real 3D ViewportFrame previews via ModelPreviewHelper, zero emojis, zero neon borders.
 
+local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
 
 local RecipeConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("RecipeConfig")
@@ -22,6 +25,8 @@ local BodyguardConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("BodyguardConfig")
 )
 local ModelPreviewHelper = require("./ModelPreviewHelper")
+local CurrencyIconHelper = require("./CurrencyIconHelper")
+local AudioController = require("./AudioController")
 
 export type MenuTab = "Kitchen" | "Warehouses" | "Upgrades" | "BlackMarket" | "Shop"
 export type ActionCallback = (action: string, arg: any?) -> ()
@@ -32,56 +37,102 @@ type GuardGearFilter = "All" | "Armor" | "Helmet" | "Outfit" | "Weapon" | "Attac
 
 local EmpireMenuController = {}
 
--- Restrained Dark Mafia Palette
-local C_BG_MODAL = Color3.fromRGB(13, 14, 18)
-local C_BG_CARD = Color3.fromRGB(19, 21, 26)
-local C_BG_CARD_ALT = Color3.fromRGB(23, 25, 31)
-local C_BG_SUBTLE = Color3.fromRGB(27, 30, 37)
-local C_BORDER = Color3.fromRGB(42, 46, 54)
-local C_BORDER_STRONG = Color3.fromRGB(68, 72, 82)
-local C_TEXT_PRIMARY = Color3.fromRGB(234, 231, 224)
-local C_TEXT_MUTED = Color3.fromRGB(150, 154, 164)
-local C_TEXT_DIM = Color3.fromRGB(108, 112, 122)
-local C_OXBLOOD = Color3.fromRGB(134, 28, 36)
-local C_OXBLOOD_DARK = Color3.fromRGB(82, 22, 28)
-local C_BRASS = Color3.fromRGB(168, 138, 76)
-local C_STEEL = Color3.fromRGB(66, 76, 92)
-local C_OWNED = Color3.fromRGB(48, 86, 62)
-local C_ROBUX = Color3.fromRGB(36, 94, 62)
-local C_DISABLED = Color3.fromRGB(38, 41, 49)
+-- Front-Page Roblox Arcade-Syndicate Vibrant Palette (NOT dull flat dark AI slop!)
+local C_BG_MODAL = Color3.fromRGB(16, 22, 36)
+local C_BG_SIDEBAR = Color3.fromRGB(12, 16, 28)
+local C_BG_CARD = Color3.fromRGB(24, 33, 52)
+local C_BG_CARD_ALT = Color3.fromRGB(30, 41, 64)
+local C_BG_SUBTLE = Color3.fromRGB(38, 52, 82)
+local C_BORDER = Color3.fromRGB(54, 72, 108)
+local C_BORDER_STRONG = Color3.fromRGB(88, 114, 164)
+local C_OUTLINE_DARK = Color3.fromRGB(8, 11, 18)
+local C_TEXT_PRIMARY = Color3.fromRGB(252, 250, 246)
+local C_TEXT_MUTED = Color3.fromRGB(184, 196, 220)
+local C_TEXT_DIM = Color3.fromRGB(132, 148, 178)
+local C_OXBLOOD = Color3.fromRGB(220, 38, 62)
+local C_OXBLOOD_DARK = Color3.fromRGB(136, 24, 42)
+local C_BRASS = Color3.fromRGB(245, 168, 28)
+local C_GOLD_HI = Color3.fromRGB(255, 224, 94)
+local C_STEEL = Color3.fromRGB(37, 132, 236)
+local C_OWNED = Color3.fromRGB(22, 163, 74)
+local C_ROBUX = Color3.fromRGB(16, 172, 92)
+local C_DISABLED = Color3.fromRGB(48, 56, 74)
 
 local DEFENSE_COSTS: { [number]: number } = { [2] = 500, [3] = 1200 }
 
 local BLACK_MARKET_ROBUX_IDS = {
+	"BossBodyguardPass",
 	"SamuraiMafiaContract",
 	"NinjaMafiaContract",
 	"GoldenEmperorPistolPass",
 	"CrimsonDragonARPass",
-	"BossBodyguardPass",
 	"GoldenEmperorSuitPass",
 	"TacticalAmmoCrate",
 	"SyndicateArmorBundle",
 }
 
 local RARITY_MUTED_COLORS: { [string]: Color3 } = {
-	Common = Color3.fromRGB(72, 76, 86),
-	Uncommon = Color3.fromRGB(54, 92, 68),
-	Rare = Color3.fromRGB(52, 78, 108),
-	Epic = Color3.fromRGB(86, 58, 104),
-	Legendary = Color3.fromRGB(136, 106, 52),
-	Mythic = Color3.fromRGB(134, 30, 38),
+	Common = Color3.fromRGB(100, 116, 139),
+	Uncommon = Color3.fromRGB(34, 197, 94),
+	Rare = Color3.fromRGB(56, 152, 248),
+	Epic = Color3.fromRGB(168, 85, 247),
+	Legendary = Color3.fromRGB(245, 176, 28),
+	Mythic = Color3.fromRGB(239, 44, 72),
 }
 
+local TAB_THEMES: { [MenuTab]: { Accent: Color3, Dark: Color3, Title: string, Sub: string } } = {
+	Kitchen = {
+		Accent = Color3.fromRGB(245, 158, 11),
+		Dark = Color3.fromRGB(146, 74, 12),
+		Title = "MASTER KITCHEN",
+		Sub = "Cook gourmet dishes, chase 2X Cravings & stack profits!",
+	},
+	Warehouses = {
+		Accent = Color3.fromRGB(14, 165, 233),
+		Dark = Color3.fromRGB(16, 86, 146),
+		Title = "STORAGE VAULTS",
+		Sub = "Expand district warehouses & stockpile fresh ingredients!",
+	},
+	Upgrades = {
+		Accent = Color3.fromRGB(234, 179, 8),
+		Dark = Color3.fromRGB(142, 94, 14),
+		Title = "SYNDICATE EMPIRE",
+		Sub = "Upgrade HQ, hire crew, launch raids & unlock rides!",
+	},
+	BlackMarket = {
+		Accent = Color3.fromRGB(225, 29, 72),
+		Dark = Color3.fromRGB(128, 18, 42),
+		Title = "BLACK MARKET",
+		Sub = "Tactical firearms, ammo, bodyguards & samurai/ninja squads!",
+	},
+	Shop = {
+		Accent = Color3.fromRGB(16, 185, 104),
+		Dark = Color3.fromRGB(12, 108, 62),
+		Title = "ROBUX STORE",
+		Sub = "Permanent VIP Game Passes & instant empire power-ups!",
+	},
+}
+
+local backdropFrame: Frame? = nil
 local modalFrame: Frame? = nil
+local stageHeaderBar: Frame? = nil
+local stageHeaderGrad: UIGradient? = nil
+local stageHeaderIconSlot: Frame? = nil
+local lastHeaderIconTab: MenuTab? = nil
 local titleLabel: TextLabel? = nil
 local subtitleLabel: TextLabel? = nil
+local headerGoldValLbl: TextLabel? = nil
+local headerRankValLbl: TextLabel? = nil
 local scrollFrame: ScrollingFrame? = nil
+local nextAutoOrder: number = 0
 local confirmOverlay: Frame? = nil
 local confirmTitleLbl: TextLabel? = nil
 local confirmDescLbl: TextLabel? = nil
 local confirmYesBtn: TextButton? = nil
 local pendingConfirmCallback: (() -> ())? = nil
 local tabButtons: { [MenuTab]: TextButton } = {}
+local tabLabels: { [MenuTab]: TextLabel } = {}
+local tabActiveBars: { [MenuTab]: Frame } = {}
 local currentTab: MenuTab = "Kitchen"
 local currentBMSubTab: BlackMarketSubTab = "Weapons"
 local currentWeaponFilter: WeaponFilter = "All"
@@ -90,6 +141,19 @@ local currentGuardGearFilter: GuardGearFilter = "All"
 local selectedGuardSlot: number = 1
 local latestState: { [string]: any }? = nil
 local dispatchAction: ActionCallback? = nil
+local lastRenderedTabSig: string = ""
+local deferredRenderQueued: boolean = false
+
+local function formatCommaInt(n: number): string
+	local s = tostring(math.max(0, math.floor(n)))
+	local formatted = s
+	while true do
+		local nextStr, k = string.gsub(formatted, "^(-?%d+)(%d%d%d)", "%1,%2")
+		formatted = nextStr
+		if k == 0 then break end
+	end
+	return formatted
+end
 
 local function makeCorner(parent: Instance, radius: number): ()
 	local c = Instance.new("UICorner")
@@ -97,31 +161,73 @@ local function makeCorner(parent: Instance, radius: number): ()
 	c.Parent = parent
 end
 
-local function makeStroke(parent: Instance, color: Color3, thickness: number): UIStroke
+local function makeStroke(parent: Instance, color: Color3, thickness: number, trans: number?): UIStroke
 	local st = Instance.new("UIStroke")
 	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	st.Color = color
 	st.Thickness = thickness
+	if trans then
+		st.Transparency = trans
+	end
 	st.Parent = parent
 	return st
 end
 
+local function addTextOutline(lbl: TextLabel | TextButton, thick: number?, col: Color3?): UIStroke
+	local st = Instance.new("UIStroke")
+	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	st.Color = col or C_OUTLINE_DARK
+	st.Thickness = thick or 1.8
+	st.Parent = lbl
+	return st
+end
+
+-- Chunky Front-Page Roblox Game Card (vibrant top color wash, crisp 2px outline, 3D bottom depth lip!)
 local function makeCard(parent: Instance, height: number, accentBar: Color3?): Frame
+	local accent = accentBar or C_BORDER_STRONG
 	local card = Instance.new("Frame")
 	card.Size = UDim2.new(1, -6, 0, height)
-	card.BackgroundColor3 = C_BG_CARD
+	card.BackgroundColor3 = C_BG_CARD:Lerp(accent, 0.14)
 	card.BorderSizePixel = 0
 	card.Parent = parent
-	makeCorner(card, 6)
-	makeStroke(card, C_BORDER, 1)
+	makeCorner(card, 10)
+	makeStroke(card, accent:Lerp(C_OUTLINE_DARK, 0.35), 2.0)
+
+	local grad = Instance.new("UIGradient")
+	grad.Rotation = 90
+	grad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(178, 186, 206)),
+	})
+	grad.Parent = card
+
+	-- Glossy top inner rim highlight
+	local topGloss = Instance.new("Frame")
+	topGloss.Size = UDim2.new(1, -16, 0, 2)
+	topGloss.Position = UDim2.fromOffset(8, 2)
+	topGloss.BackgroundColor3 = Color3.new(1, 1, 1)
+	topGloss.BackgroundTransparency = 0.84
+	topGloss.BorderSizePixel = 0
+	topGloss.Parent = card
+
+	-- Chunky 3D bottom shaded lip
+	local botLip = Instance.new("Frame")
+	botLip.AnchorPoint = Vector2.new(0, 1)
+	botLip.Position = UDim2.fromScale(0, 1)
+	botLip.Size = UDim2.new(1, 0, 0, 4)
+	botLip.BackgroundColor3 = C_OUTLINE_DARK
+	botLip.BackgroundTransparency = 0.45
+	botLip.BorderSizePixel = 0
+	botLip.Parent = card
 
 	if accentBar then
 		local bar = Instance.new("Frame")
-		bar.Size = UDim2.new(0, 3, 1, -12)
-		bar.Position = UDim2.new(0, 0, 0, 6)
+		bar.Size = UDim2.new(0, 5, 1, -16)
+		bar.Position = UDim2.new(0, 3, 0, 7)
 		bar.BackgroundColor3 = accentBar
 		bar.BorderSizePixel = 0
 		bar.Parent = card
+		makeCorner(bar, 3)
 	end
 
 	return card
@@ -130,18 +236,20 @@ end
 local function makeMonogramBox(parent: Instance, tagText: string, accent: Color3, yPos: number): TextLabel
 	local box = Instance.new("TextLabel")
 	box.Position = UDim2.new(0, 14, 0, yPos)
-	box.Size = UDim2.fromOffset(52, 52)
-	box.BackgroundColor3 = Color3.fromRGB(14, 16, 20)
+	box.Size = UDim2.fromOffset(54, 54)
+	box.BackgroundColor3 = Color3.fromRGB(14, 20, 34)
 	box.Font = Enum.Font.GothamBlack
 	box.Text = tagText
-	box.TextSize = 13
-	box.TextColor3 = C_TEXT_PRIMARY
+	box.TextSize = 14
+	box.TextColor3 = C_GOLD_HI
 	box.Parent = parent
-	makeCorner(box, 5)
-	makeStroke(box, accent, 1)
+	makeCorner(box, 9)
+	makeStroke(box, accent, 2.0)
+	addTextOutline(box, 1.8)
 	return box
 end
 
+-- Chunky 3D Extruded Tactile Roblox Game Button (glossy top sheen, dark 3D bottom lip, outlined bold text & auto Coin/Robux icon!)
 local function makeBtn(parent: Instance, text: string, bg: Color3, pos: UDim2, size: UDim2, onClick: () -> ()): TextButton
 	local btn = Instance.new("TextButton")
 	btn.Position = pos
@@ -149,24 +257,94 @@ local function makeBtn(parent: Instance, text: string, bg: Color3, pos: UDim2, s
 	btn.BackgroundColor3 = bg
 	btn.BorderSizePixel = 0
 	btn.AutoButtonColor = false
-	btn.Font = Enum.Font.GothamBold
+	btn.Font = Enum.Font.GothamBlack
 	btn.Text = text
 	btn.TextSize = 12
 	btn.TextColor3 = C_TEXT_PRIMARY
+	btn.ClipsDescendants = true
 	btn.Parent = parent
-	makeCorner(btn, 5)
-	local stroke = makeStroke(btn, C_BORDER_STRONG, 1)
+	makeCorner(btn, 8)
 
-	local baseBg = bg
+	local isVivid = (bg == C_OXBLOOD or bg == C_ROBUX or bg == C_BRASS or bg == C_OWNED or bg == C_STEEL)
+	local baseStrokeCol = if bg == C_ROBUX
+		then Color3.fromRGB(10, 68, 36)
+		elseif bg == C_OXBLOOD then Color3.fromRGB(88, 12, 24)
+		elseif bg == C_BRASS then Color3.fromRGB(112, 62, 6)
+		elseif bg == C_OWNED then Color3.fromRGB(12, 74, 34)
+		else C_OUTLINE_DARK
+	local stroke = makeStroke(btn, baseStrokeCol, if isVivid then 2.2 else 1.6)
+
+	-- Vibrant glossy vertical button gradient
+	local grad = Instance.new("UIGradient")
+	grad.Rotation = 90
+	grad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(0.55, Color3.fromRGB(232, 236, 244)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(162, 170, 188)),
+	})
+	grad.Parent = btn
+
+	-- Bright glossy arcade top highlight strip
+	local sheen = Instance.new("Frame")
+	sheen.Name = "TopSheen"
+	sheen.Position = UDim2.fromOffset(4, 2)
+	sheen.Size = UDim2.new(1, -8, 0, 3)
+	sheen.BackgroundColor3 = Color3.new(1, 1, 1)
+	sheen.BackgroundTransparency = if isVivid then 0.65 else 0.84
+	sheen.BorderSizePixel = 0
+	sheen.Active = false
+	sheen.Selectable = false
+	sheen.ZIndex = btn.ZIndex + 1
+	sheen.Parent = btn
+	makeCorner(sheen, 3)
+
+	-- Chunky 3D shaded bottom extrusion lip!
+	local lip = Instance.new("Frame")
+	lip.Name = "BottomLip"
+	lip.AnchorPoint = Vector2.new(0, 1)
+	lip.Position = UDim2.fromScale(0, 1)
+	lip.Size = UDim2.new(1, 0, 0, 4)
+	lip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	lip.BackgroundTransparency = if isVivid then 0.58 else 0.68
+	lip.BorderSizePixel = 0
+	lip.Active = false
+	lip.Selectable = false
+	lip.ZIndex = btn.ZIndex + 1
+	lip.Parent = btn
+
+	addTextOutline(btn, 1.6)
+
+	-- Automatically embed studio-grade Gold Coin or Robux Icon on EVERY currency button!
+	CurrencyIconHelper.DecorateCurrencyButton(btn, text, 16)
+
+	btn:SetAttribute("BaseBg", bg)
+	btn:SetAttribute("BaseStroke", baseStrokeCol)
+	local function getBaseBg(): Color3
+		local v = btn:GetAttribute("BaseBg")
+		return if typeof(v) == "Color3" then v else bg
+	end
+	local function getBaseStroke(): Color3
+		local v = btn:GetAttribute("BaseStroke")
+		return if typeof(v) == "Color3" then v else baseStrokeCol
+	end
+
 	btn.MouseEnter:Connect(function()
-		btn.BackgroundColor3 = baseBg:Lerp(Color3.new(1, 1, 1), 0.08)
-		stroke.Color = Color3.fromRGB(120, 124, 136)
+		local curBase = getBaseBg()
+		btn.BackgroundColor3 = curBase:Lerp(Color3.new(1, 1, 1), 0.16)
+		stroke.Color = if isVivid then C_GOLD_HI else Color3.fromRGB(168, 196, 240)
 	end)
 	btn.MouseLeave:Connect(function()
-		btn.BackgroundColor3 = baseBg
-		stroke.Color = C_BORDER_STRONG
+		btn.BackgroundColor3 = getBaseBg()
+		stroke.Color = getBaseStroke()
 	end)
-	btn.MouseButton1Click:Connect(onClick)
+	btn.MouseButton1Down:Connect(function()
+		btn.BackgroundColor3 = getBaseBg():Lerp(Color3.new(0, 0, 0), 0.12)
+	end)
+	btn.MouseButton1Up:Connect(function()
+		btn.BackgroundColor3 = getBaseBg():Lerp(Color3.new(1, 1, 1), 0.12)
+	end)
+	-- Use Activated (supports mouse clicks, quick clicks, touch taps & gamepad cleanly!)
+	btn.Activated:Connect(onClick)
 	return btn
 end
 
@@ -175,13 +353,142 @@ local function makeTag(parent: Instance, text: string, bg: Color3, pos: UDim2, s
 	lbl.Position = pos
 	lbl.Size = size
 	lbl.BackgroundColor3 = bg
-	lbl.Font = Enum.Font.GothamBold
+	lbl.Font = Enum.Font.GothamBlack
 	lbl.Text = text
 	lbl.TextSize = 9
 	lbl.TextColor3 = C_TEXT_PRIMARY
 	lbl.Parent = parent
-	makeCorner(lbl, 3)
+	makeCorner(lbl, 5)
+	makeStroke(lbl, C_OUTLINE_DARK, 1.4)
+	addTextOutline(lbl, 1.2)
 	return lbl
+end
+
+-- Helper: Creates a clean multi-column card grid container inside ScrollingFrame (2-col or 3-col!)
+local function makeGridContainer(parent: Instance, cols: number, cellHeight: number, gap: number): Frame
+	local container = Instance.new("Frame")
+	container.Name = "CardGrid"
+	container.Size = UDim2.new(1, -6, 0, 0)
+	container.AutomaticSize = Enum.AutomaticSize.Y
+	container.BackgroundTransparency = 1
+	container.Parent = parent
+
+	local grid = Instance.new("UIGridLayout")
+	grid.FillDirection = Enum.FillDirection.Horizontal
+	grid.SortOrder = Enum.SortOrder.LayoutOrder
+	grid.CellPadding = UDim2.fromOffset(gap, gap)
+	local fracW = 1 / cols
+	local offsetW = -math.ceil(gap * (cols - 1) / cols)
+	grid.CellSize = UDim2.new(fracW, offsetW, 0, cellHeight)
+	grid.Parent = container
+	return container
+end
+
+-- Helper: Creates a vibrant Collectible Vertical Store Card (for 3-col Robux Store / Black Market VIP!)
+local function makeStoreCollectibleCard(
+	parent: Instance,
+	layoutOrder: number,
+	themeCol: Color3,
+	badgeText: string,
+	kindText: string,
+	titleText: string,
+	descText: string,
+	previewKind: string,
+	previewId: string,
+	btnText: string,
+	btnCol: Color3,
+	onClick: () -> ()
+): Frame
+	local card = Instance.new("Frame")
+	card.Name = "StoreCard_" .. previewId
+	card.LayoutOrder = layoutOrder
+	card.BackgroundColor3 = C_BG_CARD:Lerp(themeCol, 0.14)
+	card.BorderSizePixel = 0
+	card.ClipsDescendants = true
+	card.Parent = parent
+	makeCorner(card, 12)
+	makeStroke(card, themeCol:Lerp(C_OUTLINE_DARK, 0.2), 2.2)
+
+	-- Vibrant colored upper showcase bay
+	local topBay = Instance.new("Frame")
+	topBay.Size = UDim2.new(1, 0, 0, 118)
+	topBay.BackgroundColor3 = themeCol:Lerp(Color3.fromRGB(16, 22, 36), 0.42)
+	topBay.BorderSizePixel = 0
+	topBay.Parent = card
+	local topGrad = Instance.new("UIGradient")
+	topGrad.Rotation = 135
+	topGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(128, 138, 164)),
+	})
+	topGrad.Parent = topBay
+
+	-- Glowing circular pedestal aura behind the 3D showcase model
+	local aura = Instance.new("Frame")
+	aura.AnchorPoint = Vector2.new(0.5, 0.5)
+	aura.Position = UDim2.fromScale(0.5, 0.56)
+	aura.Size = UDim2.fromOffset(96, 96)
+	aura.BackgroundColor3 = themeCol
+	aura.BackgroundTransparency = 0.62
+	aura.BorderSizePixel = 0
+	aura.Parent = topBay
+	makeCorner(aura, 48)
+	makeStroke(aura, Color3.new(1, 1, 1), 1.4, 0.65)
+
+	local vp = ModelPreviewHelper.CreatePreview(
+		topBay,
+		previewKind :: any,
+		previewId,
+		UDim2.fromOffset(96, 96),
+		UDim2.new(0.5, -48, 0.5, -44),
+		Color3.fromRGB(18, 24, 38)
+	)
+	vp.BackgroundTransparency = 1
+
+	-- Crisp corner pill badges
+	makeTag(topBay, badgeText, themeCol:Lerp(C_OUTLINE_DARK, 0.25), UDim2.fromOffset(8, 7), UDim2.fromOffset(92, 17))
+	makeTag(
+		topBay,
+		kindText,
+		if kindText == "PERMANENT" then C_STEEL else C_OXBLOOD_DARK,
+		UDim2.new(1, -84, 0, 7),
+		UDim2.fromOffset(76, 17)
+	)
+
+	-- Bold outlined title
+	local nLbl = Instance.new("TextLabel")
+	nLbl.Position = UDim2.new(0, 10, 0, 124)
+	nLbl.Size = UDim2.new(1, -20, 0, 32)
+	nLbl.BackgroundTransparency = 1
+	nLbl.Font = Enum.Font.GothamBlack
+	nLbl.TextWrapped = true
+	nLbl.TextXAlignment = Enum.TextXAlignment.Center
+	nLbl.TextYAlignment = Enum.TextYAlignment.Top
+	nLbl.TextSize = 13
+	nLbl.TextColor3 = C_TEXT_PRIMARY
+	nLbl.Text = titleText
+	nLbl.Parent = card
+	addTextOutline(nLbl, 1.6)
+
+	local dLbl = Instance.new("TextLabel")
+	dLbl.Position = UDim2.new(0, 10, 0, 156)
+	dLbl.Size = UDim2.new(1, -20, 0, 44)
+	dLbl.BackgroundTransparency = 1
+	dLbl.Font = Enum.Font.GothamMedium
+	dLbl.TextWrapped = true
+	dLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	dLbl.TextXAlignment = Enum.TextXAlignment.Center
+	dLbl.TextYAlignment = Enum.TextYAlignment.Top
+	dLbl.TextSize = 10
+	dLbl.TextColor3 = C_TEXT_MUTED
+	dLbl.Text = descText
+	dLbl.Parent = card
+
+	-- Chunky full-width 3D Buy Button across the bottom!
+	local btn = makeBtn(card, btnText, btnCol, UDim2.new(0, 10, 1, -46), UDim2.new(1, -20, 0, 36), onClick)
+	btn.TextSize = 13
+
+	return card
 end
 
 local function hideConfirmDialog(): ()
@@ -199,14 +506,18 @@ local function showConfirmDialog(titleText: string, detailText: string, btnLabel
 	pendingConfirmCallback = onConfirm
 	confirmTitleLbl.Text = titleText
 	confirmDescLbl.Text = detailText
+	local oldRow = confirmYesBtn:FindFirstChild("CurrencyIconRow")
+	if oldRow then oldRow:Destroy() end
 	confirmYesBtn.Text = btnLabel
 	confirmYesBtn.BackgroundColor3 = btnColor
+	CurrencyIconHelper.DecorateCurrencyButton(confirmYesBtn, btnLabel, 17)
 	confirmOverlay.Visible = true
 end
 
 local render: () -> ()
 
 local function clearScroll(): ()
+	nextAutoOrder = 0
 	if not scrollFrame then
 		return
 	end
@@ -217,26 +528,66 @@ local function clearScroll(): ()
 	end
 end
 
+local TAB_ICON_MAP: { [MenuTab]: "Food" | "Fruit" | "Empire" | "Gun" | "Robux" } = {
+	Kitchen = "Food",
+	Warehouses = "Fruit",
+	Upgrades = "Empire",
+	BlackMarket = "Gun",
+	Shop = "Robux",
+}
+
 local function refreshTabStyles(): ()
 	for tabName, btn in pairs(tabButtons) do
 		local active = (tabName == currentTab)
+		local theme = TAB_THEMES[tabName]
 		local stroke = btn:FindFirstChildOfClass("UIStroke")
+		local bar = tabActiveBars[tabName]
+		local tLbl = tabLabels[tabName]
 		if active then
-			btn.BackgroundColor3 = if tabName == "BlackMarket"
-				then C_OXBLOOD
-				elseif tabName == "Shop" then C_ROBUX
-				else C_BG_SUBTLE
-			btn.TextColor3 = C_TEXT_PRIMARY
+			btn.BackgroundColor3 = theme.Accent
+			btn:SetAttribute("BaseBg", theme.Accent)
+			btn:SetAttribute("BaseStroke", Color3.new(1, 1, 1))
+			btn.TextColor3 = Color3.new(1, 1, 1)
+			if tLbl then tLbl.TextColor3 = Color3.new(1, 1, 1) end
 			if stroke then
-				stroke.Color = if tabName == "Shop" then C_BRASS else Color3.fromRGB(168, 166, 160)
+				stroke.Color = Color3.new(1, 1, 1)
+				stroke.Thickness = 2.2
 			end
+			if bar then bar.Visible = true end
 		else
 			btn.BackgroundColor3 = C_BG_CARD
+			btn:SetAttribute("BaseBg", C_BG_CARD)
+			btn:SetAttribute("BaseStroke", C_OUTLINE_DARK)
 			btn.TextColor3 = C_TEXT_MUTED
+			if tLbl then tLbl.TextColor3 = C_TEXT_MUTED end
 			if stroke then
-				stroke.Color = C_BORDER
+				stroke.Color = C_OUTLINE_DARK
+				stroke.Thickness = 1.8
+			end
+			if bar then bar.Visible = false end
+		end
+	end
+
+	local curTheme = TAB_THEMES[currentTab]
+	if stageHeaderBar and curTheme then
+		stageHeaderBar.BackgroundColor3 = curTheme.Accent
+	end
+	if stageHeaderGrad and curTheme then
+		stageHeaderGrad.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, curTheme.Accent),
+			ColorSequenceKeypoint.new(0.65, curTheme.Dark),
+			ColorSequenceKeypoint.new(1, C_BG_MODAL),
+		})
+	end
+	if stageHeaderIconSlot and lastHeaderIconTab ~= currentTab then
+		lastHeaderIconTab = currentTab
+		for _, ch in ipairs(stageHeaderIconSlot:GetChildren()) do
+			if not ch:IsA("UICorner") and not ch:IsA("UIStroke") then
+				ch:Destroy()
 			end
 		end
+		local iconKind = TAB_ICON_MAP[currentTab]
+		CurrencyIconHelper.CreateCategoryIcon(stageHeaderIconSlot, iconKind, if iconKind == "Robux" then 32 else 40, if iconKind == "Robux" then UDim2.fromOffset(9, 9) else UDim2.fromOffset(5, 5), 4)
 	end
 end
 
@@ -342,7 +693,7 @@ local function renderKitchen(state: { [string]: any }): ()
 		UDim2.new(1, -276, 0.5, -17),
 		UDim2.fromOffset(118, 34),
 		function()
-			if canSear and dispatchAction then
+			if dispatchAction then
 				dispatchAction("SearBoostCook", nil)
 			end
 		end
@@ -408,9 +759,41 @@ local function renderKitchen(state: { [string]: any }): ()
 	end
 
 	local playerRep = (state.Profile and state.Profile.Reputation) or 0
-	for idx, recipeId in ipairs(RecipeConfig.Order) do
+	local recipeGrid = makeGridContainer(scrollFrame, 2, 134, 8)
+	-- Sort recipes smartly: 1. Cookable right now (bright green!) -> 2. Unlocked Lv/Rep dishes -> 3. Locked higher-tier dishes!
+	local sortedRecipes: { { Id: string, Tier: number, Reward: number } } = {}
+	for _, recipeId in ipairs(RecipeConfig.Order) do
 		local recipe = RecipeConfig.Recipes[recipeId]
 		if recipe then
+			local repLocked = (recipe.RequiredRep ~= nil and playerRep < recipe.RequiredRep)
+			local hqLocked = (restLevel < recipe.RequiredRestaurantLevel)
+			local hasStock = true
+			for ing, need in pairs(recipe.Ingredients) do
+				if (stock[ing] or 0) < need then
+					hasStock = false
+					break
+				end
+			end
+			local tier = if (not repLocked and not hqLocked and hasStock)
+				then 1
+				elseif (not repLocked and not hqLocked) then 2
+				else 3
+			table.insert(sortedRecipes, { Id = recipeId, Tier = tier, Reward = recipe.CoinsReward })
+		end
+	end
+	table.sort(sortedRecipes, function(a, b)
+		if a.Tier ~= b.Tier then
+			return a.Tier < b.Tier
+		end
+		return a.Reward > b.Reward
+	end)
+
+	local recipeOrder = 0
+	for _, entry in ipairs(sortedRecipes) do
+		local recipeId = entry.Id
+		local recipe = RecipeConfig.Recipes[recipeId]
+		if recipe then
+			recipeOrder += 1
 			local repLocked = (recipe.RequiredRep ~= nil and playerRep < recipe.RequiredRep)
 			local isCravingDish = (recipeId == cravingId)
 			local canAfford = (restLevel >= recipe.RequiredRestaurantLevel) and (not repLocked)
@@ -421,56 +804,103 @@ local function renderKitchen(state: { [string]: any }): ()
 				table.insert(parts, string.format("%s %d/%d", ing, have, need))
 			end
 
-			local card = makeCard(scrollFrame, 76, if isCravingDish then C_OXBLOOD elseif canAfford then C_BRASS else C_BORDER_STRONG)
-			ModelPreviewHelper.CreatePreview(card, "Dish", recipeId, UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 11), Color3.fromRGB(22, 24, 31), if isCravingDish then C_OXBLOOD elseif canAfford then C_BRASS else C_BORDER)
+			local accent = if isCravingDish then C_OXBLOOD elseif canAfford then C_BRASS else C_BORDER_STRONG
+			local card = Instance.new("Frame")
+			card.LayoutOrder = recipeOrder
+			card.BackgroundColor3 = C_BG_CARD:Lerp(accent, if isCravingDish then 0.22 else 0.12)
+			card.BorderSizePixel = 0
+			card.ClipsDescendants = true
+			card.Parent = recipeGrid
+			makeCorner(card, 10)
+			makeStroke(card, accent:Lerp(C_OUTLINE_DARK, 0.25), 2.0)
+
+			local topStrip = Instance.new("Frame")
+			topStrip.Size = UDim2.new(1, 0, 0, 26)
+			topStrip.BackgroundColor3 = accent:Lerp(C_BG_MODAL, 0.45)
+			topStrip.BorderSizePixel = 0
+			topStrip.Parent = card
 
 			local nameLbl = Instance.new("TextLabel")
-			nameLbl.Position = UDim2.new(0, 78, 0, 10)
-			nameLbl.Size = UDim2.new(1, -226, 0, 22)
+			nameLbl.Position = UDim2.new(0, 10, 0, 0)
+			nameLbl.Size = UDim2.new(1, -96, 1, 0)
 			nameLbl.BackgroundTransparency = 1
 			nameLbl.Font = Enum.Font.GothamBlack
 			nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-			nameLbl.TextSize = 13
-			nameLbl.TextColor3 = if isCravingDish then Color3.fromRGB(246, 212, 124) else C_TEXT_PRIMARY
-			nameLbl.Text = string.format(
-				"%s%s  |  %.0fs  |  +%dG  |  +%d REP",
-				string.upper(recipe.DisplayName),
-				if isCravingDish then " [2X CRAVING]" elseif recipe.IsSecretSyndicate then " [SECRET]" else "",
-				recipe.CookTime,
-				recipe.CoinsReward,
-				recipe.ReputationReward
-			)
-			nameLbl.Parent = card
+			nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+			nameLbl.TextSize = 12
+			nameLbl.TextColor3 = if isCravingDish then C_GOLD_HI else C_TEXT_PRIMARY
+			nameLbl.Text = string.upper(recipe.DisplayName) .. (if isCravingDish then "  [2X]" elseif recipe.IsSecretSyndicate then " [VIP]" else "")
+			nameLbl.Parent = topStrip
+			addTextOutline(nameLbl, 1.5)
+
+			-- Gleaming Gold Payout Pill on top right
+			local payPill = Instance.new("Frame")
+			payPill.AnchorPoint = Vector2.new(1, 0.5)
+			payPill.Position = UDim2.new(1, -6, 0.5, 0)
+			payPill.Size = UDim2.fromOffset(78, 18)
+			payPill.BackgroundColor3 = Color3.fromRGB(26, 20, 10)
+			payPill.BorderSizePixel = 0
+			payPill.Parent = topStrip
+			makeCorner(payPill, 5)
+			makeStroke(payPill, C_BRASS, 1.2)
+			CurrencyIconHelper.CreateGoldCoin(payPill, 13, UDim2.new(0, 4, 0.5, -6), 3)
+			local payTxt = Instance.new("TextLabel")
+			payTxt.Position = UDim2.fromOffset(20, 0)
+			payTxt.Size = UDim2.new(1, -22, 1, 0)
+			payTxt.BackgroundTransparency = 1
+			payTxt.Font = Enum.Font.GothamBlack
+			payTxt.TextXAlignment = Enum.TextXAlignment.Left
+			payTxt.TextSize = 10
+			payTxt.TextColor3 = C_GOLD_HI
+			payTxt.Text = string.format("+%dG", recipe.CoinsReward)
+			payTxt.Parent = payPill
+
+			local vp = ModelPreviewHelper.CreatePreview(card, "Dish", recipeId, UDim2.fromOffset(66, 66), UDim2.new(0, 10, 0, 34), Color3.fromRGB(16, 22, 36), accent)
+			makeCorner(vp, 8)
+
+			local metaLbl = Instance.new("TextLabel")
+			metaLbl.Position = UDim2.new(0, 84, 0, 32)
+			metaLbl.Size = UDim2.new(1, -92, 0, 14)
+			metaLbl.BackgroundTransparency = 1
+			metaLbl.Font = Enum.Font.GothamBold
+			metaLbl.TextXAlignment = Enum.TextXAlignment.Left
+			metaLbl.TextSize = 10
+			metaLbl.TextColor3 = C_GOLD_HI
+			metaLbl.Text = string.format("%.0fs Cook  |  +%d Rep", recipe.CookTime, recipe.ReputationReward)
+			metaLbl.Parent = card
 
 			local reqLbl = Instance.new("TextLabel")
-			reqLbl.Position = UDim2.new(0, 78, 0, 34)
-			reqLbl.Size = UDim2.new(1, -226, 0, 32)
+			reqLbl.Position = UDim2.new(0, 84, 0, 48)
+			reqLbl.Size = UDim2.new(1, -92, 0, 34)
 			reqLbl.BackgroundTransparency = 1
-			reqLbl.Font = Enum.Font.Gotham
+			reqLbl.Font = Enum.Font.GothamMedium
 			reqLbl.TextWrapped = true
+			reqLbl.TextTruncate = Enum.TextTruncate.AtEnd
 			reqLbl.TextXAlignment = Enum.TextXAlignment.Left
-			reqLbl.TextSize = 11
+			reqLbl.TextYAlignment = Enum.TextYAlignment.Top
+			reqLbl.TextSize = 10
 			reqLbl.TextColor3 = C_TEXT_MUTED
-			reqLbl.Text = "Requires: " .. table.concat(parts, ", ")
+			reqLbl.Text = table.concat(parts, ", ")
 			reqLbl.Parent = card
 
 			local allStovesBusy = kitchen.IsCooking and (not kitchen.HasDualStove or kitchen.IsCooking2)
 			local btnText = if repLocked
 				then string.format("REQ %d REP", recipe.RequiredRep or 150)
-				elseif restLevel < recipe.RequiredRestaurantLevel then string.format("LOCKED HQ LV.%d", recipe.RequiredRestaurantLevel)
+				elseif restLevel < recipe.RequiredRestaurantLevel then string.format("HQ LV.%d", recipe.RequiredRestaurantLevel)
 				elseif allStovesBusy then "BUSY"
-				else "COOK"
+				else "COOK DISH"
 
-			makeBtn(
+			local cBtn = makeBtn(
 				card,
 				btnText,
-				if canAfford and not allStovesBusy then C_OXBLOOD else C_DISABLED,
-				UDim2.new(1, -138, 0.5, -17),
-				UDim2.fromOffset(126, 34),
+				if canAfford and not allStovesBusy then C_OWNED else C_DISABLED,
+				UDim2.new(0, 84, 1, -38),
+				UDim2.new(1, -94, 0, 30),
 				function()
 					if dispatchAction then dispatchAction("CookRecipe", recipeId) end
 				end
 			)
+			cBtn.TextSize = 11
 		end
 	end
 
@@ -532,76 +962,125 @@ local function renderWarehouses(state: { [string]: any }): ()
 	local totals = wh.CategoryTotals or {}
 	local caps = wh.Capacities or {}
 
-	for _, category in ipairs(WarehouseConfig.Categories) do
+	local catColors: { [string]: Color3 } = {
+		Fish = Color3.fromRGB(14, 165, 233),
+		Meat = Color3.fromRGB(225, 29, 72),
+		Vegetable = Color3.fromRGB(22, 163, 74),
+		Fruit = Color3.fromRGB(245, 158, 11),
+	}
+
+	-- 2x2 Big Colorful District Vault Card Grid!
+	local grid = makeGridContainer(scrollFrame, 2, 206, 10)
+	for idx, category in ipairs(WarehouseConfig.Categories) do
 		local spec = WarehouseConfig.Specs[category]
 		local level = levels[category] or 0
 		local isLocked = (level <= 0)
 		local total = totals[category] or 0
 		local cap = caps[category] or 0
 		local nextTier = WarehouseConfig.Tiers[level + 1]
+		local themeCol = if isLocked then C_BORDER_STRONG else (catColors[category] or C_STEEL)
 
 		local itemStrs: { string } = {}
 		for _, ing in ipairs(spec.Ingredients) do
 			table.insert(itemStrs, string.format("%s: %d", ing, stock[ing] or 0))
 		end
 
-		local card = makeCard(scrollFrame, 86, if isLocked then C_BORDER_STRONG else C_STEEL)
-		ModelPreviewHelper.CreatePreview(card, "Warehouse", category, UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 15), Color3.fromRGB(22, 24, 31), if isLocked then C_BORDER else C_STEEL)
+		local card = Instance.new("Frame")
+		card.LayoutOrder = idx
+		card.BackgroundColor3 = C_BG_CARD:Lerp(themeCol, if isLocked then 0.06 else 0.16)
+		card.BorderSizePixel = 0
+		card.ClipsDescendants = true
+		card.Parent = grid
+		makeCorner(card, 12)
+		makeStroke(card, themeCol:Lerp(C_OUTLINE_DARK, 0.2), 2.2)
 
-		local header = Instance.new("TextLabel")
-		header.Position = UDim2.new(0, 78, 0, 9)
-		header.Size = UDim2.new(1, -335, 0, 20)
-		header.BackgroundTransparency = 1
-		header.Font = Enum.Font.GothamBlack
-		header.TextXAlignment = Enum.TextXAlignment.Left
-		header.TextSize = 13
-		header.TextColor3 = if isLocked then C_TEXT_MUTED else C_TEXT_PRIMARY
-		header.Text = if isLocked
-			then string.format("%s  (LOCKED)", string.upper(spec.DisplayName))
-			else string.format("%s  |  LV.%d  (%d/%d)", string.upper(spec.DisplayName), level, total, cap)
-		header.Parent = card
+		-- Vibrant Category Banner Header
+		local topBanner = Instance.new("Frame")
+		topBanner.Size = UDim2.new(1, 0, 0, 34)
+		topBanner.BackgroundColor3 = themeCol:Lerp(C_BG_MODAL, 0.32)
+		topBanner.BorderSizePixel = 0
+		topBanner.Parent = card
+
+		local hLbl = Instance.new("TextLabel")
+		hLbl.Position = UDim2.new(0, 12, 0, 0)
+		hLbl.Size = UDim2.new(1, -96, 1, 0)
+		hLbl.BackgroundTransparency = 1
+		hLbl.Font = Enum.Font.GothamBlack
+		hLbl.TextXAlignment = Enum.TextXAlignment.Left
+		hLbl.TextSize = 13
+		hLbl.TextColor3 = C_TEXT_PRIMARY
+		hLbl.Text = string.upper(spec.DisplayName)
+		hLbl.Parent = topBanner
+		addTextOutline(hLbl, 1.6)
+
+		makeTag(
+			topBanner,
+			if isLocked then "LOCKED" else string.format("LV.%d", level),
+			if isLocked then C_DISABLED else themeCol,
+			UDim2.new(1, -68, 0.5, -9),
+			UDim2.fromOffset(58, 18)
+		)
+
+		local vp = ModelPreviewHelper.CreatePreview(card, "Warehouse", category, UDim2.fromOffset(78, 78), UDim2.new(0, 12, 0, 44), Color3.fromRGB(16, 22, 36), themeCol)
+		makeCorner(vp, 9)
+
+		local capLbl = Instance.new("TextLabel")
+		capLbl.Position = UDim2.new(0, 100, 0, 44)
+		capLbl.Size = UDim2.new(1, -110, 0, 18)
+		capLbl.BackgroundTransparency = 1
+		capLbl.Font = Enum.Font.GothamBlack
+		capLbl.TextXAlignment = Enum.TextXAlignment.Left
+		capLbl.TextSize = 12
+		capLbl.TextColor3 = if isLocked then C_TEXT_DIM else C_GOLD_HI
+		capLbl.Text = if isLocked then "UNBUILT PLOT" else string.format("STOCK: %d / %d", total, cap)
+		capLbl.Parent = card
+		addTextOutline(capLbl, 1.4)
+
+		-- Chunky Glossy Capacity Progress Bar
+		local barBg = Instance.new("Frame")
+		barBg.Position = UDim2.new(0, 100, 0, 66)
+		barBg.Size = UDim2.new(1, -112, 0, 12)
+		barBg.BackgroundColor3 = Color3.fromRGB(10, 14, 24)
+		barBg.BorderSizePixel = 0
+		barBg.Parent = card
+		makeCorner(barBg, 6)
+		makeStroke(barBg, C_OUTLINE_DARK, 1.4)
+		local barFill = Instance.new("Frame")
+		barFill.Size = UDim2.fromScale(if not isLocked and cap > 0 then math.clamp(total / cap, 0, 1) else 0, 1)
+		barFill.BackgroundColor3 = themeCol
+		barFill.BorderSizePixel = 0
+		barFill.Parent = barBg
+		makeCorner(barFill, 6)
 
 		local detail = Instance.new("TextLabel")
-		detail.Position = UDim2.new(0, 78, 0, 31)
-		detail.Size = UDim2.new(1, -335, 0, 20)
+		detail.Position = UDim2.new(0, 100, 0, 84)
+		detail.Size = UDim2.new(1, -110, 0, 56)
 		detail.BackgroundTransparency = 1
-		detail.Font = Enum.Font.Gotham
+		detail.Font = Enum.Font.GothamMedium
+		detail.TextWrapped = true
 		detail.TextXAlignment = Enum.TextXAlignment.Left
-		detail.TextSize = 11
+		detail.TextYAlignment = Enum.TextYAlignment.Top
+		detail.TextSize = 10
 		detail.TextColor3 = C_TEXT_MUTED
 		detail.Text = if isLocked
 			then ("Stores: " .. table.concat(spec.Ingredients, ", "))
 			else table.concat(itemStrs, "  |  ")
 		detail.Parent = card
 
-		if not isLocked then
-			local barBg = Instance.new("Frame")
-			barBg.Position = UDim2.new(0, 78, 0, 58)
-			barBg.Size = UDim2.new(1, -345, 0, 8)
-			barBg.BackgroundColor3 = Color3.fromRGB(12, 13, 17)
-			barBg.Parent = card
-			makeCorner(barBg, 4)
-			local barFill = Instance.new("Frame")
-			barFill.Size = UDim2.fromScale(if cap > 0 then math.clamp(total / cap, 0, 1) else 0, 1)
-			barFill.BackgroundColor3 = C_BRASS
-			barFill.Parent = barBg
-			makeCorner(barFill, 4)
-		end
-
 		if isLocked then
-			makeBtn(card, string.format("BUILD  %dG", spec.UnlockCost), C_OXBLOOD, UDim2.new(1, -166, 0.5, -17), UDim2.fromOffset(154, 34), function()
+			makeBtn(card, string.format("BUILD  %d G", spec.UnlockCost), C_OXBLOOD, UDim2.new(0, 12, 1, -46), UDim2.new(1, -24, 0, 36), function()
 				if dispatchAction then dispatchAction("UpgradeWarehouse", category) end
 			end)
 		else
-			makeBtn(card, "MOVE", C_BG_SUBTLE, UDim2.new(1, -246, 0.5, -17), UDim2.fromOffset(82, 34), function()
+			makeBtn(card, "MOVE", C_BG_SUBTLE, UDim2.new(0, 12, 1, -46), UDim2.fromOffset(82, 36), function()
 				if dispatchAction then dispatchAction("MoveWarehouse", category) end
 			end)
 			makeBtn(
 				card,
-				if nextTier then string.format("UPGRADE  %dG", nextTier.UpgradeCost) else "MAX LEVEL",
-				if nextTier then C_OXBLOOD else C_DISABLED,
-				UDim2.new(1, -156, 0.5, -17),
-				UDim2.fromOffset(144, 34),
+				if nextTier then string.format("UPGRADE  %d G", nextTier.UpgradeCost) else "MAX LEVEL",
+				if nextTier then C_OWNED else C_DISABLED,
+				UDim2.new(0, 102, 1, -46),
+				UDim2.new(1, -114, 0, 36),
 				function()
 					if dispatchAction then dispatchAction("UpgradeWarehouse", category) end
 				end
@@ -620,24 +1099,28 @@ local function renderUpgrades(state: { [string]: any }): ()
 	local nextCrewCost = state.NextCrewCost or 180
 
 	local function addUpgradeRow(code: string, titleTxt: string, descTxt: string, btnTxt: string, btnBg: Color3, onClick: () -> ()): Frame
-		local card = makeCard(scrollFrame :: ScrollingFrame, 84, C_BORDER_STRONG)
-		ModelPreviewHelper.CreatePreview(card, "Empire", code, UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 15), Color3.fromRGB(22, 24, 31), C_BORDER_STRONG)
+		local cardAcc = if btnBg == C_DISABLED then C_BORDER_STRONG else btnBg
+		local card = makeCard(scrollFrame :: ScrollingFrame, 88, cardAcc)
+		local vp = ModelPreviewHelper.CreatePreview(card, "Empire", code, UDim2.fromOffset(60, 60), UDim2.new(0, 14, 0, 14), Color3.fromRGB(16, 22, 36), cardAcc)
+		makeCorner(vp, 9)
 		local lbl = Instance.new("TextLabel")
-		lbl.Position = UDim2.new(0, 78, 0, 10)
-		lbl.Size = UDim2.new(1, -242, 0, 20)
+		lbl.Position = UDim2.new(0, 84, 0, 10)
+		lbl.Size = UDim2.new(1, -248, 0, 22)
 		lbl.BackgroundTransparency = 1
 		lbl.Font = Enum.Font.GothamBlack
 		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.TextTruncate = Enum.TextTruncate.AtEnd
 		lbl.TextSize = 13
 		lbl.TextColor3 = C_TEXT_PRIMARY
 		lbl.Text = titleTxt
 		lbl.Parent = card
+		addTextOutline(lbl, 1.5)
 
 		local desc = Instance.new("TextLabel")
-		desc.Position = UDim2.new(0, 78, 0, 32)
-		desc.Size = UDim2.new(1, -242, 0, 42)
+		desc.Position = UDim2.new(0, 84, 0, 34)
+		desc.Size = UDim2.new(1, -248, 0, 42)
 		desc.BackgroundTransparency = 1
-		desc.Font = Enum.Font.Gotham
+		desc.Font = Enum.Font.GothamMedium
 		desc.TextXAlignment = Enum.TextXAlignment.Left
 		desc.TextSize = 11
 		desc.TextColor3 = C_TEXT_MUTED
@@ -645,7 +1128,7 @@ local function renderUpgrades(state: { [string]: any }): ()
 		desc.TextWrapped = true
 		desc.Parent = card
 
-		makeBtn(card, btnTxt, btnBg, UDim2.new(1, -156, 0.5, -17), UDim2.fromOffset(144, 34), onClick)
+		makeBtn(card, btnTxt, btnBg, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), onClick)
 		return card
 	end
 
@@ -1330,84 +1813,147 @@ local function renderShop(state: { [string]: any }): ()
 	if not scrollFrame then return end
 	local owned = state.OwnedPasses or {}
 
-	local intro = makeCard(scrollFrame, 44, C_BRASS)
-	local introLbl = Instance.new("TextLabel")
-	introLbl.Position = UDim2.new(0, 14, 0, 6)
-	introLbl.Size = UDim2.new(1, -24, 1, -12)
-	introLbl.BackgroundTransparency = 1
-	introLbl.Font = Enum.Font.GothamMedium
-	introLbl.TextWrapped = true
-	introLbl.TextXAlignment = Enum.TextXAlignment.Left
-	introLbl.TextSize = 11
-	introLbl.TextColor3 = C_TEXT_MUTED
-	introLbl.Text = "Optional Robux Store — Permanent Game Passes and consumable supply packs verified server-side via Roblox MarketplaceService."
-	introLbl.Parent = intro
+	-- 1. HERO FEATURED SPOTLIGHT BANNER AT TOP OF ROBUX STORE!
+	local heroId = "DoubleEmpireVIP"
+	local heroSpec = MonetizationConfig.Items[heroId]
+	if heroSpec then
+		local heroOwned = owned[heroId] == true
+		local heroCard = Instance.new("Frame")
+		heroCard.Name = "FeaturedHeroBanner"
+		heroCard.LayoutOrder = 1
+		heroCard.Size = UDim2.new(1, -6, 0, 134)
+		heroCard.BackgroundColor3 = Color3.fromRGB(24, 58, 42)
+		heroCard.BorderSizePixel = 0
+		heroCard.ClipsDescendants = true
+		heroCard.Parent = scrollFrame
+		makeCorner(heroCard, 12)
+		makeStroke(heroCard, C_GOLD_HI, 2.4)
 
-	for _, itemId in ipairs(MonetizationConfig.Order) do
-		local spec = MonetizationConfig.Items[itemId]
-		if spec then
-			local isBike = (itemId == "DeliveryMotorbike")
-			local isOwned = (spec.Kind == "GamePass" and owned[itemId] == true) or (isBike and state.OwnsMotorbike == true)
-			local card = makeCard(scrollFrame, 96, if isOwned then C_OWNED else C_BRASS)
-			ModelPreviewHelper.CreatePreview(card, "Premium", itemId, UDim2.fromOffset(74, 68), UDim2.new(0, 14, 0, 14), Color3.fromRGB(24, 26, 33))
+		local heroGrad = Instance.new("UIGradient")
+		heroGrad.Rotation = 15
+		heroGrad.Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(16, 152, 86)),
+			ColorSequenceKeypoint.new(0.55, Color3.fromRGB(18, 64, 52)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(22, 30, 52)),
+		})
+		heroGrad.Parent = heroCard
 
-			makeTag(card, string.upper(spec.Badge), C_BG_SUBTLE, UDim2.new(0, 98, 0, 10), UDim2.fromOffset(104, 16))
-			makeTag(
-				card,
-				if spec.Kind == "GamePass" then "PERMANENT PASS" else "CONSUMABLE",
-				if spec.Kind == "GamePass" then C_STEEL else C_OXBLOOD_DARK,
-				UDim2.new(0, 208, 0, 10),
-				UDim2.fromOffset(102, 16)
-			)
+		-- Decorative angled diagonal game-shop accent rays
+		for r = 1, 3 do
+			local stripe = Instance.new("Frame")
+			stripe.AnchorPoint = Vector2.new(0.5, 0.5)
+			stripe.Position = UDim2.fromScale(0.18 + r * 0.24, 0.5)
+			stripe.Size = UDim2.new(0, 34, 1.8, 0)
+			stripe.Rotation = 22
+			stripe.BackgroundColor3 = C_GOLD_HI
+			stripe.BackgroundTransparency = 0.90
+			stripe.BorderSizePixel = 0
+			stripe.Parent = heroCard
+		end
 
-			local nameLbl = Instance.new("TextLabel")
-			nameLbl.Position = UDim2.new(0, 98, 0, 30)
-			nameLbl.Size = UDim2.new(1, -264, 0, 20)
-			nameLbl.BackgroundTransparency = 1
-			nameLbl.Font = Enum.Font.GothamBlack
-			nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-			nameLbl.TextSize = 14
-			nameLbl.TextColor3 = C_TEXT_PRIMARY
-			nameLbl.Text = string.upper(spec.DisplayName)
-			nameLbl.Parent = card
+		local pedestal = Instance.new("Frame")
+		pedestal.Position = UDim2.fromOffset(16, 14)
+		pedestal.Size = UDim2.fromOffset(106, 106)
+		pedestal.BackgroundColor3 = Color3.fromRGB(14, 24, 34)
+		pedestal.BackgroundTransparency = 0.2
+		pedestal.Parent = heroCard
+		makeCorner(pedestal, 53)
+		makeStroke(pedestal, C_GOLD_HI, 2.2)
 
-			local descLbl = Instance.new("TextLabel")
-			descLbl.Position = UDim2.new(0, 98, 0, 52)
-			descLbl.Size = UDim2.new(1, -264, 0, 38)
-			descLbl.BackgroundTransparency = 1
-			descLbl.Font = Enum.Font.Gotham
-			descLbl.TextWrapped = true
-			descLbl.TextXAlignment = Enum.TextXAlignment.Left
-			descLbl.TextYAlignment = Enum.TextYAlignment.Top
-			descLbl.TextSize = 11
-			descLbl.TextColor3 = C_TEXT_MUTED
-			descLbl.Text = spec.Description
-			descLbl.Parent = card
+		local heroVp = ModelPreviewHelper.CreatePreview(heroCard, "Premium", heroId, UDim2.fromOffset(104, 104), UDim2.fromOffset(17, 15), Color3.fromRGB(14, 24, 34))
+		heroVp.BackgroundTransparency = 1
 
-			local btn = makeBtn(
-				card,
-				if isOwned then "OWNED" else string.format("R$ %d", spec.RobuxPrice),
-				if isOwned then C_DISABLED else C_ROBUX,
-				UDim2.new(1, -152, 0.5, -18),
-				UDim2.fromOffset(140, 36),
-				function()
-					if not isOwned and dispatchAction then
-						local kindTxt = if spec.Kind == "GamePass" then "Permanent Game Pass" else "Repeatable Developer Product"
-						showConfirmDialog(
-							"CONFIRM ROBUX PURCHASE",
-							string.format("%s (%s)\nPrice: R$ %d\n\n%s", spec.DisplayName, kindTxt, spec.RobuxPrice, spec.Description),
-							string.format("BUY  R$ %d", spec.RobuxPrice),
-							C_ROBUX,
-							function()
-								if dispatchAction then dispatchAction("BuyRobuxItem", itemId) end
-							end
-						)
-					end
+		makeTag(heroCard, "MOST POPULAR  |  VIP", C_BRASS, UDim2.fromOffset(136, 14), UDim2.fromOffset(146, 20))
+		makeTag(heroCard, "PERMANENT PASS", C_STEEL, UDim2.fromOffset(288, 14), UDim2.fromOffset(108, 20))
+
+		local hTitle = Instance.new("TextLabel")
+		hTitle.Position = UDim2.fromOffset(136, 40)
+		hTitle.Size = UDim2.new(1, -320, 0, 28)
+		hTitle.BackgroundTransparency = 1
+		hTitle.Font = Enum.Font.GothamBlack
+		hTitle.TextXAlignment = Enum.TextXAlignment.Left
+		hTitle.TextSize = 20
+		hTitle.TextColor3 = C_GOLD_HI
+		hTitle.Text = string.upper(heroSpec.DisplayName)
+		hTitle.Parent = heroCard
+		addTextOutline(hTitle, 2.0)
+
+		local hDesc = Instance.new("TextLabel")
+		hDesc.Position = UDim2.fromOffset(136, 72)
+		hDesc.Size = UDim2.new(1, -320, 0, 46)
+		hDesc.BackgroundTransparency = 1
+		hDesc.Font = Enum.Font.GothamBold
+		hDesc.TextWrapped = true
+		hDesc.TextXAlignment = Enum.TextXAlignment.Left
+		hDesc.TextYAlignment = Enum.TextYAlignment.Top
+		hDesc.TextSize = 12
+		hDesc.TextColor3 = C_TEXT_PRIMARY
+		hDesc.Text = heroSpec.Description
+		hDesc.Parent = heroCard
+
+		local hBtn = makeBtn(
+			heroCard,
+			if heroOwned then "OWNED" else string.format("R$ %d", heroSpec.RobuxPrice),
+			if heroOwned then C_DISABLED else C_ROBUX,
+			UDim2.new(1, -172, 0.5, -22),
+			UDim2.fromOffset(156, 44),
+			function()
+				if not heroOwned and dispatchAction then
+					showConfirmDialog(
+						"CONFIRM ROBUX PURCHASE",
+						string.format("%s (Permanent Game Pass)\nPrice: R$ %d\n\n%s", heroSpec.DisplayName, heroSpec.RobuxPrice, heroSpec.Description),
+						string.format("BUY  R$ %d", heroSpec.RobuxPrice),
+						C_ROBUX,
+						function()
+							if dispatchAction then dispatchAction("BuyRobuxItem", heroId) end
+						end
+					)
 				end
-			)
-			if not isOwned then
-				local st = btn:FindFirstChildOfClass("UIStroke")
-				if st then st.Color = C_BRASS end
+			end
+		)
+		hBtn.TextSize = 15
+	end
+
+	-- 2. 3-COLUMN COLLECTIBLE GAME STORE CARD GRID!
+	local storeGrid = makeGridContainer(scrollFrame, 3, 250, 10)
+	storeGrid.LayoutOrder = 2
+	local cardColors = { C_BRASS, C_STEEL, C_OXBLOOD, Color3.fromRGB(168, 85, 247), C_ROBUX }
+	local orderIdx = 0
+	for _, itemId in ipairs(MonetizationConfig.Order) do
+		if itemId ~= heroId then
+			local spec = MonetizationConfig.Items[itemId]
+			if spec then
+				orderIdx += 1
+				local isBike = (itemId == "DeliveryMotorbike")
+				local isOwned = (spec.Kind == "GamePass" and owned[itemId] == true) or (isBike and state.OwnsMotorbike == true)
+				local themeCol = if isOwned then C_OWNED else cardColors[((orderIdx - 1) % #cardColors) + 1]
+				makeStoreCollectibleCard(
+					storeGrid,
+					orderIdx,
+					themeCol,
+					string.upper(spec.Badge),
+					if spec.Kind == "GamePass" then "PERMANENT" else "PACK",
+					string.upper(spec.DisplayName),
+					spec.Description,
+					"Premium",
+					itemId,
+					if isOwned then "OWNED" else string.format("R$ %d", spec.RobuxPrice),
+					if isOwned then C_DISABLED else C_ROBUX,
+					function()
+						if not isOwned and dispatchAction then
+							local kindTxt = if spec.Kind == "GamePass" then "Permanent Game Pass" else "Repeatable Developer Product"
+							showConfirmDialog(
+								"CONFIRM ROBUX PURCHASE",
+								string.format("%s (%s)\nPrice: R$ %d\n\n%s", spec.DisplayName, kindTxt, spec.RobuxPrice, spec.Description),
+								string.format("BUY  R$ %d", spec.RobuxPrice),
+								C_ROBUX,
+								function()
+									if dispatchAction then dispatchAction("BuyRobuxItem", itemId) end
+								end
+							)
+						end
+					end
+				)
 			end
 		end
 	end
@@ -1426,14 +1972,14 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 	local weaponSkins = if typeof(bm.WeaponSkins) == "table" then bm.WeaponSkins else {}
 	local currentArmor = if typeof(bm.Armor) == "number" then bm.Armor else 0
 
-	-- Restrained Weapon Category Filter Bar
+	-- Restrained Weapon Category Filter Bar (exact fit — zero right-edge clipping!)
 	local filterRow = Instance.new("Frame")
-	filterRow.Size = UDim2.new(1, -6, 0, 30)
+	filterRow.Size = UDim2.new(1, -6, 0, 32)
 	filterRow.BackgroundTransparency = 1
 	filterRow.Parent = scrollFrame
 	local fl = Instance.new("UIListLayout")
 	fl.FillDirection = Enum.FillDirection.Horizontal
-	fl.Padding = UDim.new(0, 5)
+	fl.Padding = UDim.new(0, 4)
 	fl.Parent = filterRow
 
 	local filters: { { Id: WeaponFilter, Label: string } } = {
@@ -1508,15 +2054,16 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 				)
 
 				local dmgText = if w.Pellets > 1 then string.format("%dx%d", w.Pellets, w.Damage) else tostring(w.Damage)
-				local fireRate = string.format("%.1f/s", 1 / math.max(0.05, w.Cooldown))
+				local rofVal = 1 / math.max(0.05, w.Cooldown)
+				local fireRate = string.format("%.1f/s", rofVal)
 				local statsLbl = Instance.new("TextLabel")
-				statsLbl.Position = UDim2.new(0, 108, 0, 52)
-				statsLbl.Size = UDim2.new(1, -272, 0, 16)
+				statsLbl.Position = UDim2.new(0, 108, 0, 51)
+				statsLbl.Size = UDim2.new(1, -274, 0, 14)
 				statsLbl.BackgroundTransparency = 1
 				statsLbl.Font = Enum.Font.Code
 				statsLbl.TextXAlignment = Enum.TextXAlignment.Left
-				statsLbl.TextSize = 11
-				statsLbl.TextColor3 = Color3.fromRGB(204, 200, 192)
+				statsLbl.TextSize = 10
+				statsLbl.TextColor3 = C_GOLD_HI
 				statsLbl.Text = string.format(
 					"DMG %s  |  ROF %s  |  RNG %d  |  MAG %d  |  %s (%d/%d)",
 					dmgText,
@@ -1529,9 +2076,36 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 				)
 				statsLbl.Parent = card
 
+				-- Crisp AAA Mini Visual Stat Bars (DMG / ROF / RNG)
+				local barRow = Instance.new("Frame")
+				barRow.Position = UDim2.new(0, 108, 0, 67)
+				barRow.Size = UDim2.new(1, -278, 0, 7)
+				barRow.BackgroundTransparency = 1
+				barRow.Parent = card
+				local statSpecs = {
+					{ Pct = math.clamp((w.Damage * math.max(1, w.Pellets)) / 110, 0.14, 1), Col = C_OXBLOOD },
+					{ Pct = math.clamp(rofVal / 10, 0.14, 1), Col = C_BRASS },
+					{ Pct = math.clamp(w.Range / 220, 0.12, 1), Col = Color3.fromRGB(74, 142, 198) },
+				}
+				for sIdx, ss in ipairs(statSpecs) do
+					local bg = Instance.new("Frame")
+					bg.Position = UDim2.new((sIdx - 1) * 0.34, 0, 0, 0)
+					bg.Size = UDim2.new(0.31, 0, 1, 0)
+					bg.BackgroundColor3 = Color3.fromRGB(11, 13, 18)
+					bg.BorderSizePixel = 0
+					bg.Parent = barRow
+					makeCorner(bg, 3)
+					local fill = Instance.new("Frame")
+					fill.Size = UDim2.fromScale(ss.Pct, 1)
+					fill.BackgroundColor3 = ss.Col
+					fill.BorderSizePixel = 0
+					fill.Parent = bg
+					makeCorner(fill, 3)
+				end
+
 				local descLbl = Instance.new("TextLabel")
-				descLbl.Position = UDim2.new(0, 108, 0, 72)
-				descLbl.Size = UDim2.new(1, -272, 0, 34)
+				descLbl.Position = UDim2.new(0, 108, 0, 77)
+				descLbl.Size = UDim2.new(1, -274, 0, 30)
 				descLbl.BackgroundTransparency = 1
 				descLbl.Font = Enum.Font.Gotham
 				descLbl.TextWrapped = true
@@ -2368,56 +2942,99 @@ local function renderBlackMarketMercenaries(state: { [string]: any }): ()
 	end
 	sLbl.Parent = statusCard
 
+	-- SIDE-BY-SIDE FIGHTER SHOWDOWN CARDS (Samurai Mafia vs Ninja Assassin Mafia!)
+	local vsGrid = makeGridContainer(scrollFrame, 2, 268, 10)
 	local mercSpecs = {
 		{
 			Type = "Samurai",
 			Code = "SMR",
-			Name = "KUROGANE SAMURAI MAFIA (3 ENFORCERS  |  5 MIN)",
-			Desc = "3 elite Yakuza Samurai Enforcers (1,550 HP, 134 DMG katanas — stronger than Rival Samurai). Dominates Central Park Samurai clashes & restaurant raids!",
+			Badge = "IRON SHOGUN  |  5 MIN",
+			Name = "KUROGANE SAMURAI MAFIA",
+			Stats = "3 ENFORCERS  |  1,550 HP  |  134 KATANA DMG",
+			Desc = "Heavy armored Yakuza Samurai Enforcers. Dominates Central Park blade clashes & storms Mafia Restaurants!",
 			RobuxId = "SamuraiMafiaContract",
+			Col = C_OXBLOOD,
 		},
 		{
 			Type = "Ninja",
 			Code = "NJA",
-			Name = "KAGE NINJA ASSASSIN MAFIA (3 ASSASSINS  |  5 MIN)",
-			Desc = "3 lethal Shinobi Assassins (1,350 HP, 29 Speed, 1.6x shadow-step crits — stronger than Rival Ninja/Samurai) with steel-spark clash VFX!",
+			Badge = "SHADOW CLAN  |  5 MIN",
+			Name = "KAGE NINJA ASSASSINS",
+			Stats = "3 ASSASSINS  |  1,350 HP  |  1.6X CRIT  |  29 SPD",
+			Desc = "Blinding-fast Shinobi Assassins with shadow-step crits & dual tanto flurries. Shreds Rival Mafia squads!",
 			RobuxId = "NinjaMafiaContract",
+			Col = Color3.fromRGB(124, 58, 237),
 		},
 	}
 
-	for _, ms in ipairs(mercSpecs) do
-		local c = makeCard(scrollFrame, 108, C_OXBLOOD)
-		ModelPreviewHelper.CreatePreview(c, "Empire", ms.Code, UDim2.fromOffset(66, 78), UDim2.new(0, 14, 0, 15), Color3.fromRGB(22, 24, 31), C_OXBLOOD)
+	for idx, ms in ipairs(mercSpecs) do
+		local c = Instance.new("Frame")
+		c.LayoutOrder = idx
+		c.BackgroundColor3 = C_BG_CARD:Lerp(ms.Col, 0.18)
+		c.BorderSizePixel = 0
+		c.ClipsDescendants = true
+		c.Parent = vsGrid
+		makeCorner(c, 12)
+		makeStroke(c, ms.Col, 2.4)
+
+		local topBay = Instance.new("Frame")
+		topBay.Size = UDim2.new(1, 0, 0, 122)
+		topBay.BackgroundColor3 = ms.Col:Lerp(C_BG_MODAL, 0.45)
+		topBay.BorderSizePixel = 0
+		topBay.Parent = c
+
+		local aura = Instance.new("Frame")
+		aura.AnchorPoint = Vector2.new(0.5, 0.5)
+		aura.Position = UDim2.fromScale(0.5, 0.54)
+		aura.Size = UDim2.fromOffset(102, 102)
+		aura.BackgroundColor3 = ms.Col
+		aura.BackgroundTransparency = 0.55
+		aura.Parent = topBay
+		makeCorner(aura, 51)
+		makeStroke(aura, C_GOLD_HI, 1.8, 0.35)
+
+		local vp = ModelPreviewHelper.CreatePreview(topBay, "Empire", ms.Code, UDim2.fromOffset(106, 106), UDim2.new(0.5, -53, 0.5, -50), Color3.fromRGB(18, 24, 38))
+		vp.BackgroundTransparency = 1
+		makeTag(topBay, ms.Badge, ms.Col:Lerp(C_OUTLINE_DARK, 0.2), UDim2.fromOffset(10, 8), UDim2.fromOffset(132, 18))
+
 		local t = Instance.new("TextLabel")
-		t.Position = UDim2.new(0, 92, 0, 10)
-		t.Size = UDim2.new(1, -266, 0, 20)
+		t.Position = UDim2.new(0, 12, 0, 128)
+		t.Size = UDim2.new(1, -24, 0, 22)
 		t.BackgroundTransparency = 1
 		t.Font = Enum.Font.GothamBlack
-		t.TextXAlignment = Enum.TextXAlignment.Left
-		t.TextSize = 13
-		t.TextColor3 = C_TEXT_PRIMARY
+		t.TextSize = 15
+		t.TextColor3 = C_GOLD_HI
 		t.Text = ms.Name
 		t.Parent = c
+		addTextOutline(t, 1.8)
+
+		local stLbl = Instance.new("TextLabel")
+		stLbl.Position = UDim2.new(0, 12, 0, 150)
+		stLbl.Size = UDim2.new(1, -24, 0, 16)
+		stLbl.BackgroundTransparency = 1
+		stLbl.Font = Enum.Font.GothamBold
+		stLbl.TextSize = 10
+		stLbl.TextColor3 = C_TEXT_PRIMARY
+		stLbl.Text = ms.Stats
+		stLbl.Parent = c
 
 		local d = Instance.new("TextLabel")
-		d.Position = UDim2.new(0, 92, 0, 34)
-		d.Size = UDim2.new(1, -266, 0, 62)
+		d.Position = UDim2.new(0, 12, 0, 168)
+		d.Size = UDim2.new(1, -24, 0, 42)
 		d.BackgroundTransparency = 1
-		d.Font = Enum.Font.Gotham
+		d.Font = Enum.Font.GothamMedium
 		d.TextWrapped = true
-		d.TextXAlignment = Enum.TextXAlignment.Left
-		d.TextYAlignment = Enum.TextYAlignment.Top
-		d.TextSize = 11
+		d.TextSize = 10
 		d.TextColor3 = C_TEXT_MUTED
 		d.Text = ms.Desc
 		d.Parent = c
 
-		local gBtn = makeBtn(c, string.format("HIRE  %d G", goldCost), if coins >= goldCost then C_OXBLOOD else C_DISABLED, UDim2.new(1, -162, 0, 14), UDim2.fromOffset(150, 36), function()
+		local gBtn = makeBtn(c, string.format("%s G", formatCommaInt(goldCost)), if coins >= goldCost then C_OXBLOOD else C_DISABLED, UDim2.new(0, 12, 1, -48), UDim2.new(0.5, -16, 0, 38), function()
 			if dispatchAction then dispatchAction("HireMercenaryMafia", ms.Type) end
 		end)
 		gBtn.TextSize = 11
 
-		local rBtn = makeBtn(c, "HIRE  R$ 199 (5M)", C_ROBUX, UDim2.new(1, -162, 0, 58), UDim2.fromOffset(150, 36), function()
+		local rBtn = makeBtn(c, "R$ 199", C_ROBUX, UDim2.new(0.5, 4, 1, -48), UDim2.new(0.5, -16, 0, 38), function()
 			showConfirmDialog(
 				"CONFIRM 5-MIN MAFIA CONTRACT",
 				string.format("Deploy %s for 5 minutes for R$ 199?\nStronger than Rival Samurai/Ninja Mafia — use ATTACK [Y] & CALL BACK [Z] anytime!", ms.Name),
@@ -2428,9 +3045,7 @@ local function renderBlackMarketMercenaries(state: { [string]: any }): ()
 				end
 			)
 		end)
-		rBtn.TextSize = 10
-		local rst = rBtn:FindFirstChildOfClass("UIStroke")
-		if rst then rst.Color = C_BRASS end
+		rBtn.TextSize = 12
 	end
 
 	-- Command Panel: Direct your Samurai/Ninja Mafia to storm a Mafia-Controlled Restaurant!
@@ -2478,20 +3093,10 @@ local function renderBlackMarketPremium(state: { [string]: any }): ()
 	local ownedWeapons = (state.BlackMarket and state.BlackMarket.OwnedWeapons) or {}
 	local ownedGear = (state.Bodyguards and state.Bodyguards.OwnedGear) or {}
 
-	local intro = makeCard(scrollFrame, 48, C_BRASS)
-	local introLbl = Instance.new("TextLabel")
-	introLbl.Position = UDim2.new(0, 14, 0, 6)
-	introLbl.Size = UDim2.new(1, -24, 1, -12)
-	introLbl.BackgroundTransparency = 1
-	introLbl.Font = Enum.Font.GothamMedium
-	introLbl.TextWrapped = true
-	introLbl.TextXAlignment = Enum.TextXAlignment.Left
-	introLbl.TextSize = 11
-	introLbl.TextColor3 = C_TEXT_MUTED
-	introLbl.Text = "Optional Robux Exclusives — Clearly separated from Gold currency items. All Game Passes and Developer Products are verified server-side."
-	introLbl.Parent = intro
-
-	for _, itemId in ipairs(BLACK_MARKET_ROBUX_IDS) do
+	-- 3-Column Collectible Black Market VIP Showcase Grid!
+	local vipGrid = makeGridContainer(scrollFrame, 3, 250, 10)
+	local colors = { C_BRASS, C_OXBLOOD, Color3.fromRGB(124, 58, 237), C_GOLD_HI, C_OXBLOOD, C_BRASS, C_STEEL, C_ROBUX }
+	for idx, itemId in ipairs(BLACK_MARKET_ROBUX_IDS) do
 		local spec = MonetizationConfig.Items[itemId]
 		if spec then
 			local isOwned = spec.Kind == "GamePass" and (
@@ -2500,48 +3105,19 @@ local function renderBlackMarketPremium(state: { [string]: any }): ()
 				or (itemId == "CrimsonDragonARPass" and ownedWeapons.CrimsonDragonAR == true)
 				or (itemId == "GoldenEmperorSuitPass" and ownedGear.GoldenEmperorSuit == true)
 			)
-			local card = makeCard(scrollFrame, 102, if isOwned then C_OWNED else C_BRASS)
-			ModelPreviewHelper.CreatePreview(card, "Premium", itemId, UDim2.fromOffset(78, 74), UDim2.new(0, 14, 0, 14), Color3.fromRGB(24, 26, 33))
-
-			makeTag(card, string.upper(spec.Badge), C_BG_SUBTLE, UDim2.new(0, 104, 0, 10), UDim2.fromOffset(108, 16))
-			makeTag(
-				card,
-				if spec.Kind == "GamePass" then "PERMANENT PASS" else "CONSUMABLE",
-				if spec.Kind == "GamePass" then C_STEEL else C_OXBLOOD_DARK,
-				UDim2.new(0, 218, 0, 10),
-				UDim2.fromOffset(102, 16)
-			)
-
-			local nameLbl = Instance.new("TextLabel")
-			nameLbl.Position = UDim2.new(0, 104, 0, 30)
-			nameLbl.Size = UDim2.new(1, -270, 0, 20)
-			nameLbl.BackgroundTransparency = 1
-			nameLbl.Font = Enum.Font.GothamBlack
-			nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-			nameLbl.TextSize = 14
-			nameLbl.TextColor3 = C_TEXT_PRIMARY
-			nameLbl.Text = string.upper(spec.DisplayName)
-			nameLbl.Parent = card
-
-			local descLbl = Instance.new("TextLabel")
-			descLbl.Position = UDim2.new(0, 104, 0, 52)
-			descLbl.Size = UDim2.new(1, -270, 0, 42)
-			descLbl.BackgroundTransparency = 1
-			descLbl.Font = Enum.Font.Gotham
-			descLbl.TextWrapped = true
-			descLbl.TextXAlignment = Enum.TextXAlignment.Left
-			descLbl.TextYAlignment = Enum.TextYAlignment.Top
-			descLbl.TextSize = 11
-			descLbl.TextColor3 = C_TEXT_MUTED
-			descLbl.Text = spec.Description
-			descLbl.Parent = card
-
-			local btn = makeBtn(
-				card,
+			local themeCol = if isOwned then C_OWNED else colors[((idx - 1) % #colors) + 1]
+			makeStoreCollectibleCard(
+				vipGrid,
+				idx,
+				themeCol,
+				string.upper(spec.Badge),
+				if spec.Kind == "GamePass" then "PERMANENT" else "PACK",
+				string.upper(spec.DisplayName),
+				spec.Description,
+				"Premium",
+				itemId,
 				if isOwned then "OWNED" else string.format("R$ %d", spec.RobuxPrice),
 				if isOwned then C_DISABLED else C_ROBUX,
-				UDim2.new(1, -158, 0.5, -18),
-				UDim2.fromOffset(146, 36),
 				function()
 					if not isOwned and dispatchAction then
 						local kindTxt = if spec.Kind == "GamePass" then "Permanent Game Pass" else "Repeatable Developer Product"
@@ -2557,10 +3133,6 @@ local function renderBlackMarketPremium(state: { [string]: any }): ()
 					end
 				end
 			)
-			if not isOwned then
-				local st = btn:FindFirstChildOfClass("UIStroke")
-				if st then st.Color = C_BRASS end
-			end
 		end
 	end
 end
@@ -2585,39 +3157,63 @@ local function renderBlackMarket(state: { [string]: any }): ()
 	wLbl.Parent = warpCard
 
 	local visitBtn = makeBtn(warpCard, "VISIT OUTPOST", C_BG_SUBTLE, UDim2.new(1, -162, 0.5, -16), UDim2.fromOffset(150, 32), function()
-		if modalFrame then modalFrame.Visible = false end
+		EmpireMenuController.Close()
 		if dispatchAction then dispatchAction("TeleportBlackMarket", nil) end
 	end)
 	visitBtn.TextSize = 11
 
-	-- 4 Clean Sub-Category Tabs
+	-- 5 Category Sub-Tabs with Real 3D Icons (Real Gun, Brass Ammo, Bodyguard, Real Ninja & Robux Gem!)
 	local subBar = Instance.new("Frame")
-	subBar.Size = UDim2.new(1, -6, 0, 34)
+	subBar.Name = "BMSubTabBar"
+	subBar.Size = UDim2.new(1, -6, 0, 38)
 	subBar.BackgroundTransparency = 1
 	subBar.Parent = scrollFrame
 	local sl = Instance.new("UIListLayout")
 	sl.FillDirection = Enum.FillDirection.Horizontal
-	sl.Padding = UDim.new(0, 6)
+	sl.SortOrder = Enum.SortOrder.LayoutOrder
+	sl.Padding = UDim.new(0, 5)
 	sl.Parent = subBar
 
-	local subTabs: { { Id: BlackMarketSubTab, Label: string, ActiveCol: Color3 } } = {
-		{ Id = "Weapons", Label = "WEAPONS", ActiveCol = C_OXBLOOD },
-		{ Id = "Ammo", Label = "AMMO", ActiveCol = C_STEEL },
-		{ Id = "Bodyguards", Label = "GUARDS", ActiveCol = C_OXBLOOD },
-		{ Id = "Mercenaries", Label = "MAFIA HIRE", ActiveCol = C_OXBLOOD },
-		{ Id = "Premium", Label = "R$ VIP", ActiveCol = C_ROBUX },
+	local subTabs: { { Id: BlackMarketSubTab, Label: string, ActiveCol: Color3, Icon: "Gun" | "Ammo" | "Guard" | "Ninja" | "Robux" } } = {
+		{ Id = "Weapons", Label = "WEAPONS", ActiveCol = C_OXBLOOD, Icon = "Gun" },
+		{ Id = "Ammo", Label = "AMMO", ActiveCol = C_STEEL, Icon = "Ammo" },
+		{ Id = "Bodyguards", Label = "GUARDS", ActiveCol = C_OXBLOOD, Icon = "Guard" },
+		{ Id = "Mercenaries", Label = "MAFIA HIRE", ActiveCol = C_OXBLOOD, Icon = "Ninja" },
+		{ Id = "Premium", Label = "R$ VIP", ActiveCol = C_ROBUX, Icon = "Robux" },
 	}
-	for _, st in ipairs(subTabs) do
+	for sIdx, st in ipairs(subTabs) do
 		local active = (currentBMSubTab == st.Id)
-		local btn = makeBtn(subBar, st.Label, if active then st.ActiveCol else C_BG_CARD_ALT, UDim2.new(), UDim2.new(0.20, -5, 0, 32), function()
+		local btn = makeBtn(subBar, if st.Icon == "Robux" then st.Label else "", if active then st.ActiveCol else C_BG_CARD_ALT, UDim2.new(), UDim2.new(0.20, -4, 0, 36), function()
+			AudioController.PlayClick()
 			currentBMSubTab = st.Id
 			render()
 		end)
+		btn.Name = "BMSubTab_" .. st.Id
+		btn.LayoutOrder = sIdx
 		btn.TextSize = 10
+		if st.Icon ~= "Robux" then
+			CurrencyIconHelper.CreateCategoryIcon(btn, st.Icon, 24, UDim2.new(0, 7, 0.5, -12), btn.ZIndex + 2)
+			local lbl = Instance.new("TextLabel")
+			lbl.Name = "SubTabLabel"
+			lbl.Position = UDim2.fromOffset(34, 0)
+			lbl.Size = UDim2.new(1, -38, 1, 0)
+			lbl.BackgroundTransparency = 1
+			lbl.Font = Enum.Font.GothamBlack
+			lbl.TextXAlignment = Enum.TextXAlignment.Left
+			lbl.TextTruncate = Enum.TextTruncate.AtEnd
+			lbl.Text = st.Label
+			lbl.TextSize = 10
+			lbl.TextColor3 = if active then Color3.new(1, 1, 1) else C_TEXT_PRIMARY
+			lbl.ZIndex = btn.ZIndex + 2
+			lbl.Active = false
+			lbl.Parent = btn
+			addTextOutline(lbl, 1.4)
+		end
 		if active then
 			local stroke = btn:FindFirstChildOfClass("UIStroke")
 			if stroke then
-				stroke.Color = if st.Id == "Premium" then C_BRASS else C_TEXT_PRIMARY
+				stroke.Color = if st.Id == "Premium" then C_GOLD_HI else C_BRASS
+				stroke.Thickness = 1.8
 			end
 		end
 	end
@@ -2640,226 +3236,516 @@ local function updateVisibleViewports(): ()
 	if not sf or not modalFrame or not modalFrame.Visible then
 		return
 	end
+	if sf.AbsoluteSize.Y <= 10 then
+		return
+	end
 	local viewTop = sf.AbsolutePosition.Y - 120
 	local viewBot = sf.AbsolutePosition.Y + sf.AbsoluteSize.Y + 120
-	for _, card in ipairs(sf:GetChildren()) do
-		if card:IsA("GuiObject") then
-			local vp = card:FindFirstChild("Preview3D")
-			if vp and vp:IsA("ViewportFrame") then
-				local cTop = card.AbsolutePosition.Y
-				local cBot = cTop + card.AbsoluteSize.Y
-				vp.Visible = (cBot >= viewTop) and (cTop <= viewBot)
+	local visibleCount = 0
+	for _, desc in ipairs(sf:GetDescendants()) do
+		if desc:IsA("ViewportFrame") then
+			-- Wait until layout has actually positioned this ViewportFrame (avoid false-culling at Y=0 on frame 0!)
+			if desc.AbsoluteSize.Y > 1 then
+				local cTop = desc.AbsolutePosition.Y
+				local cBot = cTop + desc.AbsoluteSize.Y
+				local inView = (cBot >= viewTop) and (cTop <= viewBot)
+				local wantVis = inView and visibleCount < 8
+				if wantVis then
+					visibleCount += 1
+				end
+				if desc.Visible ~= wantVis then
+					desc.Visible = wantVis
+					if wantVis and desc.CurrentCamera then
+						local cam = desc.CurrentCamera
+						desc.CurrentCamera = nil
+						desc.CurrentCamera = cam
+					end
+				end
 			end
 		end
 	end
 end
 
 render = function(): ()
-	if not modalFrame or not modalFrame.Visible or not latestState then
+	if not modalFrame or not modalFrame.Visible then
 		return
 	end
+	local state = latestState or {}
 	clearScroll()
 	refreshTabStyles()
-	if titleLabel and subtitleLabel then
-		local titleMap: { [MenuTab]: { T: string, S: string } } = {
-			Kitchen = { T = "KITCHEN OPERATIONS", S = "Cook recipes, fulfill customer orders, and review ledger receipts" },
-			Warehouses = { T = "WAREHOUSE STORAGE", S = "Manage district ingredient supply capacity and storage plots" },
-			Upgrades = { T = "SYNDICATE OPERATIONS", S = "Expand restaurant HQ, perimeter defenses, raiders, and transport" },
-			BlackMarket = { T = "BLACK MARKET EXCHANGE", S = "Firearms, caliber-matched ammunition, bodyguard detail, and exclusives" },
-			Shop = { T = "ROBUX EXCHANGE", S = "Optional permanent Game Passes and consumable supply crates" },
-		}
-		local entry = titleMap[currentTab] or { T = "FOOD EMPIRE", S = "" }
-		titleLabel.Text = entry.T
-		subtitleLabel.Text = entry.S
+	local prof = if typeof(state.Profile) == "table" then state.Profile else {}
+	if headerGoldValLbl then
+		headerGoldValLbl.Text = formatCommaInt(tonumber(prof.Coins) or 0)
+	end
+	if headerRankValLbl then
+		headerRankValLbl.Text = string.format("LV.%d  |  %s REP", tonumber(prof.Level) or 1, formatCommaInt(tonumber(prof.Reputation) or 0))
+	end
+	local curTheme = TAB_THEMES[currentTab]
+	if titleLabel and subtitleLabel and curTheme then
+		titleLabel.Text = curTheme.Title
+		subtitleLabel.Text = curTheme.Sub
 	end
 	if currentTab == "Kitchen" then
-		renderKitchen(latestState)
+		renderKitchen(state)
 	elseif currentTab == "Warehouses" then
-		renderWarehouses(latestState)
+		renderWarehouses(state)
 	elseif currentTab == "BlackMarket" then
-		renderBlackMarket(latestState)
+		renderBlackMarket(state)
 	elseif currentTab == "Shop" then
-		renderShop(latestState)
+		renderShop(state)
 	else
-		renderUpgrades(latestState)
+		renderUpgrades(state)
 	end
-	-- Cull offscreen 3D ViewportFrames so Roblox's GPU viewport atlas never drops top/visible icons!
-	updateVisibleViewports()
+	-- Wait for UIListLayout / UIGridLayout to compute positions before culling offscreen 3D ViewportFrames!
 	task.defer(updateVisibleViewports)
+	task.delay(0.10, updateVisibleViewports)
+	task.delay(0.30, updateVisibleViewports)
 end
 
-function EmpireMenuController.Init(parentGui: ScreenGui, onAction: ActionCallback): ()
+function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallback): ()
 	dispatchAction = onAction
 
+	-- Dedicated DisplayOrder = 40 ScreenGui (ZIndexBehavior = Sibling, IgnoreGuiInset = false so modal never collides with TopBar/Chat!)
+	local pg = Players.LocalPlayer:WaitForChild("PlayerGui")
+	local oldGui = pg:FindFirstChild("EmpireMenuGui")
+	if oldGui then oldGui:Destroy() end
+	local menuGui = Instance.new("ScreenGui")
+	menuGui.Name = "EmpireMenuGui"
+	menuGui.DisplayOrder = 40
+	menuGui.IgnoreGuiInset = false
+	menuGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+	menuGui.ResetOnSpawn = false
+	menuGui.Parent = pg
+
+	local dim = Instance.new("Frame")
+	dim.Name = "EmpireMenuBackdrop"
+	dim.Position = UDim2.fromOffset(0, -64)
+	dim.Size = UDim2.new(1, 0, 1, 128)
+	dim.BackgroundColor3 = Color3.fromRGB(6, 9, 16)
+	dim.BackgroundTransparency = 0.38
+	dim.BorderSizePixel = 0
+	dim.Active = false
+	dim.Visible = false
+	dim.ZIndex = 1
+	dim.Parent = menuGui
+	backdropFrame = dim
+
+	-- FRONT-PAGE ROBLOX GAME WINDOW CHASSIS (Left Game Sidebar + Right Dynamic Showcase Stage!)
 	local modal = Instance.new("Frame")
 	modal.Name = "EmpireMenuModal"
 	modal.AnchorPoint = Vector2.new(0.5, 0.5)
-	modal.Position = UDim2.fromScale(0.5, 0.43)
-	modal.Size = UDim2.fromScale(0.84, 0.68)
+	modal.Position = UDim2.fromScale(0.5, 0.51)
+	modal.Size = UDim2.fromScale(0.88, 0.82)
 	modal.BackgroundColor3 = C_BG_MODAL
 	modal.BorderSizePixel = 0
 	modal.Visible = false
-	modal.Parent = parentGui
-	makeCorner(modal, 8)
-	makeStroke(modal, C_BORDER_STRONG, 1.2)
+	modal.ClipsDescendants = true
+	modal.ZIndex = 2
+	modal.Parent = menuGui
+	makeCorner(modal, 14)
+	makeStroke(modal, C_OUTLINE_DARK, 3.2)
 	local sizeCon = Instance.new("UISizeConstraint")
-	sizeCon.MinSize = Vector2.new(560, 340)
-	sizeCon.MaxSize = Vector2.new(740, 464)
+	sizeCon.MinSize = Vector2.new(680, 420)
+	sizeCon.MaxSize = Vector2.new(940, 570)
 	sizeCon.Parent = modal
 	modalFrame = modal
 
-	-- Restrained top oxblood accent hairline
-	local topAccent = Instance.new("Frame")
-	topAccent.Size = UDim2.new(1, 0, 0, 2)
-	topAccent.BackgroundColor3 = C_OXBLOOD
-	topAccent.BorderSizePixel = 0
-	topAccent.Parent = modal
+	-- Thick 3D Bottom Chassis Shadow Bar
+	local chassisBottomLip = Instance.new("Frame")
+	chassisBottomLip.AnchorPoint = Vector2.new(0, 1)
+	chassisBottomLip.Position = UDim2.fromScale(0, 1)
+	chassisBottomLip.Size = UDim2.new(1, 0, 0, 6)
+	chassisBottomLip.BackgroundColor3 = C_OUTLINE_DARK
+	chassisBottomLip.BackgroundTransparency = 0.25
+	chassisBottomLip.BorderSizePixel = 0
+	chassisBottomLip.Active = false
+	chassisBottomLip.ZIndex = 20
+	chassisBottomLip.Parent = modal
 
-	local header = Instance.new("TextLabel")
-	header.Position = UDim2.new(0, 18, 0, 10)
-	header.Size = UDim2.new(1, -80, 0, 22)
-	header.BackgroundTransparency = 1
-	header.Font = Enum.Font.GothamBlack
-	header.Text = "FOOD EMPIRE"
-	header.TextSize = 16
-	header.TextXAlignment = Enum.TextXAlignment.Left
-	header.TextColor3 = C_TEXT_PRIMARY
-	header.Parent = modal
-	titleLabel = header
+	-- =========================================================================
+	-- LEFT VERTICAL GAME NAVIGATION SIDEBAR (184px wide with Real 3D Category Icons!)
+	-- =========================================================================
+	local sidebar = Instance.new("Frame")
+	sidebar.Name = "GameNavSidebar"
+	sidebar.Position = UDim2.new(0, 0, 0, 0)
+	sidebar.Size = UDim2.new(0, 184, 1, 0)
+	sidebar.BackgroundColor3 = C_BG_SIDEBAR
+	sidebar.BorderSizePixel = 0
+	sidebar.ZIndex = 4
+	sidebar.Parent = modal
 
-	local sub = Instance.new("TextLabel")
-	sub.Position = UDim2.new(0, 18, 0, 31)
-	sub.Size = UDim2.new(1, -80, 0, 15)
-	sub.BackgroundTransparency = 1
-	sub.Font = Enum.Font.Gotham
-	sub.Text = ""
-	sub.TextSize = 11
-	sub.TextXAlignment = Enum.TextXAlignment.Left
-	sub.TextColor3 = C_TEXT_DIM
-	sub.Parent = modal
-	subtitleLabel = sub
+	local sideDivider = Instance.new("Frame")
+	sideDivider.AnchorPoint = Vector2.new(1, 0)
+	sideDivider.Position = UDim2.fromScale(1, 0)
+	sideDivider.Size = UDim2.new(0, 2, 1, 0)
+	sideDivider.BackgroundColor3 = C_BORDER
+	sideDivider.BorderSizePixel = 0
+	sideDivider.Parent = sidebar
 
-	local closeBtn = makeBtn(modal, "X", C_BG_CARD_ALT, UDim2.new(1, -46, 0, 12), UDim2.fromOffset(32, 30), function()
-		hideConfirmDialog()
-		modal.Visible = false
-	end)
-	closeBtn.TextSize = 13
+	-- Bold Game Logo Emblem at Top-Left of Sidebar (Y = 12..62)
+	local brandCard = Instance.new("Frame")
+	brandCard.Position = UDim2.fromOffset(12, 12)
+	brandCard.Size = UDim2.new(1, -24, 0, 50)
+	brandCard.BackgroundColor3 = Color3.fromRGB(28, 38, 62)
+	brandCard.BorderSizePixel = 0
+	brandCard.Parent = sidebar
+	makeCorner(brandCard, 10)
+	makeStroke(brandCard, C_BRASS, 2.0)
 
-	-- Clean 5-Section Top Navigation Bar
+	local bGrad = Instance.new("UIGradient")
+	bGrad.Rotation = 135
+	bGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(245, 168, 28)),
+		ColorSequenceKeypoint.new(0.45, Color3.fromRGB(168, 32, 48)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(24, 32, 54)),
+	})
+	bGrad.Parent = brandCard
+
+	local brandTop = Instance.new("TextLabel")
+	brandTop.Position = UDim2.fromOffset(0, 5)
+	brandTop.Size = UDim2.new(1, 0, 0, 22)
+	brandTop.BackgroundTransparency = 1
+	brandTop.Font = Enum.Font.GothamBlack
+	brandTop.Text = "FOOD EMPIRE"
+	brandTop.TextSize = 16
+	brandTop.TextColor3 = Color3.new(1, 1, 1)
+	brandTop.Parent = brandCard
+	addTextOutline(brandTop, 2.0)
+
+	local brandSub = Instance.new("TextLabel")
+	brandSub.Position = UDim2.fromOffset(0, 28)
+	brandSub.Size = UDim2.new(1, 0, 0, 16)
+	brandSub.BackgroundTransparency = 1
+	brandSub.Font = Enum.Font.GothamBlack
+	brandSub.Text = "SYNDICATE HQ"
+	brandSub.TextSize = 10
+	brandSub.TextColor3 = C_GOLD_HI
+	brandSub.Parent = brandCard
+	addTextOutline(brandSub, 1.4)
+
+	-- Live Player Wallet Card directly under Logo (Y = 70..158) — keeps ALL 5 nav buttons safely BELOW CoreGui ExperienceChat's top-left hitbox!
+	local walletCard = Instance.new("Frame")
+	walletCard.Name = "SidebarWalletCard"
+	walletCard.Position = UDim2.fromOffset(12, 70)
+	walletCard.Size = UDim2.new(1, -24, 0, 88)
+	walletCard.BackgroundColor3 = Color3.fromRGB(22, 30, 48)
+	walletCard.BorderSizePixel = 0
+	walletCard.Parent = sidebar
+	makeCorner(walletCard, 10)
+	makeStroke(walletCard, C_BRASS, 1.8)
+
+	local wLabel = Instance.new("TextLabel")
+	wLabel.Position = UDim2.fromOffset(10, 6)
+	wLabel.Size = UDim2.new(1, -20, 0, 14)
+	wLabel.BackgroundTransparency = 1
+	wLabel.Font = Enum.Font.GothamBlack
+	wLabel.TextXAlignment = Enum.TextXAlignment.Left
+	wLabel.Text = "YOUR BALANCE"
+	wLabel.TextSize = 9
+	wLabel.TextColor3 = C_TEXT_DIM
+	wLabel.Parent = walletCard
+
+	local goldPill = Instance.new("Frame")
+	goldPill.Name = "HeaderGoldPill"
+	goldPill.Position = UDim2.fromOffset(8, 22)
+	goldPill.Size = UDim2.new(1, -16, 0, 32)
+	goldPill.BackgroundColor3 = Color3.fromRGB(34, 26, 12)
+	goldPill.BorderSizePixel = 0
+	goldPill.Parent = walletCard
+	makeCorner(goldPill, 7)
+	makeStroke(goldPill, C_GOLD_HI, 1.6)
+	CurrencyIconHelper.CreateGoldCoin(goldPill, 22, UDim2.new(0, 7, 0.5, -11), 4)
+	local gVal = Instance.new("TextLabel")
+	gVal.Position = UDim2.new(0, 34, 0, 0)
+	gVal.Size = UDim2.new(1, -38, 1, 0)
+	gVal.BackgroundTransparency = 1
+	gVal.Font = Enum.Font.GothamBlack
+	gVal.TextXAlignment = Enum.TextXAlignment.Left
+	gVal.Text = "0"
+	gVal.TextSize = 15
+	gVal.TextColor3 = C_GOLD_HI
+	gVal.Parent = goldPill
+	addTextOutline(gVal, 1.6)
+	headerGoldValLbl = gVal
+
+	local rankPill = Instance.new("TextLabel")
+	rankPill.Name = "HeaderRankPill"
+	rankPill.Position = UDim2.fromOffset(8, 60)
+	rankPill.Size = UDim2.new(1, -16, 0, 20)
+	rankPill.BackgroundColor3 = Color3.fromRGB(16, 22, 36)
+	rankPill.Font = Enum.Font.GothamBlack
+	rankPill.Text = "LV.1  |  0 REP"
+	rankPill.TextSize = 10
+	rankPill.TextColor3 = C_TEXT_PRIMARY
+	rankPill.Parent = walletCard
+	makeCorner(rankPill, 5)
+	makeStroke(rankPill, C_BORDER, 1.2)
+	headerRankValLbl = rankPill
+
+	-- 5 Chunky Tactile 3D Sidebar Nav Buttons (Y = 170..430 — 100% clear of CoreGui Chat & TopBar at EVERY resolution!)
 	local tabBar = Instance.new("Frame")
 	tabBar.Name = "TabBar"
-	tabBar.Position = UDim2.new(0, 16, 0, 54)
-	tabBar.Size = UDim2.new(1, -32, 0, 32)
+	tabBar.Position = UDim2.fromOffset(12, 170)
+	tabBar.Size = UDim2.new(1, -24, 1, -182)
 	tabBar.BackgroundTransparency = 1
-	tabBar.Parent = modal
+	tabBar.Parent = sidebar
 
 	local tabLayout = Instance.new("UIListLayout")
-	tabLayout.FillDirection = Enum.FillDirection.Horizontal
-	tabLayout.Padding = UDim.new(0, 6)
+	tabLayout.FillDirection = Enum.FillDirection.Vertical
+	tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	tabLayout.Padding = UDim.new(0, 9)
 	tabLayout.Parent = tabBar
 
-	local tabs: { { Id: MenuTab, Label: string } } = {
-		{ Id = "Kitchen", Label = "KITCHEN" },
-		{ Id = "Warehouses", Label = "STORAGE" },
-		{ Id = "Upgrades", Label = "EMPIRE" },
-		{ Id = "BlackMarket", Label = "BLACK MARKET" },
-		{ Id = "Shop", Label = "ROBUX STORE" },
+	local tabs: { { Id: MenuTab, Label: string, Icon: "Food" | "Fruit" | "Empire" | "Gun" | "Robux" } } = {
+		{ Id = "Kitchen", Label = "KITCHEN", Icon = "Food" },
+		{ Id = "Warehouses", Label = "STORAGE", Icon = "Fruit" },
+		{ Id = "Upgrades", Label = "EMPIRE", Icon = "Empire" },
+		{ Id = "BlackMarket", Label = "BLACK MARKET", Icon = "Gun" },
+		{ Id = "Shop", Label = "ROBUX STORE", Icon = "Robux" },
 	}
-	for _, t in ipairs(tabs) do
-		local tb = makeBtn(tabBar, t.Label, C_BG_CARD, UDim2.new(), UDim2.new(0.2, -5, 0, 30), function()
+	table.clear(tabButtons)
+	table.clear(tabLabels)
+	table.clear(tabActiveBars)
+	for tIdx, t in ipairs(tabs) do
+		local tb = makeBtn(tabBar, "", C_BG_CARD, UDim2.new(), UDim2.new(1, 0, 0, 44), function()
+			AudioController.PlayClick()
 			hideConfirmDialog()
 			if currentTab ~= t.Id and scrollFrame then
 				scrollFrame.CanvasPosition = Vector2.new(0, 0)
 			end
 			currentTab = t.Id
+			lastRenderedTabSig = ""
 			render()
 		end)
-		tb.TextSize = 11
+		tb.Name = "SidebarTab_" .. t.Id
+		tb.LayoutOrder = tIdx
+
+		local activeBar = Instance.new("Frame")
+		activeBar.Position = UDim2.fromOffset(4, 7)
+		activeBar.Size = UDim2.new(0, 4, 1, -18)
+		activeBar.BackgroundColor3 = Color3.new(1, 1, 1)
+		activeBar.BorderSizePixel = 0
+		activeBar.Active = false
+		activeBar.Visible = false
+		activeBar.ZIndex = 5
+		activeBar.Parent = tb
+		makeCorner(activeBar, 3)
+
+		-- Real Vector Category Icon Badge on the left of every Sidebar button (0 ViewportFrame GPU slots!)
+		CurrencyIconHelper.CreateCategoryIcon(
+			tb,
+			t.Icon,
+			if t.Icon == "Robux" then 24 else 30,
+			if t.Icon == "Robux" then UDim2.new(0, 14, 0.5, -12) else UDim2.new(0, 11, 0.5, -15),
+			4
+		)
+
+		local tLbl = Instance.new("TextLabel")
+		tLbl.Name = "TabLabel"
+		tLbl.Position = UDim2.fromOffset(46, 0)
+		tLbl.Size = UDim2.new(1, -50, 1, -3)
+		tLbl.BackgroundTransparency = 1
+		tLbl.Font = Enum.Font.GothamBlack
+		tLbl.TextXAlignment = Enum.TextXAlignment.Left
+		tLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		tLbl.Text = t.Label
+		tLbl.TextSize = 11
+		tLbl.TextColor3 = C_TEXT_MUTED
+		tLbl.Active = false
+		tLbl.ZIndex = 4
+		tLbl.Parent = tb
+		addTextOutline(tLbl, 1.6)
+
+		tabActiveBars[t.Id] = activeBar
+		tabLabels[t.Id] = tLbl
 		tabButtons[t.Id] = tb
 	end
 
-	-- Hairline Divider below tabs
-	local divider = Instance.new("Frame")
-	divider.Position = UDim2.new(0, 16, 0, 92)
-	divider.Size = UDim2.new(1, -32, 0, 1)
-	divider.BackgroundColor3 = C_BORDER
-	divider.BorderSizePixel = 0
-	divider.Parent = modal
+	-- =========================================================================
+	-- RIGHT DYNAMIC SHOWCASE STAGE (Vibrant Themed Header + Multi-Column Scroll Stage!)
+	-- =========================================================================
+	local stagePane = Instance.new("Frame")
+	stagePane.Name = "StagePane"
+	stagePane.Position = UDim2.fromOffset(184, 0)
+	stagePane.Size = UDim2.new(1, -184, 1, 0)
+	stagePane.BackgroundTransparency = 1
+	stagePane.ZIndex = 3
+	stagePane.Parent = modal
+
+	-- Dynamic Per-Tab Colored Header Banner with Diagonal Light Rays & Hero Category Icon!
+	local headBar = Instance.new("Frame")
+	headBar.Name = "StageHeaderBanner"
+	headBar.Size = UDim2.new(1, 0, 0, 72)
+	headBar.BackgroundColor3 = C_BRASS
+	headBar.BorderSizePixel = 0
+	headBar.ClipsDescendants = true
+	headBar.Parent = stagePane
+	stageHeaderBar = headBar
+
+	local hGrad = Instance.new("UIGradient")
+	hGrad.Rotation = 12
+	hGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, C_BRASS),
+		ColorSequenceKeypoint.new(0.65, Color3.fromRGB(128, 72, 16)),
+		ColorSequenceKeypoint.new(1, C_BG_MODAL),
+	})
+	hGrad.Parent = headBar
+	stageHeaderGrad = hGrad
+
+	-- Dynamic diagonal shine stripes across header
+	for sIdx = 1, 3 do
+		local ray = Instance.new("Frame")
+		ray.AnchorPoint = Vector2.new(0.5, 0.5)
+		ray.Position = UDim2.fromScale(0.25 + sIdx * 0.22, 0.5)
+		ray.Size = UDim2.new(0, 30, 2.2, 0)
+		ray.Rotation = 24
+		ray.BackgroundColor3 = Color3.new(1, 1, 1)
+		ray.BackgroundTransparency = 0.88
+		ray.BorderSizePixel = 0
+		ray.Parent = headBar
+	end
+
+	local headLine = Instance.new("Frame")
+	headLine.AnchorPoint = Vector2.new(0, 1)
+	headLine.Position = UDim2.fromScale(0, 1)
+	headLine.Size = UDim2.new(1, 0, 0, 3)
+	headLine.BackgroundColor3 = C_OUTLINE_DARK
+	headLine.BackgroundTransparency = 0.25
+	headLine.BorderSizePixel = 0
+	headLine.Parent = headBar
+
+	-- Glowing Category Hero Icon Medallion inside the Stage Header Banner!
+	local hIconSlot = Instance.new("Frame")
+	hIconSlot.Name = "StageHeaderIconSlot"
+	hIconSlot.Position = UDim2.fromOffset(14, 11)
+	hIconSlot.Size = UDim2.fromOffset(50, 50)
+	hIconSlot.BackgroundColor3 = Color3.fromRGB(14, 20, 34)
+	hIconSlot.BackgroundTransparency = 0.28
+	hIconSlot.BorderSizePixel = 0
+	hIconSlot.ZIndex = 3
+	hIconSlot.Parent = headBar
+	makeCorner(hIconSlot, 12)
+	makeStroke(hIconSlot, Color3.new(1, 1, 1), 1.6, 0.45)
+	stageHeaderIconSlot = hIconSlot
+	lastHeaderIconTab = nil
+
+	local header = Instance.new("TextLabel")
+	header.Position = UDim2.new(0, 74, 0, 10)
+	header.Size = UDim2.new(1, -142, 0, 30)
+	header.BackgroundTransparency = 1
+	header.Font = Enum.Font.GothamBlack
+	header.Text = "FOOD EMPIRE"
+	header.TextSize = 24
+	header.TextXAlignment = Enum.TextXAlignment.Left
+	header.TextColor3 = Color3.new(1, 1, 1)
+	header.Parent = headBar
+	addTextOutline(header, 2.4)
+	titleLabel = header
+
+	local sub = Instance.new("TextLabel")
+	sub.Position = UDim2.new(0, 74, 0, 42)
+	sub.Size = UDim2.new(1, -142, 0, 18)
+	sub.BackgroundTransparency = 1
+	sub.Font = Enum.Font.GothamBold
+	sub.Text = ""
+	sub.TextSize = 11
+	sub.TextXAlignment = Enum.TextXAlignment.Left
+	sub.TextColor3 = Color3.fromRGB(242, 246, 255)
+	sub.Parent = headBar
+	addTextOutline(sub, 1.3)
+	subtitleLabel = sub
+
+	-- Chunky 3D Bright-Red [X] Close Button!
+	local closeBtn = makeBtn(headBar, "X", Color3.fromRGB(225, 29, 64), UDim2.new(1, -54, 0.5, -20), UDim2.fromOffset(40, 40), function()
+		AudioController.PlayClick()
+		EmpireMenuController.Close()
+	end)
+	closeBtn.Name = "CloseMenuBtn"
+	closeBtn.TextSize = 18
 
 	local scroll = Instance.new("ScrollingFrame")
-	scroll.Position = UDim2.new(0, 16, 0, 100)
-	scroll.Size = UDim2.new(1, -32, 1, -112)
+	scroll.Position = UDim2.new(0, 14, 0, 82)
+	scroll.Size = UDim2.new(1, -24, 1, -96)
 	scroll.BackgroundTransparency = 1
 	scroll.BorderSizePixel = 0
 	scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
 	scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
-	scroll.ScrollBarThickness = 4
-	scroll.ScrollBarImageColor3 = C_BORDER_STRONG
-	scroll.Parent = modal
+	scroll.ScrollBarThickness = 6
+	scroll.ScrollBarImageColor3 = C_BRASS
+	scroll.Parent = stagePane
 
 	local layout = Instance.new("UIListLayout")
-	layout.Padding = UDim.new(0, 8)
+	layout.SortOrder = Enum.SortOrder.LayoutOrder
+	layout.Padding = UDim.new(0, 10)
 	layout.Parent = scroll
+	nextAutoOrder = 0
+	scroll.ChildAdded:Connect(function(ch: Instance)
+		if ch:IsA("GuiObject") and ch.LayoutOrder == 0 then
+			nextAutoOrder += 1
+			ch.LayoutOrder = nextAutoOrder
+		end
+	end)
 	scrollFrame = scroll
 	scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(updateVisibleViewports)
 	scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateVisibleViewports)
 
-	-- Restrained Confirmation Dialog Overlay (for expensive Gold >= 500G & Robux purchases)
+	-- Chunky Confirmation Dialog Overlay (for expensive Gold >= 500G & Robux purchases)
 	local overlay = Instance.new("Frame")
 	overlay.Name = "ConfirmPurchaseOverlay"
 	overlay.Size = UDim2.fromScale(1, 1)
-	overlay.BackgroundColor3 = Color3.fromRGB(6, 7, 10)
+	overlay.BackgroundColor3 = Color3.fromRGB(4, 6, 12)
 	overlay.BackgroundTransparency = 0.22
 	overlay.Visible = false
 	overlay.ZIndex = 40
 	overlay.Parent = modal
-	makeCorner(overlay, 8)
+	makeCorner(overlay, 14)
 	confirmOverlay = overlay
 
 	local dialog = Instance.new("Frame")
 	dialog.AnchorPoint = Vector2.new(0.5, 0.5)
 	dialog.Position = UDim2.fromScale(0.5, 0.5)
-	dialog.Size = UDim2.fromOffset(396, 206)
+	dialog.Size = UDim2.fromOffset(436, 224)
 	dialog.BackgroundColor3 = C_BG_CARD
 	dialog.ZIndex = 41
 	dialog.Parent = overlay
-	makeCorner(dialog, 6)
-	makeStroke(dialog, C_BRASS, 1.2)
+	makeCorner(dialog, 12)
+	makeStroke(dialog, C_GOLD_HI, 2.4)
 
 	local cTitle = Instance.new("TextLabel")
 	cTitle.Position = UDim2.new(0, 18, 0, 14)
-	cTitle.Size = UDim2.new(1, -36, 0, 22)
+	cTitle.Size = UDim2.new(1, -36, 0, 26)
 	cTitle.BackgroundTransparency = 1
 	cTitle.Font = Enum.Font.GothamBlack
 	cTitle.Text = "CONFIRM PURCHASE"
-	cTitle.TextSize = 14
+	cTitle.TextSize = 17
 	cTitle.TextXAlignment = Enum.TextXAlignment.Left
-	cTitle.TextColor3 = C_TEXT_PRIMARY
+	cTitle.TextColor3 = C_GOLD_HI
 	cTitle.ZIndex = 42
 	cTitle.Parent = dialog
+	addTextOutline(cTitle, 1.8)
 	confirmTitleLbl = cTitle
 
 	local cDesc = Instance.new("TextLabel")
 	cDesc.Position = UDim2.new(0, 18, 0, 44)
-	cDesc.Size = UDim2.new(1, -36, 0, 96)
+	cDesc.Size = UDim2.new(1, -36, 0, 104)
 	cDesc.BackgroundTransparency = 1
 	cDesc.Font = Enum.Font.Gotham
 	cDesc.TextWrapped = true
 	cDesc.TextXAlignment = Enum.TextXAlignment.Left
 	cDesc.TextYAlignment = Enum.TextYAlignment.Top
 	cDesc.TextSize = 12
-	cDesc.TextColor3 = C_TEXT_MUTED
+	cDesc.TextColor3 = C_TEXT_PRIMARY
 	cDesc.Text = ""
 	cDesc.ZIndex = 42
 	cDesc.Parent = dialog
 	confirmDescLbl = cDesc
 
-	local cancelBtn = makeBtn(dialog, "CANCEL", C_BG_SUBTLE, UDim2.new(0, 18, 1, -50), UDim2.fromOffset(172, 36), function()
+	local cancelBtn = makeBtn(dialog, "CANCEL", C_BG_SUBTLE, UDim2.new(0, 18, 1, -52), UDim2.fromOffset(182, 38), function()
 		hideConfirmDialog()
 	end)
 	cancelBtn.ZIndex = 42
 
-	local yesBtn = makeBtn(dialog, "CONFIRM", C_OXBLOOD, UDim2.new(1, -190, 1, -50), UDim2.fromOffset(172, 36), function()
+	local yesBtn = makeBtn(dialog, "CONFIRM", C_OXBLOOD, UDim2.new(1, -200, 1, -52), UDim2.fromOffset(182, 38), function()
 		local cb = pendingConfirmCallback
 		hideConfirmDialog()
 		if cb then cb() end
@@ -2868,8 +3754,84 @@ function EmpireMenuController.Init(parentGui: ScreenGui, onAction: ActionCallbac
 	confirmYesBtn = yesBtn
 end
 
+local function computeTabSignature(tab: MenuTab, state: { [string]: any }): string
+	local prof = if typeof(state.Profile) == "table" then state.Profile else {}
+	local base = string.format(
+		"%s|%d|%d|%d|%d",
+		tab,
+		tonumber(prof.Coins) or 0,
+		tonumber(prof.Level) or 1,
+		tonumber(prof.Reputation) or 0,
+		tonumber(prof.RestaurantLevel) or 1
+	)
+	if tab == "Warehouses" then
+		local wh = if typeof(state.Warehouse) == "table" then state.Warehouse else {}
+		local lv = if typeof(wh.Levels) == "table" then wh.Levels else {}
+		local tot = if typeof(wh.CategoryTotals) == "table" then wh.CategoryTotals else {}
+		return string.format(
+			"%s|W:%d,%d,%d,%d|%d,%d,%d,%d",
+			base,
+			tonumber(lv.Fish) or 0, tonumber(lv.Vegetable) or 0, tonumber(lv.Fruit) or 0, tonumber(lv.Meat) or 0,
+			tonumber(tot.Fish) or 0, tonumber(tot.Vegetable) or 0, tonumber(tot.Fruit) or 0, tonumber(tot.Meat) or 0
+		)
+	elseif tab == "Kitchen" then
+		local k = if typeof(state.Kitchen) == "table" then state.Kitchen else {}
+		local w = if typeof(state.WaitingCustomer) == "table" then state.WaitingCustomer else {}
+		local wh = if typeof(state.Warehouse) == "table" then state.Warehouse else {}
+		local tot = if typeof(wh.CategoryTotals) == "table" then wh.CategoryTotals else {}
+		local cr = if typeof(state.CityCraving) == "table" then tostring(state.CityCraving.RecipeId or "") else ""
+		local rc = if typeof(state.Receipts) == "table" then #state.Receipts else 0
+		return string.format(
+			"%s|K:%s|%s|%s|%s|%d|%s|%s|%s|%s|%d|%d,%d,%d,%d",
+			base,
+			tostring(k.IsCooking == true), tostring(k.IsCooking2 == true),
+			tostring(k.Boosted1 == true), tostring(k.Boosted2 == true),
+			tonumber(k.ReadyTotal) or 0,
+			tostring(w.CustomerName or ""), tostring(w.IsBeingCooked == true),
+			tostring(state.MenuPricing or ""), cr, rc,
+			tonumber(tot.Fish) or 0, tonumber(tot.Vegetable) or 0, tonumber(tot.Fruit) or 0, tonumber(tot.Meat) or 0
+		)
+	elseif tab == "Shop" then
+		local op = if typeof(state.OwnedPasses) == "table" then state.OwnedPasses else {}
+		local cnt = 0
+		for _, v in pairs(op) do if v then cnt += 1 end end
+		return string.format("%s|S:%d|%s", base, cnt, tostring(state.OwnsMotorbike == true))
+	elseif tab == "BlackMarket" then
+		local bm = if typeof(state.BlackMarket) == "table" then state.BlackMarket else {}
+		local ow = if typeof(bm.OwnedWeapons) == "table" then bm.OwnedWeapons else {}
+		local wCnt = 0
+		for _, v in pairs(ow) do if v then wCnt += 1 end end
+		local mc = if typeof(state.MercenaryMafia) == "table" then state.MercenaryMafia else {}
+		local bg = if typeof(state.Bodyguards) == "table" then state.Bodyguards else {}
+		local sq = if typeof(bg.ActiveSquad) == "table" then #bg.ActiveSquad else 0
+		return string.format(
+			"%s|BM:%s|%s|%d|%d|%s|%s|%s",
+			base, currentBMSubTab, currentWeaponFilter, wCnt, sq,
+			tostring(mc.Active == true), tostring(mc.MercType or ""), tostring(mc.TargetRestaurantId or "")
+		)
+	else
+		return string.format(
+			"%s|U:%d|%d|%d|%d|%s|%s|%s|%s|%s",
+			base,
+			tonumber(prof.DefenseLevel) or 1,
+			tonumber(prof.CrewCount) or 0,
+			tonumber(state.WaiterCount) or 0,
+			tonumber(state.CourierCount) or 0,
+			tostring(prof.HasDualStove == true),
+			tostring(prof.HasVIPBooths == true),
+			tostring(state.OwnsMotorbike == true),
+			tostring(state.OwnsMafiaSedan == true),
+			tostring(state.VehiclePaint or "")
+		)
+	end
+end
+
 function EmpireMenuController.Close(): ()
 	hideConfirmDialog()
+	lastRenderedTabSig = ""
+	if backdropFrame then
+		backdropFrame.Visible = false
+	end
 	if modalFrame then
 		modalFrame.Visible = false
 	end
@@ -2879,19 +3841,67 @@ function EmpireMenuController.ToggleTab(tab: MenuTab): ()
 	if not modalFrame then return end
 	hideConfirmDialog()
 	if modalFrame.Visible and currentTab == tab then
-		modalFrame.Visible = false
+		EmpireMenuController.Close()
 		return
 	end
 	if currentTab ~= tab and scrollFrame then
 		scrollFrame.CanvasPosition = Vector2.new(0, 0)
 	end
 	currentTab = tab
+	lastRenderedTabSig = ""
+	if backdropFrame then
+		backdropFrame.Visible = true
+	end
+	local wasHidden = not modalFrame.Visible
 	modalFrame.Visible = true
+	if wasHidden then
+		modalFrame.Size = UDim2.fromScale(0.83, 0.77)
+		TweenService:Create(modalFrame, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+			Size = UDim2.fromScale(0.88, 0.82),
+		}):Play()
+	end
+	if not latestState and dispatchAction then
+		task.spawn(dispatchAction, "GetState", nil)
+	end
 	render()
+	if latestState then
+		lastRenderedTabSig = computeTabSignature(currentTab, latestState)
+	end
 end
 
 function EmpireMenuController.Update(state: { [string]: any }): ()
 	latestState = state
+	if not modalFrame or not modalFrame.Visible then
+		return
+	end
+	-- Always refresh sidebar balance immediately without destroying buttons/Viewports!
+	local prof = if typeof(state.Profile) == "table" then state.Profile else {}
+	if headerGoldValLbl then
+		headerGoldValLbl.Text = formatCommaInt(tonumber(prof.Coins) or 0)
+	end
+	if headerRankValLbl then
+		headerRankValLbl.Text = string.format("LV.%d  |  %s REP", tonumber(prof.Level) or 1, formatCommaInt(tonumber(prof.Reputation) or 0))
+	end
+
+	-- Only rebuild ScrollingFrame when current tab's relevant state actually changed (prevents killing buttons mid-click or flickering Viewports!)
+	local sig = computeTabSignature(currentTab, state)
+	if sig == lastRenderedTabSig then
+		return
+	end
+	if UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+		if not deferredRenderQueued then
+			deferredRenderQueued = true
+			task.delay(0.18, function()
+				deferredRenderQueued = false
+				if latestState and modalFrame and modalFrame.Visible then
+					lastRenderedTabSig = computeTabSignature(currentTab, latestState)
+					render()
+				end
+			end)
+		end
+		return
+	end
+	lastRenderedTabSig = sig
 	render()
 end
 

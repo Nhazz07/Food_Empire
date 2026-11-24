@@ -48,6 +48,7 @@ type RestaurantRuntime = {
 	RevengeEndsAt: number,
 	NextRevengeAt: number,
 	NextPayoutAt: number,
+	ProvokedUntil: number,
 	Garrison: { GarrisonUnit },
 	RevengeSquad: { GarrisonUnit },
 	StatusLabel: TextLabel?,
@@ -307,6 +308,9 @@ local function buildApexUnit(rt: RestaurantRuntime, isBoss: boolean, isRevenge: 
 	model:SetAttribute("BountyGold", if isBoss then spec.BountyGold else math.floor(spec.BountyGold * 0.5))
 	model:SetAttribute("BountyExp", if isBoss then 140 else 75)
 	model:SetAttribute("BountyRep", if isBoss then 65 else 30)
+	model:SetAttribute("MafiaRestaurantId", rt.Spec.Id)
+	model:SetAttribute("UnderRevenge", isRevenge)
+	model:SetAttribute("Provoked", isRevenge)
 	CollectionService:AddTag(model, "ApexMafiaUnit")
 	CollectionService:AddTag(model, "AnimatedRaiderLimbs")
 	model.Parent = unitFolder or Workspace
@@ -320,6 +324,19 @@ local function buildApexUnit(rt: RestaurantRuntime, isBoss: boolean, isRevenge: 
 		LastShotAt = 0,
 		LastAttacker = nil,
 	}
+
+	local lastHp = hum.MaxHealth
+	hum.HealthChanged:Connect(function(hp: number)
+		if hp < lastHp and hp > 0 then
+			rt.ProvokedUntil = math.max(rt.ProvokedUntil, os.clock() + 35)
+			for _, g in ipairs(rt.Garrison) do
+				if g.Model.Parent then
+					g.Model:SetAttribute("Provoked", true)
+				end
+			end
+		end
+		lastHp = hp
+	end)
 
 	hum.Died:Connect(function()
 		MafiaVisualBuilder.PlayDeathSequence(model, isBoss, function(impactPos: Vector3)
@@ -606,27 +623,46 @@ function MafiaRestaurantService.GetSnapshot(player: Player): { [string]: any }
 	return list
 end
 
+local function hasPlayerStolenInCentralMarket(player: Player): boolean
+	local untilAttr = player:GetAttribute("StolenShipmentUntil")
+	if typeof(untilAttr) == "number" and untilAttr > os.clock() then
+		return true
+	end
+	return player:GetAttribute("CarryingCrate") ~= nil
+end
+
 local function stepApexUnit(rt: RestaurantRuntime, u: GarrisonUnit, now: number): ()
 	if not u.Model.Parent or u.Humanoid.Health <= 0 then return end
 	local stunUntil = u.Model:GetAttribute("StunnedUntil")
 	if typeof(stunUntil) == "number" and stunUntil > now then
 		return
 	end
+	local isProvoked = rt.UnderRevenge or (rt.ProvokedUntil > now)
+	if not isProvoked and u.Model:GetAttribute("Provoked") == true then
+		u.Model:SetAttribute("Provoked", false)
+	end
+
 	local myPos = u.Root.Position
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
 	local bestDist = 72
 
-	-- Engage attacking Mercenary Samurai/Ninja Mafia, Player Bodyguards, or nearby Players!
+	-- Central Market Truce: Restaurant garrisons inside Central Market NEVER randomly attack peaceful visitors!
+	-- They only engage if: (1) UnderRevenge raid, (2) Provoked/attacked first, or (3) Player STOLE a Central Market shipment!
 	for _, tagName in ipairs({ "MercenaryMafiaUnit", "PlayerBodyguardUnit" }) do
 		for _, ally in ipairs(CollectionService:GetTagged(tagName)) do
 			if ally:IsA("Model") then
-				local r = ally:FindFirstChild("HumanoidRootPart")
-				local h = ally:FindFirstChildOfClass("Humanoid")
-				if r and r:IsA("BasePart") and h and h.Health > 0 then
-					local d = (r.Position - myPos).Magnitude
-					if d < bestDist then
-						bestDist = d; bestHum = h; bestRoot = r
+				local ownerUid = ally:GetAttribute("OwnerUserId")
+				local ownerPlayer = if typeof(ownerUid) == "number" then Players:GetPlayerByUserId(ownerUid) else nil
+				local ownerStole = (ownerPlayer ~= nil and hasPlayerStolenInCentralMarket(ownerPlayer))
+				if isProvoked or ownerStole then
+					local r = ally:FindFirstChild("HumanoidRootPart")
+					local h = ally:FindFirstChildOfClass("Humanoid")
+					if r and r:IsA("BasePart") and h and h.Health > 0 then
+						local d = (r.Position - myPos).Magnitude
+						if d < bestDist then
+							bestDist = d; bestHum = h; bestRoot = r
+						end
 					end
 				end
 			end
@@ -634,15 +670,17 @@ local function stepApexUnit(rt: RestaurantRuntime, u: GarrisonUnit, now: number)
 	end
 
 	for _, p in ipairs(Players:GetPlayers()) do
-		local ch = p.Character
-		local r = if ch then ch:FindFirstChild("HumanoidRootPart") else nil
-		local h = if ch then ch:FindFirstChildOfClass("Humanoid") else nil
-		if r and r:IsA("BasePart") and h and h.Health > 0 then
-			local smokeUntil = p:GetAttribute("InSmokeUntil")
-			local maxSight = if typeof(smokeUntil) == "number" and smokeUntil > now then 16 else bestDist
-			local d = (r.Position - myPos).Magnitude
-			if d < maxSight then
-				bestDist = d; bestHum = h; bestRoot = r
+		if isProvoked or hasPlayerStolenInCentralMarket(p) then
+			local ch = p.Character
+			local r = if ch then ch:FindFirstChild("HumanoidRootPart") else nil
+			local h = if ch then ch:FindFirstChildOfClass("Humanoid") else nil
+			if r and r:IsA("BasePart") and h and h.Health > 0 then
+				local smokeUntil = p:GetAttribute("InSmokeUntil")
+				local maxSight = if typeof(smokeUntil) == "number" and smokeUntil > now then 16 else bestDist
+				local d = (r.Position - myPos).Magnitude
+				if d < maxSight then
+					bestDist = d; bestHum = h; bestRoot = r
+				end
 			end
 		end
 	end
@@ -655,6 +693,7 @@ local function stepApexUnit(rt: RestaurantRuntime, u: GarrisonUnit, now: number)
 		end
 		if bestDist <= 14 and isBladeSquad and rt.Spec.BladeStyle and (now - u.LastShotAt) >= 0.85 then
 			u.LastShotAt = now
+			MafiaVisualBuilder.TriggerAttackAnim(u.Model)
 			bestHum:TakeDamage(u.Damage)
 			local clashPoint = (myPos + bestRoot.Position) * 0.5 + Vector3.new(0, 1.5, 0)
 			local targetModel = bestRoot.Parent
@@ -665,6 +704,7 @@ local function stepApexUnit(rt: RestaurantRuntime, u: GarrisonUnit, now: number)
 			BlackMarketService.BroadcastSFX("MeleeHit", clashPoint)
 		elseif bestDist <= 68 and (now - u.LastShotAt) >= 0.95 then
 			u.LastShotAt = now
+			MafiaVisualBuilder.TriggerAttackAnim(u.Model)
 			bestHum:TakeDamage(u.Damage)
 			BlackMarketService.SpawnBulletTracer(myPos + Vector3.new(0, 1.5, 0), bestRoot.Position, Color3.fromRGB(224, 72, 64))
 			BlackMarketService.BroadcastSFX("SMGShot", myPos)
@@ -714,6 +754,7 @@ function MafiaRestaurantService.Start(): ()
 			RevengeEndsAt = 0,
 			NextRevengeAt = 0,
 			NextPayoutAt = 0,
+			ProvokedUntil = 0,
 			Garrison = {},
 			RevengeSquad = {},
 			StatusLabel = nil,

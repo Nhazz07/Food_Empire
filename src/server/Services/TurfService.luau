@@ -547,14 +547,26 @@ local function findBestEnemyTarget(agent: TurfAgent): (Humanoid?, BasePart?, Mod
 		end
 	end
 
-	-- 1. Players (Mafia turf Ninja/Samurai clans ALWAYS attack players who walk near their block!)
+	-- 1. Players (Mafia turf Ninja/Samurai clans ALWAYS defend their outer turf blocks,
+	--    but NEVER randomly attack peaceful visitors inside the Central Market unless they stole a shipment!)
+	local function isInCentralMarket(pos: Vector3): boolean
+		return math.abs(pos.X) <= 185 and math.abs(pos.Z) <= 185
+	end
+	local function hasStolenCentralMarket(p: Player): boolean
+		local u = p:GetAttribute("StolenShipmentUntil")
+		return (typeof(u) == "number" and u > os.clock()) or (p:GetAttribute("CarryingCrate") ~= nil)
+	end
+
 	for _, player in ipairs(Players:GetPlayers()) do
 		local pFaction = "Player_" .. tostring(player.UserId)
 		if pFaction ~= myFaction and player.Character then
-			local smokeUntil = player:GetAttribute("InSmokeUntil")
-			if typeof(smokeUntil) == "number" and smokeUntil > os.clock() then
-				local r = player.Character:FindFirstChild("HumanoidRootPart")
-				if r and r:IsA("BasePart") and (r.Position - myPos).Magnitude > 16 then
+			local r = player.Character:FindFirstChild("HumanoidRootPart")
+			if r and r:IsA("BasePart") then
+				if isMafia and isInCentralMarket(r.Position) and not hasStolenCentralMarket(player) then
+					continue
+				end
+				local smokeUntil = player:GetAttribute("InSmokeUntil")
+				if typeof(smokeUntil) == "number" and smokeUntil > os.clock() and (r.Position - myPos).Magnitude > 16 then
 					continue
 				end
 			end
@@ -573,6 +585,15 @@ local function findBestEnemyTarget(agent: TurfAgent): (Humanoid?, BasePart?, Mod
 					elseif typeof(ownerUid) == "number" then ("Player_" .. tostring(ownerUid))
 					else "Player_Unknown"
 				if resolvedFaction ~= myFaction then
+					if isMafia then
+						local ur = unit:FindFirstChild("HumanoidRootPart")
+						if ur and ur:IsA("BasePart") and isInCentralMarket(ur.Position) then
+							local ownerPlayer = if typeof(ownerUid) == "number" then Players:GetPlayerByUserId(ownerUid) else nil
+							if not (ownerPlayer and hasStolenCentralMarket(ownerPlayer)) then
+								continue
+							end
+						end
+					end
 					considerModel(unit, resolvedFaction)
 				end
 			end
@@ -624,6 +645,7 @@ local function stepAgentAI(agent: TurfAgent, now: number): ()
 
 		if enemyDist <= meleeRange and (now - agent.LastAttackAt) >= meleeCd then
 			agent.LastAttackAt = now
+			MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
 			local dmg = if agent.IsBoss then 26 elseif isBladeMafia then 18 else 14
 			enemyHum:TakeDamage(dmg)
 			if isBladeMafia and agent.BladeStyle then
@@ -638,6 +660,7 @@ local function stepAgentAI(agent: TurfAgent, now: number): ()
 			end
 		elseif enemyDist > meleeRange and enemyDist <= shootRange and (now - agent.LastAttackAt) >= rangedCd then
 			agent.LastAttackAt = now
+			MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
 			local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
 			local tracerCol = if isNinja then Color3.fromRGB(178, 192, 218) elseif isBladeMafia then Color3.fromRGB(214, 62, 68) else TurfConfig.ResolveFactionColor(agent.FactionId)
 			BlackMarketService.SpawnBulletTracer(fromPos, enemyRoot.Position, tracerCol)

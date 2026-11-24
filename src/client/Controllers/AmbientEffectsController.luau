@@ -30,6 +30,9 @@ function AmbientEffectsController.Start(): ()
 	local kitchenBasePivots: { [Model]: CFrame } = {}
 	local dyingDustPlayed: { [Model]: boolean } = {}
 	local dyingOrigTrans: { [Model]: { { Obj: BasePart | Decal, BaseT: number } } } = {}
+	local npcPrevHealth: { [Model]: number } = {}
+	local npcFlinchStart: { [Model]: number } = {}
+	local npcFlinchSide: { [Model]: number } = {}
 	local cachedSailboats = false
 	local searchCooldown = 0
 	local elapsed = 0
@@ -438,7 +441,24 @@ function AmbientEffectsController.Start(): ()
 
 						local diningPose = unit:GetAttribute("DiningPose")
 						local waiterState = unit:GetAttribute("WaiterState")
+						local combatStyle = unit:GetAttribute("CombatStyle")
+						local lastAttackAttr = unit:GetAttribute("LastAttackAt")
+						local comboStep = tonumber(unit:GetAttribute("AttackCombo")) or 1
 						local phaseSeed = (string.byte(unit.Name, -1) or 1) * 0.75
+						local serverNowLocal = Workspace:GetServerTimeNow()
+
+						-- Client-side Hit-Stagger Flinch detection (visibly jolts any Rival or Comrade when hit!)
+						if hum and typeof(combatStyle) == "string" then
+							local prevHp = npcPrevHealth[unit]
+							if prevHp ~= nil and hum.Health < prevHp - 0.5 then
+								npcFlinchStart[unit] = elapsed
+								npcFlinchSide[unit] = if math.random() < 0.5 then -1 else 1
+							end
+							npcPrevHealth[unit] = hum.Health
+						end
+						local flinchT = if npcFlinchStart[unit] then (elapsed - npcFlinchStart[unit]) else 99
+						local attackElapsed = if typeof(lastAttackAttr) == "number" then math.max(0, serverNowLocal - lastAttackAttr) else 99
+						local inCombatRecent = (attackElapsed < 3.6)
 
 						if diningPose == "SeatedWaiting" or diningPose == "Eating" then
 							-- Authentic R15 Seated Dining Pose (bent hips & knees on chair!)
@@ -496,6 +516,141 @@ function AmbientEffectsController.Start(): ()
 							if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(-14), 0, math.rad(-10)) end
 							if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(48), 0, 0) end
 							if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(-8), 0, 0) end
+						elseif typeof(combatStyle) == "string" and (attackElapsed < 0.44 or flinchT < 0.24) then
+							-- =====================================================================
+							-- REALISTIC 60 FPS FIGHTING CHOREOGRAPHY (3-Hit Combos, Recoil & Flinch!)
+							-- =====================================================================
+							-- Keep legs actively striding if moving during combat, or planted in athletic combat stance!
+							if speed > 0.8 then
+								local freq = math.clamp(speed * 0.58, 7.6, 14.2)
+								local ph = elapsed * freq
+								local stride = math.sin(ph) * math.rad(38)
+								if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.Angles(-stride, 0, 0) end
+								if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.Angles(stride, 0, 0) end
+								if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.Angles(-math.max(0, math.cos(ph)) * math.rad(48), 0, 0) end
+								if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.Angles(-math.max(0, -math.cos(ph)) * math.rad(48), 0, 0) end
+							else
+								-- Athletic planted combat lunge stance (bent knees, front foot forward!)
+								if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.Angles(math.rad(22), 0, math.rad(-6)) end
+								if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.Angles(math.rad(-18), 0, math.rad(6)) end
+								if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.Angles(math.rad(-26), 0, 0) end
+								if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.Angles(math.rad(-20), 0, 0) end
+							end
+
+							if flinchT < 0.24 and attackElapsed >= 0.30 then
+								-- Visceral Hit-Stagger Flinch!
+								local fu = math.sin(math.clamp(flinchT / 0.24, 0, 1) * math.pi)
+								local fSide = npcFlinchSide[unit] or 1
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(16 * fu), math.rad(fSide * 18 * fu), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(18 * fu), math.rad(-fSide * 14 * fu), 0) end
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(24 * fu), 0, math.rad(-26 * fu)) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(34 * fu), 0, math.rad(26 * fu)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(48), 0, 0) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(48), 0, 0) end
+							elseif combatStyle == "Katana" then
+								-- SAMURAI 3-HIT IAIJUTSU KATANA COMBO!
+								local u = math.clamp(attackElapsed / 0.42, 0, 1)
+								local strike = if u < 0.24 then -(u / 0.24) else math.sin(((u - 0.24) / 0.76) * math.pi)
+								if comboStep == 1 then
+									-- Combo 1: Kesa-Giri Overhead Diagonal Cleave
+									local rPitch = if u < 0.24 then (85 + 75 * (u / 0.24)) else (160 - 155 * easeOutCubic((u - 0.24) / 0.76))
+									if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(rPitch), math.rad(-22 * strike), math.rad(22 - 36 * strike)) end
+									if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(26 + 24 * (1 - u)), 0, 0) end
+									if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(rPitch * 0.72), math.rad(32), math.rad(-14)) end
+									if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(48), 0, 0) end
+									if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-14 * strike), math.rad(32 * strike - 16), 0) end
+									if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(8), math.rad(-24 * strike + 10), 0) end
+								elseif comboStep == 2 then
+									-- Combo 2: Gyaku-Kiri Wide Horizontal Reverse Slash
+									local sweep = math.sin(u * math.pi)
+									local yaw = -58 + 128 * easeOutCubic(u)
+									if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(78), math.rad(yaw * 0.65), math.rad(42 - 74 * u)) end
+									if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(22), 0, 0) end
+									if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(64), math.rad(yaw * 0.45 + 24), math.rad(-18)) end
+									if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(42), 0, 0) end
+									if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-10 * sweep), math.rad(yaw * 0.55), 0) end
+									if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(6), math.rad(-yaw * 0.42), 0) end
+								else
+									-- Combo 3: Deep Lunge Thrust Execution
+									local thrust = math.sin(u * math.pi)
+									if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(92 + 12 * thrust), math.rad(-16 * thrust), math.rad(6)) end
+									if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(46 - 40 * thrust), 0, 0) end
+									if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(78), math.rad(36), math.rad(-14)) end
+									if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(54 - 28 * thrust), 0, 0) end
+									if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-22 * thrust), math.rad(28 * thrust), 0) end
+									if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(14 * thrust), math.rad(-22 * thrust), 0) end
+								end
+							elseif combatStyle == "DualNinja" then
+								-- NINJA ASSASSIN 3-HIT DUAL-TANTO FLURRY!
+								local u = math.clamp(attackElapsed / 0.36, 0, 1)
+								local whip = math.sin(u * math.pi)
+								if comboStep == 1 then
+									-- Rapid Right Cross-Slash
+									if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(124 - 110 * u), math.rad(-42 * whip), math.rad(36 - 68 * u)) end
+									if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(32), 0, 0) end
+									if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(-24), 0, math.rad(-24)) end
+									if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(56), 0, 0) end
+									if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-20), math.rad(38 * whip), 0) end
+									if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(16), math.rad(-32 * whip), 0) end
+								elseif comboStep == 2 then
+									-- Rapid Left Counter-Slash
+									if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(124 - 110 * u), math.rad(42 * whip), math.rad(-36 + 68 * u)) end
+									if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(32), 0, 0) end
+									if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(-24), 0, math.rad(24)) end
+									if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(56), 0, 0) end
+									if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-20), math.rad(-38 * whip), 0) end
+									if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(16), math.rad(32 * whip), 0) end
+								else
+									-- Twin X-Slash Execution (both tanto cross inward then blast wide open!)
+									local open = easeOutCubic(u)
+									if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(110 - 54 * open), math.rad(-34 + 68 * open), math.rad(-26 + 86 * open)) end
+									if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(110 - 54 * open), math.rad(34 - 68 * open), math.rad(26 - 86 * open)) end
+									if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(38 - 18 * open), 0, 0) end
+									if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(38 - 18 * open), 0, 0) end
+									if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-24 + 14 * open), 0, 0) end
+									if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(18 - 10 * open), 0, 0) end
+								end
+							elseif combatStyle == "Melee" then
+								-- Heavy Street Cleaver / Spatula Overhead Smash
+								local u = math.clamp(attackElapsed / 0.42, 0, 1)
+								local rPitch = if u < 0.25 then (70 + 86 * (u / 0.25)) else (156 - 148 * easeOutCubic((u - 0.25) / 0.75))
+								local whip = math.sin(u * math.pi)
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(rPitch), math.rad(-14 * whip), math.rad(14)) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(32), 0, 0) end
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(-12 + 24 * whip), 0, math.rad(-18)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(46), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-14 * whip), math.rad(26 * whip), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(8), math.rad(-18 * whip), 0) end
+							else
+								-- REALISTIC FIREARM AIM & RECOIL KICK (Rifle / Pistol / Shield!)
+								local u = math.clamp(attackElapsed / 0.34, 0, 1)
+								local kick = math.sin(math.min(1, u * 3.2) * math.pi) * math.exp(-3.4 * u)
+								if combatStyle == "Shield" then
+									-- Ballistic Shield braced defensively forward while Shotgun fires over rim!
+									if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(68), math.rad(42), math.rad(-10)) end
+									if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(48), 0, 0) end
+									if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(86 + 24 * kick), math.rad(-8), math.rad(6)) end
+									if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(18 + 18 * kick), 0, 0) end
+									if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-6 + 10 * kick), math.rad(-18), 0) end
+									if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(4 + 6 * kick), math.rad(16), 0) end
+								elseif combatStyle == "Pistol" then
+									-- Two-Handed Weaver Pistol Stance with snappy wrist/shoulder kick!
+									if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(88 + 20 * kick), math.rad(-14), math.rad(4)) end
+									if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(12 + 16 * kick), 0, 0) end
+									if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(82 + 18 * kick), math.rad(34), math.rad(-6)) end
+									if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(28 + 14 * kick), 0, 0) end
+									if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-5 + 8 * kick), math.rad(-14), 0) end
+									if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(4 + 5 * kick), math.rad(14), 0) end
+								else
+									-- Tactical Two-Handed Shoulder-Braced Rifle/SMG/Sniper Firing + Recoil Impulse!
+									if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(84 + 18 * kick), math.rad(-12), math.rad(8)) end
+									if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(22 + 16 * kick), 0, 0) end
+									if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(76 + 16 * kick), math.rad(42), math.rad(-8)) end
+									if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(44 + 12 * kick), 0, 0) end
+									if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-7 + 9 * kick), math.rad(-22), 0) end
+									if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(4 + 5 * kick), math.rad(20), math.rad(-6)) end
+								end
+							end
 						elseif speed > 0.8 then
 							local freq = math.clamp(speed * 0.56, 7.2, 13.5)
 							local phase = elapsed * freq
@@ -515,6 +670,38 @@ function AmbientEffectsController.Start(): ()
 								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(34), 0, 0) end
 								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-3), math.sin(phase) * math.rad(3), 0) end
 								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(2), 0, 0) end
+							elseif combatStyle == "DualNinja" then
+								-- Authentic Low-Crouched Shinobi Sprint (arms swept back holding twin tanto!)
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(-42) + armSwing * 0.25, 0, math.rad(-16)) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(-42) - armSwing * 0.25, 0, math.rad(16)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(26), 0, 0) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(26), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-22), math.sin(phase) * math.rad(7), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(18), 0, 0) end
+							elseif combatStyle == "Katana" then
+								-- Disciplined Samurai Combat Sprint (Katana gripped low-ready, focused torso!)
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(36) + armSwing * 0.35, math.rad(14), math.rad(-6)) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(52) - armSwing * 0.2, math.rad(-10), math.rad(8)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(42), 0, 0) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(38), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-10), math.sin(phase) * math.rad(6), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(8), 0, 0) end
+							elseif combatStyle == "Shield" then
+								-- Heavy Breacher March (Ballistic shield held forward protecting chest!)
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(60), math.rad(36), math.rad(-8)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(44), 0, 0) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(62) - armSwing * 0.2, 0, math.rad(8)) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(28), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-6), math.rad(-10), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(4), math.rad(10), 0) end
+							elseif combatStyle == "Rifle" or combatStyle == "Pistol" then
+								-- Tactical High-Ready Firearm Advance (both hands gripping weapon across chest!)
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(58) + armSwing * 0.15, math.rad(34), math.rad(-6)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(44), 0, 0) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(66) - armSwing * 0.15, math.rad(-10), math.rad(6)) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(28), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-7), math.rad(-12) + math.sin(phase) * math.rad(4), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(5), math.rad(10), 0) end
 							else
 								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(armSwing, 0, math.rad(-4)) end
 								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(-armSwing * 0.55 + math.rad(22), 0, math.rad(4)) end
@@ -524,18 +711,70 @@ function AmbientEffectsController.Start(): ()
 								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(3), -math.sin(phase) * math.rad(4), 0) end
 							end
 						else
-							-- Natural living idle breathing & subtle stance sway
-							local breath = math.sin(elapsed * 2.1)
-							if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.identity end
-							if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.identity end
-							if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.identity end
-							if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.identity end
-							if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(4), 0, math.rad(-3 - breath * 1.5)) end
-							if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(16), 0, math.rad(3 + breath * 1.5)) end
-							if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(14), 0, 0) end
-							if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(24), 0, 0) end
-							if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(breath * 1.8), 0, 0) end
-							if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(0, math.sin(elapsed * 0.7) * math.rad(6), 0) end
+							-- Weapon-Matched Alert Combat-Ready Idle Stance (living breathing, alert head scan!)
+							local breath = math.sin(elapsed * 2.2 + phaseSeed)
+							if combatStyle == "Katana" then
+								-- Chudan-no-kamae Samurai Guard
+								if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.Angles(math.rad(12), 0, math.rad(-4)) end
+								if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.Angles(math.rad(-10), 0, math.rad(4)) end
+								if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.Angles(math.rad(-14), 0, 0) end
+								if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.Angles(math.rad(-12), 0, 0) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(62 + breath * 2.5), math.rad(-14), math.rad(6)) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(32), 0, 0) end
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(54 + breath * 2.5), math.rad(28), math.rad(-10)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(42), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-4 + breath * 1.5), math.rad(-14), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(4), math.rad(14) + math.sin(elapsed * 0.9 + phaseSeed) * math.rad(8), 0) end
+							elseif combatStyle == "DualNinja" then
+								-- Predatory Crouched Shinobi Guard
+								if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.Angles(math.rad(22), 0, math.rad(-6)) end
+								if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.Angles(math.rad(-18), 0, math.rad(6)) end
+								if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.Angles(math.rad(-26), 0, 0) end
+								if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.Angles(math.rad(-22), 0, 0) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(48 + breath * 3), math.rad(-16), math.rad(14)) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(48), 0, 0) end
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(-18 + breath * 3), math.rad(12), math.rad(-18)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(54), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-14 + breath * 2), math.rad(10), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(12), math.rad(-10) + math.sin(elapsed * 1.2 + phaseSeed) * math.rad(10), 0) end
+							elseif combatStyle == "Shield" then
+								-- Heavy Riot Shield Ready Stance
+								if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.Angles(math.rad(10), 0, math.rad(-4)) end
+								if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.Angles(math.rad(-8), 0, math.rad(4)) end
+								if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.Angles(math.rad(-12), 0, 0) end
+								if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.Angles(math.rad(-10), 0, 0) end
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(64 + breath * 2), math.rad(38), math.rad(-10)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(46), 0, 0) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(68 + breath * 2), math.rad(-6), math.rad(6)) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(24), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-4 + breath * 1.4), math.rad(-16), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(3), math.rad(14) + math.sin(elapsed * 0.8 + phaseSeed) * math.rad(7), 0) end
+							elseif combatStyle == "Rifle" or combatStyle == "Pistol" then
+								-- Tactical Low-Ready / Aiming Stance
+								local aimLift = if inCombatRecent then 18 else 0
+								if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.Angles(math.rad(8), 0, math.rad(-4)) end
+								if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.Angles(math.rad(-8), 0, math.rad(4)) end
+								if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.Angles(math.rad(-10), 0, 0) end
+								if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.Angles(math.rad(-10), 0, 0) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(62 + aimLift + breath * 2), math.rad(-12), math.rad(6)) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(26), 0, 0) end
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(56 + aimLift + breath * 2), math.rad(38), math.rad(-6)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(42), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-4 + breath * 1.5), math.rad(-18), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(3), math.rad(16) + math.sin(elapsed * 0.85 + phaseSeed) * math.rad(8), 0) end
+							else
+								-- Natural living idle breathing & subtle stance sway
+								if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.identity end
+								if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.identity end
+								if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.identity end
+								if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.identity end
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(4), 0, math.rad(-3 - breath * 1.5)) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(16), 0, math.rad(3 + breath * 1.5)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(14), 0, 0) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(24), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(breath * 1.8), 0, 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(0, math.sin(elapsed * 0.7) * math.rad(6), 0) end
+							end
 						end
 					else
 						local swing = if speed > 0.8 then math.sin(elapsed * 8.5) * math.rad(34) else 0
@@ -636,6 +875,13 @@ function AmbientEffectsController.Start(): ()
 			if not m.Parent then
 				dyingDustPlayed[m] = nil
 				dyingOrigTrans[m] = nil
+			end
+		end
+		for m in pairs(npcPrevHealth) do
+			if not m.Parent then
+				npcPrevHealth[m] = nil
+				npcFlinchStart[m] = nil
+				npcFlinchSide[m] = nil
 			end
 		end
 

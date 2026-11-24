@@ -256,8 +256,11 @@ local function tryMafiaAmbush(agent: MafiaAgent): boolean
 	local bestDist = if isNight then 80 else 62
 	local runnerVision = if isNight then 26 else 42
 
-	-- Spot & ambush Stealth Delivery Runners sneaking through Central Park (only if not in peaceful Spin Plaza, or if owner stole a shipment!)
-	local inCentralSpinZone = math.abs(myPos.X) <= 175 and math.abs(myPos.Z) <= 175
+	-- Central Market Peace Truce: Food Mafia in/near Central Market NEVER randomly attack unless the player stole a shipment!
+	local function isInCentralMarket(pos: Vector3): boolean
+		return math.abs(pos.X) <= 195 and math.abs(pos.Z) <= 195
+	end
+	local inCentralSpinZone = isInCentralMarket(myPos)
 	local function hasPlayerStolenShipment(p: Player): boolean
 		local untilAttr = p:GetAttribute("StolenShipmentUntil")
 		if typeof(untilAttr) == "number" and untilAttr > os.clock() then
@@ -305,12 +308,13 @@ local function tryMafiaAmbush(agent: MafiaAgent): boolean
 	end
 
 	for _, player in ipairs(Players:GetPlayers()) do
-		local allowPlayerAggro = if inCentralSpinZone then hasPlayerStolenShipment(player) else true
-		if allowPlayerAggro then
-			local char = player.Character
-			local pRoot = if char then char:FindFirstChild("HumanoidRootPart") else nil
-			local pHum = if char then char:FindFirstChildOfClass("Humanoid") else nil
-			if pRoot and pRoot:IsA("BasePart") and pHum and pHum.Health > 0 and not isInsideAnySafeBase(pRoot.Position) then
+		local char = player.Character
+		local pRoot = if char then char:FindFirstChild("HumanoidRootPart") else nil
+		local pHum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+		if pRoot and pRoot:IsA("BasePart") and pHum and pHum.Health > 0 and not isInsideAnySafeBase(pRoot.Position) then
+			local targetInCentral = inCentralSpinZone or isInCentralMarket(pRoot.Position)
+			local allowPlayerAggro = if targetInCentral then hasPlayerStolenShipment(player) else true
+			if allowPlayerAggro then
 				local d = (pRoot.Position - myPos).Magnitude
 				if d < bestDist then
 					bestDist = d; bestHum = pHum; bestPos = pRoot.Position
@@ -322,10 +326,12 @@ local function tryMafiaAmbush(agent: MafiaAgent): boolean
 	if bestHum and bestPos then
 		if bestDist <= 12 and (now - agent.LastAttackAt) >= 1.15 then
 			agent.LastAttackAt = now
+			MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
 			bestHum:TakeDamage(if agent.IsBoss then 26 else 18)
 			BlackMarketService.BroadcastSFX("MeleeHit", bestPos)
 		elseif bestDist > 12 and bestDist <= 60 and (now - agent.LastAttackAt) >= (if agent.IsBoss then 1.05 else 1.5) then
 			agent.LastAttackAt = now
+			MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
 			local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
 			local tracerCol = if agent.IsBoss then Color3.fromRGB(255, 206, 54) else Color3.fromRGB(255, 62, 86)
 			BlackMarketService.SpawnBulletTracer(fromPos, bestPos, tracerCol)

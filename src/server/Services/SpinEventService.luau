@@ -329,6 +329,8 @@ function SpinEventService.GetSnapshot(player: Player): { [string]: any }
 			ShortLabel = p.ShortLabel,
 			Category = p.Category,
 			Rarity = p.Rarity,
+			Weight = p.Weight,
+			OddsPct = math.max(1, math.floor((p.Weight / math.max(1, TOTAL_WEIGHT)) * 100 + 0.5)),
 			ColorR = math.floor(p.AccentColor.R * 255),
 			ColorG = math.floor(p.AccentColor.G * 255),
 			ColorB = math.floor(p.AccentColor.B * 255),
@@ -371,9 +373,12 @@ function SpinEventService.TrySpin(player: Player): (boolean, string, { [string]:
 	end
 
 	local prize = rollWeightedPrize()
+	local prizeTitle = prize.Title
 	local detailMsg = prize.Title
 	local previewKind = prize.PreviewKind
 	local previewId = prize.PreviewId
+	local wonWeaponId: string? = nil
+	local wonClassId: string? = nil
 
 	if prize.Category == "Fish" or prize.Category == "Meat" or prize.Category == "Vegetable" or prize.Category == "Fruit" then
 		detailMsg = grantCategoryCrate(player, prize.Category :: WarehouseConfig.WarehouseCategory, 12)
@@ -405,9 +410,12 @@ function SpinEventService.TrySpin(player: Player): (boolean, string, { [string]:
 			BlackMarketService.SyncPlayerAmmoAndGear(player)
 			previewKind = "Weapon"
 			previewId = wonWid
-			detailMsg = string.format("Unlocked %s! Ready in your hotbar.", if wSpec then wSpec.DisplayName else wonWid)
+			wonWeaponId = wonWid
+			prizeTitle = if wSpec then wSpec.DisplayName else wonWid
+			detailMsg = string.format("Unlocked %s! Ready in your hotbar.", prizeTitle)
 		else
 			PlayerDataService.AddCoins(player, 750)
+			prizeTitle = "Black Market Vault Bonus (+750G)"
 			detailMsg = "All Black Market guns owned — awarded +750 Gold Cashback!"
 		end
 	elseif prize.Category == "Bodyguard" then
@@ -425,9 +433,12 @@ function SpinEventService.TrySpin(player: Player): (boolean, string, { [string]:
 			BodyguardService.RebuildGuardsForPlayer(player)
 			previewKind = "Bodyguard"
 			previewId = wonCid
-			detailMsg = string.format("Recruited %s (%s) into your squad!", if gSpec then gSpec.DisplayName else wonCid, if gSpec then gSpec.Role else "Guard")
+			wonClassId = wonCid
+			prizeTitle = if gSpec then gSpec.DisplayName else wonCid
+			detailMsg = string.format("Recruited %s (%s) into your squad!", prizeTitle, if gSpec then gSpec.Role else "Guard")
 		else
 			PlayerDataService.AddCoins(player, 850)
+			prizeTitle = "Syndicate Contract Bonus (+850G)"
 			detailMsg = "All Gold bodyguard classes unlocked — awarded +850 Gold Bonus!"
 		end
 	end
@@ -435,11 +446,13 @@ function SpinEventService.TrySpin(player: Player): (boolean, string, { [string]:
 	local result = {
 		SegmentIndex = prize.Index,
 		PrizeId = prize.Id,
-		PrizeTitle = prize.Title,
+		PrizeTitle = prizeTitle,
 		Detail = detailMsg,
 		Rarity = prize.Rarity,
 		PreviewKind = previewKind,
 		PreviewId = previewId,
+		WonWeaponId = wonWeaponId,
+		WonClassId = wonClassId,
 	}
 	return true, detailMsg, result
 end
@@ -482,6 +495,11 @@ function SpinEventService.Start(): ()
 		ev.Name = "OpenSpinWheel"
 		ev.Parent = remotes
 		openWheelEv = ev
+	end
+	if not remotes:FindFirstChild("PlayUnitWelcome") then
+		local wev = Instance.new("RemoteEvent")
+		wev.Name = "PlayUnitWelcome"
+		wev.Parent = remotes
 	end
 
 	build3DSpinWheelMonument()

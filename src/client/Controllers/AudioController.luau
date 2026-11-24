@@ -39,6 +39,17 @@ local ENEMY_HIT_B_URL = "rbxassetid://121052703957549"   -- Combat Hurt Vocal 2
 local CIVILIAN_PANIC_A_URL = "rbxassetid://9114399475"   -- ProSoundEffects: Short Screams & Panic Yells
 local CIVILIAN_PANIC_B_URL = "rbxassetid://103266285456711" -- Scared Civilian Scream 1
 
+-- Verified Official ProSoundEffects, APMOfficial & Creator Store Cinematic Surprise Audio Suite
+local CINEMATIC_BOOM_URL = "rbxassetid://9125484367"       -- ProSoundEffects: Deep Hits Big Reverberant Booms 2
+local SUB_DROP_URL = "rbxassetid://1837830050"             -- APMOfficial: BOOM-Sub Boom 01
+local VAULT_RUMBLE_URL = "rbxassetid://9125484526"         -- ProSoundEffects: Deep Hits Big Reverberant Booms 1
+local KATANA_DRAW_URL = "rbxassetid://79499154333475"      -- Crisp Steel Katana Unsheathe
+local KATANA_SLASH_WIND_URL = "rbxassetid://130317074796316" -- Katana Slash Wind 7
+local PETAL_WHOOSH_URL = "rbxassetid://81471688425359"     -- Long Petal Woosh SFX
+local NINJA_WHOOSH_URL = "rbxassetid://80454497832356"     -- Fast Kunai / Smoke Whoosh
+local LEGENDARY_CHIME_URL = "rbxassetid://73774648241042"  -- RatingExcellent Jackpot Chime
+local MYSTERY_STING_URL = "rbxassetid://9042321434"        -- APMOfficial: Dramatic Reveal Sting
+
 type PoolSpec = {
 	SoundId: string,
 	PoolSize: number,
@@ -275,6 +286,86 @@ local POOL_SPECS: { [string]: PoolSpec } = {
 		BaseSpeed = 1.04,
 		StartOffset = 0,
 		PitchJitter = 0.07,
+	},
+	-- Surprise Cinematic Reveal & Unit Welcome Audio Suite
+	CinematicBoom = {
+		SoundId = CINEMATIC_BOOM_URL,
+		PoolSize = 2,
+		BaseVolume = 1.0,
+		BaseSpeed = 1.0,
+		StartOffset = 0,
+		PitchJitter = 0.02,
+		LowGain = 6.0,
+		MidGain = 1.5,
+	},
+	SubDrop = {
+		SoundId = SUB_DROP_URL,
+		PoolSize = 2,
+		BaseVolume = 1.0,
+		BaseSpeed = 0.96,
+		StartOffset = 0,
+		PitchJitter = 0.02,
+		LowGain = 6.5,
+	},
+	VaultRumble = {
+		SoundId = VAULT_RUMBLE_URL,
+		PoolSize = 2,
+		BaseVolume = 0.85,
+		BaseSpeed = 0.82,
+		StartOffset = 0,
+		PitchJitter = 0.02,
+		LowGain = 5.0,
+	},
+	KatanaDraw = {
+		SoundId = KATANA_DRAW_URL,
+		PoolSize = 2,
+		BaseVolume = 0.92,
+		BaseSpeed = 1.02,
+		StartOffset = 0,
+		PitchJitter = 0.03,
+		HighGain = 3.0,
+	},
+	KatanaSlashWind = {
+		SoundId = KATANA_SLASH_WIND_URL,
+		PoolSize = 3,
+		BaseVolume = 0.90,
+		BaseSpeed = 1.05,
+		StartOffset = 0,
+		PitchJitter = 0.04,
+		HighGain = 2.0,
+	},
+	PetalWhoosh = {
+		SoundId = PETAL_WHOOSH_URL,
+		PoolSize = 2,
+		BaseVolume = 0.86,
+		BaseSpeed = 1.0,
+		StartOffset = 0,
+		PitchJitter = 0.03,
+	},
+	NinjaWhoosh = {
+		SoundId = NINJA_WHOOSH_URL,
+		PoolSize = 4,
+		BaseVolume = 0.84,
+		BaseSpeed = 1.18,
+		StartOffset = 0,
+		PitchJitter = 0.06,
+	},
+	LegendaryChime = {
+		SoundId = LEGENDARY_CHIME_URL,
+		PoolSize = 2,
+		BaseVolume = 0.95,
+		BaseSpeed = 1.0,
+		StartOffset = 0,
+		PitchJitter = 0.01,
+		HighGain = 2.5,
+	},
+	MysterySting = {
+		SoundId = MYSTERY_STING_URL,
+		PoolSize = 2,
+		BaseVolume = 0.82,
+		BaseSpeed = 1.04,
+		StartOffset = 0,
+		PitchJitter = 0.02,
 	},
 }
 
@@ -622,6 +713,121 @@ function AudioController.PlayShadowDash(volScale: number?): ()
 	local v = volScale or 1
 	playPooled("MeleeSwing", v * 1.25, 0.78)
 	playPooled("MeleeSnap", v * 0.9, 0.85)
+end
+
+-- =========================================================================
+-- SURPRISE CINEMATIC AUDIO SUITE (Roulette Tick, Vault Drop, Ninja, Samurai, Bodyguard)
+-- =========================================================================
+
+-- Crisp pitch-escalating roulette peg click as the spin slows toward a jackpot!
+function AudioController.PlaySpinTick(progress01: number): ()
+	local p = math.clamp(progress01, 0, 1)
+	local pitch = 0.92 + p * 0.62
+	local vol = 0.30 + p * 0.22
+	playTone(CLICK_URL, vol, pitch, 0)
+	if p > 0.68 then
+		playTone(SNAP_URL, 0.22 * p, 1.45 + p * 0.35, 0)
+	end
+end
+
+-- Tense obsidian vault buildup right before doors blast apart
+function AudioController.PlayVaultCharge(): ()
+	playPooled("VaultRumble", 0.78, 0.76)
+	playPooled("MysterySting", 0.72, 0.96)
+	playTone(SNAP_URL, 0.42, 0.72, 0.14)
+	playTone(SNAP_URL, 0.48, 0.88, 0.30)
+	playTone(SNAP_URL, 0.56, 1.08, 0.44)
+end
+
+-- Jaw-dropping LEGENDARY surprise impact drop + reverberant gong + 24K golden chord arpeggio!
+function AudioController.PlayLegendarySurpriseDrop(): ()
+	playPooled("SubDrop", 1.15, 0.92)
+	playPooled("CinematicBoom", 1.05, 0.98)
+	task.delay(0.05, function()
+		playPooled("LegendaryChime", 1.05, 1.0)
+	end)
+	-- Sparkling ascending syndicate brass/crystal chord
+	playTone(PING_URL, 0.48, 1.00, 0.08)
+	playTone(PING_URL, 0.50, 1.25, 0.17)
+	playTone(PING_URL, 0.54, 1.50, 0.26)
+	playTone(PING_URL, 0.58, 2.00, 0.36)
+	playTone(PING_URL, 0.42, 2.50, 0.48)
+end
+
+-- Dramatic EPIC Black Market firearm reveal drop (Sub Drop + Heavy Rack + Chime)
+function AudioController.PlayEpicRevealDrop(): ()
+	playPooled("SubDrop", 1.0, 1.0)
+	playPooled("CinematicBoom", 0.88, 1.06)
+	task.delay(0.12, function()
+		playPooled("ShotgunPump", 0.95, 0.96)
+	end)
+	task.delay(0.22, function()
+		playPooled("LegendaryChime", 0.85, 1.06)
+	end)
+	playTone(PING_URL, 0.44, 1.18, 0.14)
+	playTone(PING_URL, 0.48, 1.50, 0.25)
+	playTone(PING_URL, 0.50, 1.88, 0.36)
+end
+
+-- Crisp RARE celebration chime
+function AudioController.PlayRareRevealDrop(): ()
+	playPooled("LegendaryChime", 0.82, 1.08)
+	AudioController.PlayFanfare()
+end
+
+-- Surprise NINJA ASSASSIN Welcome SFX: whistling kunai barrage -> smoke sub drop -> razor katana X-slash!
+function AudioController.PlayNinjaArrivalSFX(): ()
+	playPooled("KatanaDraw", 0.95, 1.10)
+	playPooled("NinjaWhoosh", 0.88, 1.32)
+	task.delay(0.11, function()
+		playPooled("NinjaWhoosh", 0.85, 1.18)
+	end)
+	task.delay(0.21, function()
+		playPooled("NinjaWhoosh", 0.92, 1.04)
+	end)
+	task.delay(0.32, function()
+		playPooled("SubDrop", 1.12, 0.94)
+		playPooled("KatanaSlashWind", 1.05, 1.08)
+	end)
+	task.delay(0.46, function()
+		playPooled("KatanaSlashWind", 0.90, 1.24)
+		playPooled("MysterySting", 0.78, 1.08)
+	end)
+end
+
+-- Surprise SAMURAI MAFIA Welcome SFX: slow metallic iaijutsu blade draw -> sakura petal whoosh -> deep gong boom!
+function AudioController.PlaySamuraiArrivalSFX(): ()
+	playPooled("KatanaDraw", 1.05, 0.92)
+	task.delay(0.18, function()
+		playPooled("PetalWhoosh", 0.95, 0.96)
+	end)
+	task.delay(0.42, function()
+		playPooled("CinematicBoom", 1.08, 0.94)
+		playPooled("SubDrop", 1.02, 0.96)
+		playPooled("KatanaSlashWind", 1.02, 0.94)
+	end)
+	task.delay(0.62, function()
+		playPooled("LegendaryChime", 0.88, 0.96)
+		playTone(PING_URL, 0.44, 1.00, 0.00)
+		playTone(PING_URL, 0.46, 1.33, 0.11)
+		playTone(PING_URL, 0.50, 1.50, 0.22)
+	end)
+end
+
+-- Surprise BODYGUARD Recruitment Welcome SFX: sub bass impact -> tactical rack -> brass fanfare chime!
+function AudioController.PlayBodyguardArrivalSFX(): ()
+	playPooled("SubDrop", 1.04, 0.98)
+	playPooled("MysterySting", 0.82, 0.98)
+	task.delay(0.16, function()
+		playPooled("ShotgunPump", 0.96, 1.02)
+	end)
+	task.delay(0.32, function()
+		playPooled("CinematicBoom", 0.85, 1.06)
+		playPooled("LegendaryChime", 0.96, 1.02)
+	end)
+	playTone(PING_URL, 0.44, 1.12, 0.34)
+	playTone(PING_URL, 0.48, 1.50, 0.46)
+	playTone(PING_URL, 0.52, 2.00, 0.58)
 end
 
 function AudioController.PlayCombatSFX(kind: string, volScale: number?): ()

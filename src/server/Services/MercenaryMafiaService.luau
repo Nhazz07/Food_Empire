@@ -4,6 +4,7 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CollectionService = game:GetService("CollectionService")
+local TweenService = game:GetService("TweenService")
 
 local MafiaVisualBuilder = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
@@ -164,6 +165,132 @@ local function spawnMercenaryUnit(owner: Player, mercType: MercenaryType, idx: n
 	}
 end
 
+local function fireUnitWelcome(player: Player, mercType: MercenaryType): ()
+	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+	local ev = if remotes then remotes:FindFirstChild("PlayUnitWelcome") else nil
+	if ev and ev:IsA("RemoteEvent") then
+		ev:FireClient(player, {
+			Kind = mercType,
+			Title = if mercType == "Ninja" then "KAGE NINJA ASSASSIN SQUAD" else "KUROGANE SAMURAI MAFIA",
+			Subtitle = if mercType == "Ninja"
+				then "3 Shadow Ninja Assassins dropped onto your perimeter — Press [Y] to Unleash!"
+				else "3 Armored Iron Shogun Samurai sworn to your Empire — Press [Y] to Command Assault!",
+		})
+	end
+end
+
+local function spawnMercenaryArrivalVFX(origin: Vector3, mercType: MercenaryType, offsets: { Vector3 }): ()
+	local isNinja = (mercType == "Ninja")
+	local groundY = origin.Y - 2.6
+
+	if isNinja then
+		-- 5 Whistling 3D Steel Kunai slamming into a semicircle around the player + Charcoal Smoke Bombs!
+		for k = 1, 5 do
+			local ang = math.rad(-72 + (k - 1) * 36)
+			local landPos = Vector3.new(origin.X + math.sin(ang) * 9.5, groundY + 0.65, origin.Z - math.cos(ang) * 9.5)
+			local startPos = landPos + Vector3.new(math.sin(ang) * 4, 22, -math.cos(ang) * 4)
+
+			local kunai = Instance.new("Part")
+			kunai.Name = "NinjaArrivalKunai"
+			kunai.Size = Vector3.new(0.22, 1.9, 0.22)
+			kunai.Color = Color3.fromRGB(196, 208, 226)
+			kunai.Material = Enum.Material.Metal
+			kunai.Anchored = true
+			kunai.CanCollide = false
+			kunai.CFrame = CFrame.lookAt(startPos, landPos) * CFrame.Angles(math.rad(-90), 0, 0)
+			kunai.Parent = Workspace
+
+			task.delay((k - 1) * 0.05, function()
+				if not kunai.Parent then return end
+				local tw = TweenService:Create(kunai, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+					CFrame = CFrame.new(landPos) * CFrame.Angles(math.rad(165), ang, 0),
+				})
+				tw:Play()
+				tw.Completed:Connect(function()
+					local spark = Instance.new("ParticleEmitter")
+					spark.Color = ColorSequence.new(Color3.fromRGB(220, 232, 255), Color3.fromRGB(168, 34, 46))
+					spark.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.7), NumberSequenceKeypoint.new(1, 0) })
+					spark.Lifetime = NumberRange.new(0.18, 0.34)
+					spark.Speed = NumberRange.new(10, 18)
+					spark.SpreadAngle = Vector2.new(180, 180)
+					spark.Parent = kunai
+					spark:Emit(14)
+				end)
+				task.delay(2.4, function()
+					if kunai.Parent then kunai:Destroy() end
+				end)
+			end)
+		end
+
+		-- 3 Dense Obsidian Charcoal Smoke Vortex Clouds at the 3 Ninja drop points!
+		for _, off in ipairs(offsets) do
+			local smokePart = Instance.new("Part")
+			smokePart.Name = "NinjaSmokeBombVFX"
+			smokePart.Size = Vector3.new(2, 2, 2)
+			smokePart.CFrame = CFrame.new(origin.X + off.X, groundY + 1.2, origin.Z + off.Z)
+			smokePart.Transparency = 1
+			smokePart.Anchored = true
+			smokePart.CanCollide = false
+			smokePart.Parent = Workspace
+
+			local smoke = Instance.new("ParticleEmitter")
+			smoke.Color = ColorSequence.new(Color3.fromRGB(22, 24, 30), Color3.fromRGB(64, 68, 82))
+			smoke.Size = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 1.8),
+				NumberSequenceKeypoint.new(0.45, 5.2),
+				NumberSequenceKeypoint.new(1, 7.0),
+			})
+			smoke.Transparency = NumberSequence.new({
+				NumberSequenceKeypoint.new(0, 0.12),
+				NumberSequenceKeypoint.new(0.7, 0.55),
+				NumberSequenceKeypoint.new(1, 1),
+			})
+			smoke.Lifetime = NumberRange.new(0.9, 1.55)
+			smoke.Speed = NumberRange.new(5, 14)
+			smoke.SpreadAngle = Vector2.new(180, 75)
+			smoke.RotSpeed = NumberRange.new(-140, 140)
+			smoke.Parent = smokePart
+			smoke:Emit(28)
+
+			task.delay(2.0, function()
+				if smokePart.Parent then smokePart:Destroy() end
+			end)
+		end
+	else
+		-- SAMURAI ARRIVAL: Expanding Crimson-Brass Shogun Floor Crest Ring + Rising Sakura Petals & Gold Embers!
+		local ring = Instance.new("Part")
+		ring.Name = "SamuraiArrivalCrest"
+		ring.Shape = Enum.PartType.Cylinder
+		ring.Size = Vector3.new(0.24, 4.0, 4.0)
+		ring.CFrame = CFrame.new(origin.X, groundY + 0.15, origin.Z - 6) * CFrame.Angles(0, 0, math.rad(90))
+		ring.Color = Color3.fromRGB(168, 34, 46)
+		ring.Material = Enum.Material.Metal
+		ring.Transparency = 0.25
+		ring.Anchored = true
+		ring.CanCollide = false
+		ring.Parent = Workspace
+
+		TweenService:Create(ring, TweenInfo.new(0.72, Enum.EasingStyle.Exponential, Enum.EasingDirection.Out), {
+			Size = Vector3.new(0.18, 26, 26),
+			Transparency = 0.88,
+		}):Play()
+
+		local sakura = Instance.new("ParticleEmitter")
+		sakura.Color = ColorSequence.new(Color3.fromRGB(244, 166, 188), Color3.fromRGB(238, 198, 108))
+		sakura.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.75), NumberSequenceKeypoint.new(1, 0.25) })
+		sakura.Lifetime = NumberRange.new(1.2, 2.1)
+		sakura.Speed = NumberRange.new(8, 17)
+		sakura.SpreadAngle = Vector2.new(110, 110)
+		sakura.RotSpeed = NumberRange.new(-180, 180)
+		sakura.Parent = ring
+		sakura:Emit(48)
+
+		task.delay(2.3, function()
+			if ring.Parent then ring:Destroy() end
+		end)
+	end
+end
+
 function MercenaryMafiaService.ActivateContract(player: Player, mercType: MercenaryType): ()
 	clearContract(player)
 	local char = player.Character
@@ -176,8 +303,11 @@ function MercenaryMafiaService.ActivateContract(player: Player, mercType: Mercen
 		Vector3.new(7, 0, -6),
 		Vector3.new(0, 0, -10),
 	}
+	spawnMercenaryArrivalVFX(origin, mercType, offsets)
 	for i = 1, 3 do
-		table.insert(agents, spawnMercenaryUnit(player, mercType, i, origin + offsets[i]))
+		-- Ninja Assassins drop in from above out of the smoke!
+		local dropHeight = if mercType == "Ninja" then Vector3.new(0, 10, 0) else Vector3.new(0, 0, 0)
+		table.insert(agents, spawnMercenaryUnit(player, mercType, i, origin + offsets[i] + dropHeight))
 	end
 
 	contracts[player] = {
@@ -188,6 +318,7 @@ function MercenaryMafiaService.ActivateContract(player: Player, mercType: Mercen
 		TargetRestaurantId = nil,
 		Agents = agents,
 	}
+	fireUnitWelcome(player, mercType)
 	if onChangedCb then onChangedCb(player) end
 end
 
@@ -333,8 +464,8 @@ local function findBestEnemyForMerc(owner: Player, c: MercenaryContract, anchor:
 				if tagName == "TurfGuardUnit" and u:GetAttribute("OwnerUserId") == owner.UserId then
 					continue
 				end
-				if tagName == "RivalSamuraiUnit" then
-					local isProvoked = u:GetAttribute("Provoked") == true
+				if tagName == "RivalSamuraiUnit" or tagName == "ApexMafiaUnit" then
+					local isProvoked = (u:GetAttribute("Provoked") == true) or (u:GetAttribute("UnderRevenge") == true)
 					if not c.ExplicitAttackOrder and not ownerStole and not isProvoked then
 						continue
 					end
@@ -342,8 +473,8 @@ local function findBestEnemyForMerc(owner: Player, c: MercenaryContract, anchor:
 				local r = u:FindFirstChild("HumanoidRootPart")
 				local h = u:FindFirstChildOfClass("Humanoid")
 				if r and r:IsA("BasePart") and h and h.Health > 0 then
-					if tagName == "RivalAIUnit" then
-						local inCentralSpinZone = (math.abs(r.Position.X) <= 175 and math.abs(r.Position.Z) <= 175)
+					if tagName == "RivalAIUnit" or tagName == "MafiaUnit" then
+						local inCentralSpinZone = (math.abs(r.Position.X) <= 195 and math.abs(r.Position.Z) <= 195)
 							or (u:GetAttribute("RivalFactionId") == "CrimsonDonEmpire")
 						if inCentralSpinZone and not ownerStole and not c.ExplicitAttackOrder then
 							continue
@@ -432,6 +563,7 @@ function MercenaryMafiaService.Start(): ()
 						end
 						if d <= 15 and (now - ag.LastAttackAt) >= ag.Cooldown then
 							ag.LastAttackAt = now
+							MafiaVisualBuilder.TriggerAttackAnim(ag.Model)
 							local dmg = ag.Damage
 							if ag.MercType == "Ninja" and math.random() < 0.38 then
 								dmg = math.floor(dmg * 1.6)

@@ -292,7 +292,7 @@ local function findFactionBossLeader(factionId: string): RivalAgent?
 end
 
 local function isNearCentralSpinEvent(pos: Vector3): boolean
-	return math.abs(pos.X) <= 175 and math.abs(pos.Z) <= 175
+	return math.abs(pos.X) <= 195 and math.abs(pos.Z) <= 195
 end
 
 local function hasPlayerStolenShipment(player: Player): boolean
@@ -362,17 +362,13 @@ local function tryRivalCombat(agent: RivalAgent): boolean
 	--    * Central Park Rivals (near the Lucky Spin Event) ONLY shoot/fight if the player stole a Fish/Meat/Veg/Fruit shipment!
 	--    * Corner Territory Rivals (Fruit, Meat, Fish, Vegetable territories) ALWAYS shoot/fight any player who enters or stays near their territory!
 	for _, player in ipairs(Players:GetPlayers()) do
-		local canAggro: boolean
-		if isCentralParkRival then
-			canAggro = hasPlayerStolenShipment(player)
-		else
-			canAggro = true
-		end
-		if canAggro then
-			local char = player.Character
-			local pRoot = if char then char:FindFirstChild("HumanoidRootPart") else nil
-			local pHum = if char then char:FindFirstChildOfClass("Humanoid") else nil
-			if pRoot and pRoot:IsA("BasePart") and pHum and pHum.Health > 0 and not isInsideAnySafeBase(pRoot.Position) then
+		local char = player.Character
+		local pRoot = if char then char:FindFirstChild("HumanoidRootPart") else nil
+		local pHum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+		if pRoot and pRoot:IsA("BasePart") and pHum and pHum.Health > 0 and not isInsideAnySafeBase(pRoot.Position) then
+			local inCentral = isCentralParkRival or isNearCentralSpinEvent(pRoot.Position)
+			local canAggro = if inCentral then hasPlayerStolenShipment(player) else true
+			if canAggro then
 				local smokeUntil = player:GetAttribute("InSmokeUntil")
 				local maxSight = if typeof(smokeUntil) == "number" and smokeUntil > now then 16 else bestDist
 				local d = (pRoot.Position - myPos).Magnitude
@@ -398,6 +394,7 @@ local function tryRivalCombat(agent: RivalAgent): boolean
 		if hasGun and bestDist <= faction.AttackRange and bestDist > RIVAL_MELEE_RANGE then
 			if (now - agent.LastAttackAt) >= faction.FireCooldown then
 				agent.LastAttackAt = now
+				MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
 				local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
 				local gunDmg = if agent.IsBossEscort then math.floor(faction.GunDamage * 0.78) else faction.GunDamage
 				local shots = if isBossLeader then 2 else 1
@@ -439,6 +436,7 @@ local function tryRivalCombat(agent: RivalAgent): boolean
 		elseif bestDist <= RIVAL_MELEE_RANGE then
 			if (now - agent.LastAttackAt) >= RIVAL_MELEE_COOLDOWN then
 				agent.LastAttackAt = now
+				MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
 				local mDmg = if agent.IsBossEscort then math.floor(faction.MeleeDamage * 0.8) else faction.MeleeDamage
 				if nearestModel then
 					local dir = nearestPos - myPos

@@ -11,6 +11,7 @@ local SectorConfig = require(
 local TurfConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("TurfConfig")
 )
+local CurrencyIconHelper = require("./CurrencyIconHelper")
 
 export type OpenMenuCallback = (tabName: "Kitchen" | "Warehouses" | "Upgrades" | "Shop" | "BlackMarket") -> ()
 export type QuickServeCallback = () -> ()
@@ -177,12 +178,33 @@ local function createDockGridButton(
 	btn.Name = name
 	btn.LayoutOrder = layoutOrder
 	btn.BackgroundColor3 = bg
-	btn.BackgroundTransparency = 0.04
+	btn.BackgroundTransparency = 0.02
 	btn.Text = ""
 	btn.AutoButtonColor = false
+	btn.ClipsDescendants = true
 	btn.Parent = parent
-	makeCorner(btn, 6)
-	local stroke = makeBorderStroke(btn, borderCol, 1.2)
+	makeCorner(btn, 8)
+	local stroke = makeBorderStroke(btn, borderCol, 1.8)
+
+	local sheen = Instance.new("Frame")
+	sheen.Position = UDim2.fromOffset(3, 2)
+	sheen.Size = UDim2.new(1, -6, 0, 3)
+	sheen.BackgroundColor3 = Color3.new(1, 1, 1)
+	sheen.BackgroundTransparency = 0.72
+	sheen.BorderSizePixel = 0
+	sheen.Active = false
+	sheen.Parent = btn
+	makeCorner(sheen, 2)
+
+	local lip = Instance.new("Frame")
+	lip.AnchorPoint = Vector2.new(0, 1)
+	lip.Position = UDim2.fromScale(0, 1)
+	lip.Size = UDim2.new(1, 0, 0, 4)
+	lip.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+	lip.BackgroundTransparency = 0.56
+	lip.BorderSizePixel = 0
+	lip.Active = false
+	lip.Parent = btn
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Name = "Label"
@@ -192,29 +214,33 @@ local function createDockGridButton(
 	lbl.Font = FONT_TITLE
 	lbl.Text = string.upper(labelText)
 	lbl.TextSize = 10
-	lbl.TextColor3 = C_BONE
+	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.Active = false
 	lbl.Parent = btn
+	makeTextOutline(lbl, 1.5)
 
 	local keyLbl = Instance.new("TextLabel")
 	keyLbl.Name = "KeyCap"
-	keyLbl.Position = UDim2.new(0, 2, 0, 26)
+	keyLbl.Position = UDim2.new(0, 2, 0, 25)
 	keyLbl.Size = UDim2.new(1, -4, 0, 14)
 	keyLbl.BackgroundTransparency = 1
-	keyLbl.Font = FONT_BODY
+	keyLbl.Font = FONT_TITLE
 	keyLbl.Text = "[" .. keyHint .. "]"
 	keyLbl.TextSize = 10
 	keyLbl.TextColor3 = accentText
+	keyLbl.Active = false
 	keyLbl.Parent = btn
+	makeTextOutline(keyLbl, 1.2)
 
 	btn.MouseEnter:Connect(function()
-		btn.BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.1)
-		stroke.Color = borderCol:Lerp(Color3.new(1, 1, 1), 0.25)
+		btn.BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.16)
+		stroke.Color = Color3.new(1, 1, 1)
 	end)
 	btn.MouseLeave:Connect(function()
 		btn.BackgroundColor3 = bg
 		stroke.Color = borderCol
 	end)
-	btn.MouseButton1Click:Connect(onClick)
+	btn.Activated:Connect(onClick)
 	return btn
 end
 
@@ -424,7 +450,7 @@ function HUDController.Init(
 	baseBadge = bLbl
 	addDivider(154)
 
-	-- Segment 2: Gold Coins (154..292)
+	-- Segment 2: Gold Coins (154..292) with gleaming 24K vector Gold Coin icon!
 	local segGold = Instance.new("Frame")
 	segGold.Name = "Coins"
 	segGold.Position = UDim2.new(0, 154, 0, 0)
@@ -432,16 +458,7 @@ function HUDController.Init(
 	segGold.BackgroundTransparency = 1
 	segGold.Parent = topBar
 
-	local gCoin = Instance.new("TextLabel")
-	gCoin.Position = UDim2.new(0, 12, 0.5, -11)
-	gCoin.Size = UDim2.fromOffset(22, 22)
-	gCoin.BackgroundColor3 = Color3.fromRGB(218, 174, 62)
-	gCoin.Font = FONT_TITLE
-	gCoin.Text = "G"
-	gCoin.TextSize = 11
-	gCoin.TextColor3 = Color3.fromRGB(24, 18, 8)
-	gCoin.Parent = segGold
-	makeCorner(gCoin, 11)
+	CurrencyIconHelper.CreateGoldCoin(segGold, 24, UDim2.new(0, 11, 0.5, -12), 4)
 
 	local cLbl = Instance.new("TextLabel")
 	cLbl.Name = "ValueText"
@@ -452,7 +469,7 @@ function HUDController.Init(
 	cLbl.Text = "90"
 	cLbl.TextSize = 14
 	cLbl.TextXAlignment = Enum.TextXAlignment.Left
-	cLbl.TextColor3 = C_BONE
+	cLbl.TextColor3 = Color3.fromRGB(252, 224, 132)
 	cLbl.Parent = segGold
 	coinsLabel = cLbl
 	addDivider(292)
@@ -470,8 +487,8 @@ function HUDController.Init(
 	lvBadge.Size = UDim2.fromOffset(22, 22)
 	lvBadge.BackgroundColor3 = Color3.fromRGB(48, 36, 78)
 	lvBadge.Font = FONT_TITLE
-	lvBadge.Text = "★"
-	lvBadge.TextSize = 12
+	lvBadge.Text = "LV"
+	lvBadge.TextSize = 9
 	lvBadge.TextColor3 = C_GOLD
 	lvBadge.Parent = segLvl
 	makeCorner(lvBadge, 5)
@@ -577,7 +594,7 @@ function HUDController.Init(
 	emp.BackgroundColor3 = C_OBS
 	emp.BackgroundTransparency = 0.08
 	emp.Font = FONT_BODY
-	emp.Text = "STREET RUNNER  •  1★ BISTRO"
+	emp.Text = "STREET RUNNER  |  1-STAR BISTRO"
 	emp.TextSize = 10
 	emp.TextColor3 = C_BONE
 	emp.Parent = tickerRow
@@ -872,12 +889,13 @@ function HUDController.Init(
 	menuDock.Name = "BottomDock"
 	menuDock.AnchorPoint = Vector2.new(0, 1)
 	menuDock.Position = UDim2.new(0, 14, 1, -14)
-	menuDock.Size = UDim2.fromOffset(220, 134)
-	menuDock.BackgroundColor3 = C_OBS
-	menuDock.BackgroundTransparency = 0.06
+	menuDock.Size = UDim2.fromOffset(224, 136)
+	menuDock.BackgroundColor3 = Color3.fromRGB(14, 20, 34)
+	menuDock.BackgroundTransparency = 0.04
+	menuDock.ZIndex = 12
 	menuDock.Parent = gui
-	makeCorner(menuDock, 8)
-	makeBorderStroke(menuDock, C_GOLD_DIM, 1.2)
+	makeCorner(menuDock, 10)
+	makeBorderStroke(menuDock, C_GOLD, 1.8)
 
 	local dockTitle = Instance.new("TextLabel")
 	dockTitle.Position = UDim2.new(0, 0, 0, 4)
@@ -886,8 +904,9 @@ function HUDController.Init(
 	dockTitle.Font = FONT_TITLE
 	dockTitle.Text = "EMPIRE MENU DOCK"
 	dockTitle.TextSize = 9
-	dockTitle.TextColor3 = C_GOLD
+	dockTitle.TextColor3 = Color3.fromRGB(255, 224, 94)
 	dockTitle.Parent = menuDock
+	makeTextOutline(dockTitle, 1.2)
 
 	local dockGrid = Instance.new("Frame")
 	dockGrid.Position = UDim2.new(0, 8, 0, 21)
@@ -896,29 +915,29 @@ function HUDController.Init(
 	dockGrid.Parent = menuDock
 
 	local dockGridLayout = Instance.new("UIGridLayout")
-	dockGridLayout.CellSize = UDim2.fromOffset(64, 49)
+	dockGridLayout.CellSize = UDim2.fromOffset(65, 50)
 	dockGridLayout.CellPadding = UDim2.fromOffset(6, 6)
 	dockGridLayout.SortOrder = Enum.SortOrder.LayoutOrder
 	dockGridLayout.Parent = dockGrid
 
-	createDockGridButton(dockGrid, "BaseBtn", "Base", "H", C_INNER, C_GOLD, C_GOLD, 1, function()
+	createDockGridButton(dockGrid, "BaseBtn", "Base", "H", Color3.fromRGB(40, 48, 72), C_GOLD, Color3.fromRGB(255, 224, 94), 1, function()
 		if onReturnHome then
 			onReturnHome()
 		end
 	end)
-	createDockGridButton(dockGrid, "KitchenBtn", "Kitchen", "C", C_INNER, C_BORDER, C_ASH, 2, function()
+	createDockGridButton(dockGrid, "KitchenBtn", "Kitchen", "C", Color3.fromRGB(186, 102, 16), Color3.fromRGB(252, 186, 56), Color3.fromRGB(255, 236, 172), 2, function()
 		onOpenMenu("Kitchen")
 	end)
-	createDockGridButton(dockGrid, "WarehouseBtn", "Storage", "B", C_INNER, C_BORDER, C_ASH, 3, function()
+	createDockGridButton(dockGrid, "WarehouseBtn", "Storage", "B", Color3.fromRGB(20, 104, 174), Color3.fromRGB(56, 189, 248), Color3.fromRGB(196, 238, 255), 3, function()
 		onOpenMenu("Warehouses")
 	end)
-	createDockGridButton(dockGrid, "UpgradeBtn", "Empire", "U", C_INNER, C_BORDER, C_ASH, 4, function()
+	createDockGridButton(dockGrid, "UpgradeBtn", "Empire", "U", Color3.fromRGB(154, 112, 16), Color3.fromRGB(250, 204, 21), Color3.fromRGB(255, 240, 172), 4, function()
 		onOpenMenu("Upgrades")
 	end)
-	createDockGridButton(dockGrid, "BlackMarketBtn", "Market", "M", C_CRIMSON_BG, C_OXBLOOD, Color3.fromRGB(234, 114, 122), 5, function()
+	createDockGridButton(dockGrid, "BlackMarketBtn", "Market", "M", Color3.fromRGB(158, 22, 48), Color3.fromRGB(244, 63, 94), Color3.fromRGB(255, 192, 204), 5, function()
 		onOpenMenu("BlackMarket")
 	end)
-	createDockGridButton(dockGrid, "RobuxShopBtn", "Store", "P", Color3.fromRGB(28, 25, 19), C_GOLD, C_GOLD, 6, function()
+	createDockGridButton(dockGrid, "RobuxShopBtn", "Store", "P", Color3.fromRGB(16, 128, 68), Color3.fromRGB(52, 211, 153), Color3.fromRGB(196, 255, 224), 6, function()
 		onOpenMenu("Shop")
 	end)
 
@@ -1532,7 +1551,7 @@ function HUDController.Update(state: { [string]: any }): ()
 		local famTag = if typeof(fam) == "table" and fam.InFamily and typeof(fam.FamilyName) == "string" then (" • " .. fam.FamilyName) else ""
 		local pTag = if pLv > 0 then string.format(" P%d", pLv) else ""
 		emperorBanner.Text = string.format(
-			"%s%s  •  %d★ BISTRO  •  DON: %s%s",
+			"%s%s  |  %d-STAR BISTRO  |  DON: %s%s",
 			rankTitle,
 			pTag,
 			stars,

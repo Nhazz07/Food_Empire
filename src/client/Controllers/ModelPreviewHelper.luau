@@ -38,6 +38,24 @@ local function addPart(model: Model, name: string, size: Vector3, cf: CFrame, co
 	return p
 end
 
+local function addWedge(model: Model, name: string, size: Vector3, cf: CFrame, col: Color3, mat: Enum.Material): WedgePart
+	local w = Instance.new("WedgePart")
+	w.Name = name
+	w.Size = size
+	w.CFrame = cf
+	w.Color = col
+	w.Material = mat
+	w.Anchored = true
+	w.CanCollide = false
+	w.CanTouch = false
+	w.CanQuery = false
+	w.CastShadow = false
+	w.TopSurface = Enum.SurfaceType.Smooth
+	w.BottomSurface = Enum.SurfaceType.Smooth
+	w.Parent = model
+	return w
+end
+
 local function freezeModelForPreview(model: Model): Model
 	for _, desc in ipairs(model:GetDescendants()) do
 		if desc:IsA("BasePart") then
@@ -56,110 +74,231 @@ end
 local function buildWeaponModel(weaponId: string): Model
 	local m = Instance.new("Model")
 	m.Name = "Preview_" .. weaponId
-	local darkSteel = Color3.fromRGB(64, 70, 82)
-	local brushedSteel = Color3.fromRGB(156, 164, 178)
-	local chrome = Color3.fromRGB(204, 210, 220)
-	local gripCol = Color3.fromRGB(38, 42, 50)
-	local walnut = Color3.fromRGB(118, 72, 42)
-	local brass = Color3.fromRGB(204, 168, 76)
-	local oxblood = Color3.fromRGB(156, 34, 44)
-	local olive = Color3.fromRGB(74, 84, 70)
+	local matteBlack = Color3.fromRGB(28, 32, 38)
+	local darkSteel = Color3.fromRGB(58, 64, 76)
+	local brushedSteel = Color3.fromRGB(162, 170, 184)
+	local chrome = Color3.fromRGB(218, 224, 234)
+	local gripCol = Color3.fromRGB(34, 38, 46)
+	local walnut = Color3.fromRGB(122, 74, 42)
+	local brass = Color3.fromRGB(224, 182, 68)
+	local oxblood = Color3.fromRGB(184, 34, 48)
+	local olive = Color3.fromRGB(76, 88, 70)
+	local boreDark = Color3.fromRGB(12, 14, 18)
+
+	local function addPicatinnyRail(y: number, zStart: number, zEnd: number, col: Color3)
+		addPart(m, "RailBase", Vector3.new(0.24, 0.06, math.abs(zEnd - zStart)), CFrame.new(0, y, (zStart + zEnd) * 0.5), col, Enum.Material.Metal, nil)
+		local steps = math.max(2, math.floor(math.abs(zEnd - zStart) / 0.24))
+		for i = 0, steps do
+			local z = zStart + (zEnd - zStart) * (i / steps)
+			addPart(m, "RailNotch_" .. i, Vector3.new(0.26, 0.07, 0.10), CFrame.new(0, y + 0.04, z), col, Enum.Material.Metal, nil)
+		end
+	end
+
+	local function addErgonomicGrip(gripColor: Color3, zOff: number?)
+		local z = zOff or 0.0
+		-- Angled tactical pistol grip + palm swell + floorplate + closed trigger guard + curved trigger
+		addPart(m, "PistolGrip", Vector3.new(0.27, 0.94, 0.42), CFrame.new(0, -0.02, z + 0.08) * CFrame.Angles(math.rad(-15), 0, 0), gripColor, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "GripPlate", Vector3.new(0.30, 0.10, 0.46), CFrame.new(0, -0.48, z + 0.20) * CFrame.Angles(math.rad(-15), 0, 0), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "TriggerGuardBot", Vector3.new(0.14, 0.07, 0.48), CFrame.new(0, 0.10, z - 0.34), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "TriggerGuardFront", Vector3.new(0.14, 0.34, 0.07), CFrame.new(0, 0.26, z - 0.56), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "Trigger", Vector3.new(0.06, 0.24, 0.09), CFrame.new(0, 0.26, z - 0.30) * CFrame.Angles(math.rad(22), 0, 0), brushedSteel, Enum.Material.Metal, nil)
+	end
 
 	if weaponId == "GoldenSpatula" then
-		addPart(m, "Handle", Vector3.new(0.28, 2.4, 0.28), CFrame.new(0, -0.6, 0), walnut, Enum.Material.Wood, nil)
-		addPart(m, "Neck", Vector3.new(0.20, 0.65, 0.16), CFrame.new(0, 0.88, 0), brass, Enum.Material.Metal, nil)
-		addPart(m, "Blade", Vector3.new(1.15, 1.38, 0.12), CFrame.new(0, 1.72, 0), brass, Enum.Material.Metal, nil)
+		addPart(m, "Handle", Vector3.new(0.28, 2.25, 0.28), CFrame.new(0, -0.6, 0), walnut, Enum.Material.Wood, nil)
+		addPart(m, "Pommel", Vector3.new(0.32, 0.18, 0.32), CFrame.new(0, -1.72, 0), brass, Enum.Material.Metal, nil)
+		addPart(m, "Neck", Vector3.new(0.18, 0.72, 0.14), CFrame.new(0, 0.85, 0), brass, Enum.Material.Metal, nil)
+		addPart(m, "Blade", Vector3.new(1.18, 1.38, 0.10), CFrame.new(0, 1.74, 0), brass, Enum.Material.Metal, nil)
+		for sx = -0.32, 0.32, 0.32 do
+			addPart(m, "Slot_" .. tostring(sx), Vector3.new(0.12, 0.82, 0.14), CFrame.new(sx, 1.74, 0), boreDark, Enum.Material.Metal, nil)
+		end
 		return m
 	elseif weaponId == "MafiaKnife" then
-		addPart(m, "Grip", Vector3.new(0.24, 0.26, 1.15), CFrame.new(0, 0, 0.55), gripCol, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Bolster", Vector3.new(0.32, 0.34, 0.16), CFrame.new(0, 0, -0.05), brass, Enum.Material.Metal, nil)
-		addPart(m, "StilettoBlade", Vector3.new(0.08, 0.24, 1.75), CFrame.new(0, 0, -1.0), chrome, Enum.Material.Metal, nil)
-		addPart(m, "BladeTip", Vector3.new(0.06, 0.14, 0.42), CFrame.new(0, 0, -2.02), brushedSteel, Enum.Material.Metal, nil)
+		addPart(m, "Grip", Vector3.new(0.24, 0.26, 1.15), CFrame.new(0, 0, 0.56), gripCol, Enum.Material.Leather, nil)
+		addPart(m, "Pommel", Vector3.new(0.28, 0.28, 0.18), CFrame.new(0, 0, 1.18), brass, Enum.Material.Metal, nil)
+		addPart(m, "Guard", Vector3.new(0.46, 0.36, 0.14), CFrame.new(0, 0, -0.04), brass, Enum.Material.Metal, nil)
+		addPart(m, "StilettoBlade", Vector3.new(0.08, 0.24, 1.65), CFrame.new(0, 0, -0.94), chrome, Enum.Material.Metal, nil)
+		addPart(m, "Fuller", Vector3.new(0.10, 0.06, 1.25), CFrame.new(0, 0.04, -0.86), darkSteel, Enum.Material.Metal, nil)
+		addWedge(m, "BladeTip", Vector3.new(0.08, 0.24, 0.52), CFrame.new(0, 0, -2.02) * CFrame.Angles(0, math.rad(180), 0), chrome, Enum.Material.Metal)
 		return m
 	elseif weaponId == "SamuraiKatana" then
-		addPart(m, "Tsuka", Vector3.new(0.22, 0.28, 1.45), CFrame.new(0, 0, 1.15), gripCol, Enum.Material.Fabric, nil)
-		addPart(m, "SilkWrap", Vector3.new(0.24, 0.30, 0.14), CFrame.new(0, 0, 1.55), oxblood, Enum.Material.Fabric, nil)
-		addPart(m, "Tsuba", Vector3.new(0.56, 0.56, 0.12), CFrame.new(0, 0, 0.38), brass, Enum.Material.Metal, nil)
-		addPart(m, "BladeBase", Vector3.new(0.08, 0.26, 2.65), CFrame.new(0, 0.02, -0.98), chrome, Enum.Material.Metal, nil)
-		addPart(m, "BladeEdge", Vector3.new(0.06, 0.22, 1.65), CFrame.new(0, 0.12, -3.05) * CFrame.Angles(math.rad(6), 0, 0), brushedSteel, Enum.Material.Metal, nil)
+		addPart(m, "Tsuka", Vector3.new(0.22, 0.28, 1.48), CFrame.new(0, 0, 1.15), matteBlack, Enum.Material.Fabric, nil)
+		for i = 0, 5 do
+			addPart(m, "DiamondWrap_" .. i, Vector3.new(0.24, 0.20, 0.14), CFrame.new(0, 0, 0.56 + i * 0.22) * CFrame.Angles(math.rad(45), 0, 0), oxblood, Enum.Material.Fabric, nil)
+		end
+		addPart(m, "Kashira", Vector3.new(0.24, 0.30, 0.14), CFrame.new(0, 0, 1.92), brass, Enum.Material.Metal, nil)
+		addPart(m, "Tsuba", Vector3.new(0.12, 0.62, 0.62), CFrame.new(0, 0, 0.38) * CFrame.Angles(0, math.rad(90), 0), brass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Habaki", Vector3.new(0.14, 0.28, 0.24), CFrame.new(0, 0.01, 0.20), brass, Enum.Material.Metal, nil)
+		addPart(m, "BladeBase", Vector3.new(0.08, 0.25, 2.45), CFrame.new(0, 0.02, -1.14), chrome, Enum.Material.Metal, nil)
+		addPart(m, "BladeCurve", Vector3.new(0.07, 0.23, 1.55), CFrame.new(0, 0.10, -3.12) * CFrame.Angles(math.rad(6), 0, 0), chrome, Enum.Material.Metal, nil)
+		addWedge(m, "KissakiTip", Vector3.new(0.07, 0.23, 0.50), CFrame.new(0, 0.18, -4.12) * CFrame.Angles(math.rad(6), math.rad(180), 0), brushedSteel, Enum.Material.Metal)
 		return m
 	end
 
-	addPart(m, "Handle", Vector3.new(0.28, 0.92, 0.42), CFrame.new(), if weaponId == "GoldenEmperorPistol" then P.OffWhite else gripCol, Enum.Material.SmoothPlastic, nil)
-	addPart(m, "TriggerGuard", Vector3.new(0.14, 0.08, 0.42), CFrame.new(0, 0.16, -0.34), darkSteel, Enum.Material.Metal, nil)
+	addErgonomicGrip(if weaponId == "GoldenEmperorPistol" then P.OffWhite else gripCol, 0)
 
 	if weaponId == "PepperShotgun" then
-		addPart(m, "Stock", Vector3.new(0.32, 0.56, 1.35), CFrame.new(0, 0.28, 0.78) * CFrame.Angles(math.rad(-10), 0, 0), walnut, Enum.Material.Wood, nil)
-		addPart(m, "Receiver", Vector3.new(0.36, 0.48, 1.25), CFrame.new(0, 0.52, -0.38), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Barrel", Vector3.new(2.45, 0.24, 0.24), CFrame.new(0, 0.62, -2.15) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "MagTube", Vector3.new(1.95, 0.22, 0.22), CFrame.new(0, 0.39, -1.90) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Pump", Vector3.new(0.42, 0.36, 0.92), CFrame.new(0, 0.38, -1.78), walnut, Enum.Material.Wood, nil)
+		-- Classic Trench Pump Shotgun (walnut stock + recoil pad + side ejection + barrel clamp + ribbed pump + bead sight)
+		addPart(m, "Stock", Vector3.new(0.32, 0.60, 1.38), CFrame.new(0, 0.24, 0.86) * CFrame.Angles(math.rad(-10), 0, 0), walnut, Enum.Material.Wood, nil)
+		addPart(m, "RecoilPad", Vector3.new(0.34, 0.64, 0.14), CFrame.new(0, 0.12, 1.56) * CFrame.Angles(math.rad(-10), 0, 0), matteBlack, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Receiver", Vector3.new(0.38, 0.50, 1.34), CFrame.new(0, 0.54, -0.40), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "EjectionPort", Vector3.new(0.40, 0.18, 0.44), CFrame.new(0, 0.60, -0.46), brushedSteel, Enum.Material.Metal, nil)
+		addPart(m, "Barrel", Vector3.new(2.58, 0.23, 0.23), CFrame.new(0, 0.65, -2.32) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "MuzzleBore", Vector3.new(0.08, 0.15, 0.15), CFrame.new(0, 0.65, -3.60) * CFrame.Angles(0, math.rad(90), 0), boreDark, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "MagTube", Vector3.new(2.12, 0.22, 0.22), CFrame.new(0, 0.40, -2.08) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "BarrelClamp", Vector3.new(0.28, 0.48, 0.18), CFrame.new(0, 0.52, -3.02), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "Pump", Vector3.new(0.42, 0.36, 0.96), CFrame.new(0, 0.40, -1.84), walnut, Enum.Material.Wood, nil)
+		for r = -2, 2 do
+			addPart(m, "PumpRib_" .. r, Vector3.new(0.45, 0.34, 0.06), CFrame.new(0, 0.40, -1.84 + r * 0.16), Color3.fromRGB(86, 48, 26), Enum.Material.Wood, nil)
+		end
+		addPart(m, "BeadSight", Vector3.new(0.10, 0.12, 0.10), CFrame.new(0, 0.80, -3.50), brass, Enum.Material.Metal, Enum.PartType.Ball)
 	elseif weaponId == "AutoCombatShotgun" then
-		addPart(m, "Stock", Vector3.new(0.34, 0.60, 1.30), CFrame.new(0, 0.34, 0.80), gripCol, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Receiver", Vector3.new(0.40, 0.54, 1.40), CFrame.new(0, 0.54, -0.42), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Optic", Vector3.new(0.28, 0.26, 0.40), CFrame.new(0, 0.99, -0.32), gripCol, Enum.Material.Metal, nil)
-		addPart(m, "HeatShield", Vector3.new(0.34, 0.28, 1.95), CFrame.new(0, 0.64, -2.02), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Tube", Vector3.new(2.25, 0.26, 0.26), CFrame.new(0, 0.38, -2.05) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Pump", Vector3.new(0.46, 0.38, 1.05), CFrame.new(0, 0.38, -1.78), gripCol, Enum.Material.SmoothPlastic, nil)
+		-- Tactical Combat Auto-Shotgun (adjustable stock + top rail + red-dot optic + vented heatshield + choke)
+		addPart(m, "Stock", Vector3.new(0.34, 0.66, 1.28), CFrame.new(0, 0.36, 0.86), matteBlack, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "CheekRest", Vector3.new(0.36, 0.18, 0.72), CFrame.new(0, 0.68, 0.92), darkSteel, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Receiver", Vector3.new(0.42, 0.54, 1.44), CFrame.new(0, 0.56, -0.44), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "EjectionPort", Vector3.new(0.44, 0.18, 0.46), CFrame.new(0, 0.60, -0.48), chrome, Enum.Material.Metal, nil)
+		addPicatinnyRail(0.85, 0.18, -1.10, matteBlack)
+		addPart(m, "OpticHood", Vector3.new(0.30, 0.32, 0.44), CFrame.new(0, 1.04, -0.32), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "OpticLens", Vector3.new(0.22, 0.22, 0.46), CFrame.new(0, 1.04, -0.32), Color3.fromRGB(48, 128, 198), Enum.Material.Glass, nil)
+		addPart(m, "HeatShield", Vector3.new(0.36, 0.28, 2.02), CFrame.new(0, 0.66, -2.14), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "BarrelChoke", Vector3.new(0.36, 0.27, 0.27), CFrame.new(0, 0.65, -3.28) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Tube", Vector3.new(2.26, 0.26, 0.26), CFrame.new(0, 0.38, -2.12) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Pump", Vector3.new(0.46, 0.38, 1.08), CFrame.new(0, 0.38, -1.82), matteBlack, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "ShellHolder", Vector3.new(0.46, 0.24, 0.64), CFrame.new(0, 0.56, -0.44), oxblood, Enum.Material.SmoothPlastic, nil)
 	elseif weaponId == "TacticalSMG" then
-		addPart(m, "Receiver", Vector3.new(0.34, 0.46, 1.35), CFrame.new(0, 0.56, -0.42), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Rail", Vector3.new(0.26, 0.10, 1.28), CFrame.new(0, 0.82, -0.42), brass, Enum.Material.Metal, nil)
-		addPart(m, "Mag", Vector3.new(0.24, 1.05, 0.34), CFrame.new(0, -0.14, -0.78) * CFrame.Angles(math.rad(-14), 0, 0), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Holo", Vector3.new(0.28, 0.30, 0.42), CFrame.new(0, 0.98, -0.35), gripCol, Enum.Material.Metal, nil)
-		addPart(m, "Handguard", Vector3.new(0.36, 0.38, 0.85), CFrame.new(0, 0.52, -1.48), gripCol, Enum.Material.Metal, nil)
-		addPart(m, "Suppressor", Vector3.new(1.05, 0.28, 0.28), CFrame.new(0, 0.54, -2.35) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Stock", Vector3.new(0.28, 0.62, 0.16), CFrame.new(0, 0.42, 1.18), gripCol, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Strut", Vector3.new(0.16, 0.18, 0.95), CFrame.new(0, 0.52, 0.72), darkSteel, Enum.Material.Metal, nil)
+		-- MP5/MPX-Style Suppressed Tactical SMG (curved banana mag + rail + holo optic + vented shroud + ribbed suppressor + folding stock)
+		addPart(m, "UpperRec", Vector3.new(0.34, 0.30, 1.44), CFrame.new(0, 0.68, -0.46), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "LowerRec", Vector3.new(0.32, 0.24, 1.24), CFrame.new(0, 0.44, -0.38), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "BoltPort", Vector3.new(0.36, 0.14, 0.38), CFrame.new(0, 0.68, -0.52), chrome, Enum.Material.Metal, nil)
+		addPicatinnyRail(0.85, 0.16, -1.82, darkSteel)
+		-- Two-segment curved banana magazine
+		addPart(m, "MagTop", Vector3.new(0.22, 0.64, 0.34), CFrame.new(0, 0.04, -0.78) * CFrame.Angles(math.rad(-10), 0, 0), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "MagCurve", Vector3.new(0.22, 0.62, 0.34), CFrame.new(0, -0.48, -0.94) * CFrame.Angles(math.rad(-24), 0, 0), darkSteel, Enum.Material.Metal, nil)
+		-- Holographic Optic
+		addPart(m, "HoloHood", Vector3.new(0.30, 0.34, 0.48), CFrame.new(0, 1.06, -0.38), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "HoloGlass", Vector3.new(0.22, 0.24, 0.50), CFrame.new(0, 1.06, -0.38), Color3.fromRGB(56, 174, 224), Enum.Material.Glass, nil)
+		addPart(m, "Handguard", Vector3.new(0.36, 0.38, 0.88), CFrame.new(0, 0.56, -1.56), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "AngledGrip", Vector3.new(0.22, 0.24, 0.52), CFrame.new(0, 0.28, -1.62) * CFrame.Angles(math.rad(28), 0, 0), gripCol, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Suppressor", Vector3.new(1.18, 0.28, 0.28), CFrame.new(0, 0.58, -2.56) * CFrame.Angles(0, math.rad(90), 0), matteBlack, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "SuppCollar", Vector3.new(0.18, 0.32, 0.32), CFrame.new(0, 0.58, -2.02) * CFrame.Angles(0, math.rad(90), 0), brass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "MuzzleBore", Vector3.new(0.06, 0.16, 0.16), CFrame.new(0, 0.58, -3.14) * CFrame.Angles(0, math.rad(90), 0), boreDark, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "StockButt", Vector3.new(0.28, 0.68, 0.18), CFrame.new(0, 0.42, 1.24), matteBlack, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "StrutTop", Vector3.new(0.14, 0.12, 1.04), CFrame.new(0, 0.64, 0.72), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "StrutBot", Vector3.new(0.14, 0.10, 1.04), CFrame.new(0, 0.34, 0.72) * CFrame.Angles(math.rad(-14), 0, 0), darkSteel, Enum.Material.Metal, nil)
 	elseif weaponId == "SilencedDeagle" then
-		addPart(m, "Lower", Vector3.new(0.30, 0.25, 1.62), CFrame.new(0, 0.43, -0.56), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Slide", Vector3.new(0.34, 0.36, 1.72), CFrame.new(0, 0.68, -0.58), chrome, Enum.Material.Metal, nil)
-		addPart(m, "Suppressor", Vector3.new(0.95, 0.24, 0.24), CFrame.new(0, 0.66, -1.88) * CFrame.Angles(0, math.rad(90), 0), gripCol, Enum.Material.Metal, Enum.PartType.Cylinder)
-	elseif weaponId == "SyndicateCarbine" then
-		addPart(m, "Buffer", Vector3.new(0.95, 0.24, 0.24), CFrame.new(0, 0.56, 0.68) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Stock", Vector3.new(0.32, 0.72, 0.56), CFrame.new(0, 0.44, 1.18), olive, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Receiver", Vector3.new(0.36, 0.50, 1.48), CFrame.new(0, 0.56, -0.46), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Mag", Vector3.new(0.24, 1.10, 0.42), CFrame.new(0, -0.18, -0.84) * CFrame.Angles(math.rad(-16), 0, 0), gripCol, Enum.Material.Metal, nil)
-		addPart(m, "Handguard", Vector3.new(0.38, 0.42, 1.38), CFrame.new(0, 0.56, -1.84), olive, Enum.Material.Metal, nil)
-		addPart(m, "Scope", Vector3.new(0.68, 0.30, 0.30), CFrame.new(0, 0.96, -0.42) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Barrel", Vector3.new(1.15, 0.20, 0.20), CFrame.new(0, 0.58, -3.02) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-	elseif weaponId == "ShadowSniper" then
-		addPart(m, "Stock", Vector3.new(0.34, 0.68, 1.45), CFrame.new(0, 0.40, 0.92), gripCol, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Chassis", Vector3.new(0.38, 0.48, 2.25), CFrame.new(0, 0.54, -0.82), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "BoxMag", Vector3.new(0.26, 0.65, 0.48), CFrame.new(0, 0.04, -0.78), brushedSteel, Enum.Material.Metal, nil)
-		addPart(m, "Scope", Vector3.new(1.48, 0.26, 0.26), CFrame.new(0, 1.02, -0.62) * CFrame.Angles(0, math.rad(90), 0), gripCol, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "LensRing", Vector3.new(0.32, 0.34, 0.34), CFrame.new(0, 1.02, -1.40) * CFrame.Angles(0, math.rad(90), 0), brass, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "LongBarrel", Vector3.new(2.25, 0.22, 0.22), CFrame.new(0, 0.60, -2.98) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Brake", Vector3.new(0.32, 0.28, 0.38), CFrame.new(0, 0.60, -4.18), darkSteel, Enum.Material.Metal, nil)
+		-- Heavy Chrome Desert Eagle + Ribbed Suppressor + Iron Sights + Ejection Port + Hammer
+		addPart(m, "LowerFrame", Vector3.new(0.30, 0.24, 1.66), CFrame.new(0, 0.42, -0.56), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "UnderRail", Vector3.new(0.24, 0.08, 0.78), CFrame.new(0, 0.28, -0.96), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "Slide", Vector3.new(0.34, 0.34, 1.78), CFrame.new(0, 0.68, -0.58), chrome, Enum.Material.Metal, nil)
+		addPart(m, "SlidePort", Vector3.new(0.36, 0.16, 0.44), CFrame.new(0, 0.72, -0.46), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "Hammer", Vector3.new(0.12, 0.20, 0.18), CFrame.new(0, 0.72, 0.34) * CFrame.Angles(math.rad(-28), 0, 0), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "RearSight", Vector3.new(0.26, 0.12, 0.12), CFrame.new(0, 0.89, 0.18), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "FrontSight", Vector3.new(0.10, 0.14, 0.16), CFrame.new(0, 0.89, -1.34), oxblood, Enum.Material.Metal, nil)
+		addPart(m, "Suppressor", Vector3.new(1.10, 0.26, 0.26), CFrame.new(0, 0.66, -2.02) * CFrame.Angles(0, math.rad(90), 0), matteBlack, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "SuppRing", Vector3.new(0.14, 0.29, 0.29), CFrame.new(0, 0.66, -1.52) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "MuzzleBore", Vector3.new(0.06, 0.14, 0.14), CFrame.new(0, 0.66, -2.56) * CFrame.Angles(0, math.rad(90), 0), boreDark, Enum.Material.Metal, Enum.PartType.Cylinder)
+	elseif weaponId == "SyndicateCarbine" or weaponId == "CrimsonDragonAR" then
+		-- Realistic M4/HK416 Tactical Assault Rifle (crane stock, beveled receiver, curved mag, picatinny rail, ACOG/red-dot, vented handguard, gas block, ported muzzle brake!)
+		local isCrimson = (weaponId == "CrimsonDragonAR")
+		local accent = if isCrimson then oxblood else olive
+		local trimCol = if isCrimson then brass else brushedSteel
+		addPart(m, "BufferTube", Vector3.new(1.02, 0.24, 0.24), CFrame.new(0, 0.58, 0.72) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "CraneStock", Vector3.new(0.34, 0.74, 0.74), CFrame.new(0, 0.44, 1.26), accent, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "RecoilPad", Vector3.new(0.36, 0.78, 0.12), CFrame.new(0, 0.44, 1.66), matteBlack, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "UpperRec", Vector3.new(0.36, 0.30, 1.54), CFrame.new(0, 0.68, -0.48), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "LowerRec", Vector3.new(0.34, 0.26, 1.38), CFrame.new(0, 0.44, -0.44), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "EjectionPort", Vector3.new(0.38, 0.14, 0.46), CFrame.new(0, 0.68, -0.58), chrome, Enum.Material.Metal, nil)
+		addPart(m, "Stripe", Vector3.new(0.39, 0.10, 1.38), CFrame.new(0, 0.60, -0.48), accent, Enum.Material.Metal, nil)
+		-- Two-piece curved 30-rd STANAG tactical magazine
+		addPart(m, "MagUpper", Vector3.new(0.24, 0.64, 0.42), CFrame.new(0, 0.04, -0.84) * CFrame.Angles(math.rad(-8), 0, 0), if isCrimson then oxblood else gripCol, Enum.Material.Metal, nil)
+		addPart(m, "MagLower", Vector3.new(0.24, 0.66, 0.42), CFrame.new(0, -0.48, -1.00) * CFrame.Angles(math.rad(-22), 0, 0), if isCrimson then oxblood else darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "MagBase", Vector3.new(0.28, 0.10, 0.46), CFrame.new(0, -0.78, -1.14) * CFrame.Angles(math.rad(-22), 0, 0), trimCol, Enum.Material.Metal, nil)
+		-- Vented M-LOK Handguard + Foregrip + Top Picatinny Rail
+		addPart(m, "Handguard", Vector3.new(0.38, 0.42, 1.52), CFrame.new(0, 0.58, -1.96), if isCrimson then matteBlack else accent, Enum.Material.Metal, nil)
+		for v = 0, 3 do
+			addPart(m, "Vent_" .. v, Vector3.new(0.41, 0.10, 0.22), CFrame.new(0, 0.58, -1.42 - v * 0.34), trimCol, Enum.Material.Metal, nil)
+		end
+		addPart(m, "VertForegrip", Vector3.new(0.22, 0.52, 0.24), CFrame.new(0, 0.14, -2.04) * CFrame.Angles(math.rad(10), 0, 0), matteBlack, Enum.Material.SmoothPlastic, nil)
+		addPicatinnyRail(0.84, 0.20, -2.68, if isCrimson then brass else matteBlack)
+		-- Tactical ACOG Optic with Elevated Mount & Tinted Objective Lens
+		addPart(m, "OpticMount", Vector3.new(0.22, 0.18, 0.52), CFrame.new(0, 0.94, -0.46), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "OpticTube", Vector3.new(0.84, 0.32, 0.32), CFrame.new(0, 1.12, -0.48) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "OpticRing", Vector3.new(0.18, 0.36, 0.36), CFrame.new(0, 1.12, -0.88) * CFrame.Angles(0, math.rad(90), 0), trimCol, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "OpticLens", Vector3.new(0.08, 0.26, 0.26), CFrame.new(0, 1.12, -0.96) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(56, 152, 232), Enum.Material.Glass, Enum.PartType.Cylinder)
+		-- Gas Block + Front Sight + Fluted Barrel + Multi-Port Muzzle Brake
+		addPart(m, "FrontSight", Vector3.new(0.12, 0.26, 0.16), CFrame.new(0, 0.92, -2.66), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "Barrel", Vector3.new(1.12, 0.20, 0.20), CFrame.new(0, 0.59, -3.22) * CFrame.Angles(0, math.rad(90), 0), trimCol, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "MuzzleBrake", Vector3.new(0.30, 0.28, 0.44), CFrame.new(0, 0.59, -3.86), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "MuzzleBore", Vector3.new(0.08, 0.15, 0.15), CFrame.new(0, 0.59, -4.08) * CFrame.Angles(0, math.rad(90), 0), boreDark, Enum.Material.Metal, Enum.PartType.Cylinder)
+	elseif weaponId == "ShadowSniper" or weaponId == "PhantomAssassinRifle" then
+		-- Long-Range Precision Sniper / Suppressed Assassin Rifle (precision cheek stock, bolt knob, box mag, bipod, twin scope rings, high-power scope, brake/suppressor)
+		local isPhantom = (weaponId == "PhantomAssassinRifle")
+		addPart(m, "Stock", Vector3.new(0.34, 0.72, 1.48), CFrame.new(0, 0.40, 0.96), matteBlack, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "CheekRiser", Vector3.new(0.36, 0.24, 0.68), CFrame.new(0, 0.78, 0.98), darkSteel, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Chassis", Vector3.new(0.38, 0.50, 2.38), CFrame.new(0, 0.56, -0.88), if isPhantom then Color3.fromRGB(24, 28, 36) else darkSteel, Enum.Material.Metal, nil)
+		if isPhantom then
+			addPart(m, "AccentStripe", Vector3.new(0.41, 0.10, 1.78), CFrame.new(0, 0.64, -0.84), oxblood, Enum.Material.Metal, nil)
+		end
+		addPart(m, "BoltHandle", Vector3.new(0.46, 0.10, 0.10), CFrame.new(0.24, 0.64, -0.26), chrome, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "BoxMag", Vector3.new(0.26, 0.68, 0.50), CFrame.new(0, 0.02, -0.80), brushedSteel, Enum.Material.Metal, nil)
+		addPicatinnyRail(0.84, 0.16, -1.96, matteBlack)
+		addPart(m, "ScopeRing1", Vector3.new(0.30, 0.30, 0.14), CFrame.new(0, 0.98, -0.28), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "ScopeRing2", Vector3.new(0.30, 0.30, 0.14), CFrame.new(0, 0.98, -1.04), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "ScopeTube", Vector3.new(1.76, 0.28, 0.28), CFrame.new(0, 1.12, -0.68) * CFrame.Angles(0, math.rad(90), 0), matteBlack, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "ScopeBell", Vector3.new(0.42, 0.38, 0.38), CFrame.new(0, 1.12, -1.62) * CFrame.Angles(0, math.rad(90), 0), if isPhantom then oxblood else brass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "ScopeLens", Vector3.new(0.08, 0.30, 0.30), CFrame.new(0, 1.12, -1.82) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(56, 178, 242), Enum.Material.Glass, Enum.PartType.Cylinder)
+		-- Folded Tactical Bipod under forend
+		addPart(m, "BipodL", Vector3.new(0.10, 0.10, 0.92), CFrame.new(-0.22, 0.24, -2.06) * CFrame.Angles(math.rad(-12), 0, 0), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "BipodR", Vector3.new(0.10, 0.10, 0.92), CFrame.new(0.22, 0.24, -2.06) * CFrame.Angles(math.rad(-12), 0, 0), darkSteel, Enum.Material.Metal, nil)
+		if isPhantom then
+			addPart(m, "SuppressedBarrel", Vector3.new(2.58, 0.30, 0.30), CFrame.new(0, 0.60, -3.28) * CFrame.Angles(0, math.rad(90), 0), matteBlack, Enum.Material.Metal, Enum.PartType.Cylinder)
+			addPart(m, "MuzzleBore", Vector3.new(0.06, 0.16, 0.16), CFrame.new(0, 0.60, -4.56) * CFrame.Angles(0, math.rad(90), 0), boreDark, Enum.Material.Metal, Enum.PartType.Cylinder)
+		else
+			addPart(m, "LongBarrel", Vector3.new(2.26, 0.22, 0.22), CFrame.new(0, 0.60, -3.14) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+			addPart(m, "Brake", Vector3.new(0.34, 0.30, 0.44), CFrame.new(0, 0.60, -4.38), matteBlack, Enum.Material.Metal, nil)
+			addPart(m, "MuzzleBore", Vector3.new(0.06, 0.16, 0.16), CFrame.new(0, 0.60, -4.60) * CFrame.Angles(0, math.rad(90), 0), boreDark, Enum.Material.Metal, Enum.PartType.Cylinder)
+		end
 	elseif weaponId == "GoldenEmperorPistol" then
-		addPart(m, "Lower", Vector3.new(0.30, 0.24, 1.48), CFrame.new(0, 0.42, -0.50), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Slide", Vector3.new(0.32, 0.34, 1.58), CFrame.new(0, 0.66, -0.52), brass, Enum.Material.Metal, nil)
-		addPart(m, "Comp", Vector3.new(0.32, 0.32, 0.38), CFrame.new(0, 0.66, -1.46), brass, Enum.Material.Metal, nil)
+		-- 24K Engraved Mafia Custom Pistol (pearl grip, black steel lower, gleaming gold slide + vented compensator + gold hammer + iron sights!)
+		addPart(m, "Lower", Vector3.new(0.30, 0.24, 1.54), CFrame.new(0, 0.42, -0.52), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "Slide", Vector3.new(0.34, 0.34, 1.66), CFrame.new(0, 0.68, -0.54), brass, Enum.Material.Metal, nil)
+		addPart(m, "EjectPort", Vector3.new(0.36, 0.14, 0.42), CFrame.new(0, 0.72, -0.44), chrome, Enum.Material.Metal, nil)
+		addPart(m, "Compensator", Vector3.new(0.34, 0.32, 0.44), CFrame.new(0, 0.68, -1.58), brass, Enum.Material.Metal, nil)
+		addPart(m, "CompPort", Vector3.new(0.36, 0.12, 0.18), CFrame.new(0, 0.74, -1.58), boreDark, Enum.Material.Metal, nil)
+		addPart(m, "Hammer", Vector3.new(0.12, 0.20, 0.16), CFrame.new(0, 0.72, 0.32) * CFrame.Angles(math.rad(-26), 0, 0), brass, Enum.Material.Metal, nil)
+		addPart(m, "RearSight", Vector3.new(0.24, 0.12, 0.12), CFrame.new(0, 0.89, 0.18), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "FrontSight", Vector3.new(0.10, 0.14, 0.14), CFrame.new(0, 0.89, -1.66), oxblood, Enum.Material.Metal, nil)
+		addPart(m, "MuzzleBore", Vector3.new(0.06, 0.16, 0.16), CFrame.new(0, 0.68, -1.80) * CFrame.Angles(0, math.rad(90), 0), boreDark, Enum.Material.Metal, Enum.PartType.Cylinder)
 	elseif weaponId == "SyndicateTommyDrum" then
-		addPart(m, "WoodStock", Vector3.new(0.32, 0.62, 1.42), CFrame.new(0, 0.34, 0.86) * CFrame.Angles(math.rad(-8), 0, 0), walnut, Enum.Material.Wood, nil)
-		addPart(m, "Receiver", Vector3.new(0.38, 0.48, 1.56), CFrame.new(0, 0.58, -0.48), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "DrumMag", Vector3.new(0.42, 1.05, 1.05), CFrame.new(0, 0.02, -0.82), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "DrumBrass", Vector3.new(0.46, 0.36, 0.36), CFrame.new(0, 0.02, -0.82), brass, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Foregrip", Vector3.new(0.26, 0.66, 0.30), CFrame.new(0, 0.16, -1.68), walnut, Enum.Material.Wood, nil)
-		addPart(m, "FinBarrel", Vector3.new(1.65, 0.24, 0.24), CFrame.new(0, 0.60, -2.06) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-	elseif weaponId == "PhantomAssassinRifle" then
-		addPart(m, "Stock", Vector3.new(0.34, 0.68, 1.48), CFrame.new(0, 0.42, 0.94), gripCol, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Chassis", Vector3.new(0.38, 0.50, 2.30), CFrame.new(0, 0.54, -0.84), Color3.fromRGB(26, 28, 34), Enum.Material.Metal, nil)
-		addPart(m, "AccentStripe", Vector3.new(0.40, 0.10, 1.65), CFrame.new(0, 0.62, -0.78), oxblood, Enum.Material.Metal, nil)
-		addPart(m, "Scope", Vector3.new(1.55, 0.28, 0.28), CFrame.new(0, 1.04, -0.62) * CFrame.Angles(0, math.rad(90), 0), gripCol, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "SuppressedBarrel", Vector3.new(2.55, 0.30, 0.30), CFrame.new(0, 0.60, -3.15) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-	elseif weaponId == "CrimsonDragonAR" then
-		addPart(m, "Stock", Vector3.new(0.34, 0.72, 0.58), CFrame.new(0, 0.44, 1.18), oxblood, Enum.Material.Metal, nil)
-		addPart(m, "Buffer", Vector3.new(0.95, 0.24, 0.24), CFrame.new(0, 0.56, 0.68) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Receiver", Vector3.new(0.38, 0.52, 1.52), CFrame.new(0, 0.56, -0.46), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Stripe", Vector3.new(0.40, 0.16, 1.42), CFrame.new(0, 0.68, -0.48), oxblood, Enum.Material.Metal, nil)
-		addPart(m, "Mag", Vector3.new(0.24, 1.24, 0.44), CFrame.new(0, -0.22, -0.84) * CFrame.Angles(math.rad(-16), 0, 0), oxblood, Enum.Material.Metal, nil)
-		addPart(m, "Handguard", Vector3.new(0.40, 0.44, 1.45), CFrame.new(0, 0.56, -1.86), darkSteel, Enum.Material.Metal, nil)
-		addPart(m, "Rail", Vector3.new(0.26, 0.10, 2.55), CFrame.new(0, 0.84, -1.16), brass, Enum.Material.Metal, nil)
-		addPart(m, "Barrel", Vector3.new(1.22, 0.22, 0.22), CFrame.new(0, 0.58, -3.08) * CFrame.Angles(0, math.rad(90), 0), brass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		-- Iconic 1928 Mafia Thompson Submachine Gun (walnut stock + cooling fins + circular 100-rd drum mag + brass hub + vertical walnut foregrip + Cutts compensator!)
+		addPart(m, "WoodStock", Vector3.new(0.32, 0.66, 1.46), CFrame.new(0, 0.32, 0.88) * CFrame.Angles(math.rad(-9), 0, 0), walnut, Enum.Material.Wood, nil)
+		addPart(m, "ButtPlate", Vector3.new(0.34, 0.68, 0.10), CFrame.new(0, 0.20, 1.62) * CFrame.Angles(math.rad(-9), 0, 0), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "Receiver", Vector3.new(0.38, 0.48, 1.60), CFrame.new(0, 0.58, -0.50), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "TopKnob", Vector3.new(0.16, 0.18, 0.16), CFrame.new(0, 0.90, -0.34), chrome, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "DrumMag", Vector3.new(0.44, 1.12, 1.12), CFrame.new(0, -0.02, -0.86), matteBlack, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "DrumRing", Vector3.new(0.48, 0.78, 0.78), CFrame.new(0, -0.02, -0.86), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "DrumBrass", Vector3.new(0.52, 0.36, 0.36), CFrame.new(0, -0.02, -0.86), brass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Foregrip", Vector3.new(0.26, 0.72, 0.30), CFrame.new(0, 0.12, -1.76) * CFrame.Angles(math.rad(12), 0, 0), walnut, Enum.Material.Wood, nil)
+		addPart(m, "FinBarrel", Vector3.new(1.78, 0.22, 0.22), CFrame.new(0, 0.60, -2.14) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		for f = 0, 5 do
+			addPart(m, "CoolFin_" .. f, Vector3.new(0.06, 0.32, 0.32), CFrame.new(0, 0.60, -1.42 - f * 0.14) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		end
+		addPart(m, "CuttsComp", Vector3.new(0.24, 0.28, 0.36), CFrame.new(0, 0.60, -3.14), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "FrontBlade", Vector3.new(0.08, 0.18, 0.14), CFrame.new(0, 0.80, -3.16), brass, Enum.Material.Metal, nil)
 	else
-		addPart(m, "Lower", Vector3.new(0.28, 0.22, 1.38), CFrame.new(0, 0.42, -0.45), gripCol, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Slide", Vector3.new(0.30, 0.30, 1.46), CFrame.new(0, 0.64, -0.46), brushedSteel, Enum.Material.Metal, nil)
-		addPart(m, "Barrel", Vector3.new(0.32, 0.18, 0.18), CFrame.new(0, 0.63, -1.26) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		-- Realistic Street 9mm Semi-Auto Pistol (textured grip, polymer lower + picatinny rail, brushed steel slide + serrations + ejection port + tritium sights + bore!)
+		addPart(m, "Lower", Vector3.new(0.28, 0.22, 1.44), CFrame.new(0, 0.42, -0.48), matteBlack, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "UnderRail", Vector3.new(0.22, 0.08, 0.52), CFrame.new(0, 0.29, -0.88), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "Slide", Vector3.new(0.32, 0.32, 1.54), CFrame.new(0, 0.66, -0.50), brushedSteel, Enum.Material.Metal, nil)
+		addPart(m, "EjectPort", Vector3.new(0.34, 0.14, 0.38), CFrame.new(0, 0.70, -0.42), darkSteel, Enum.Material.Metal, nil)
+		for s = 0, 2 do
+			addPart(m, "Serr_" .. s, Vector3.new(0.34, 0.22, 0.05), CFrame.new(0, 0.66, 0.06 - s * 0.10), darkSteel, Enum.Material.Metal, nil)
+		end
+		addPart(m, "RearSight", Vector3.new(0.24, 0.12, 0.10), CFrame.new(0, 0.86, 0.16), matteBlack, Enum.Material.Metal, nil)
+		addPart(m, "FrontSight", Vector3.new(0.10, 0.12, 0.12), CFrame.new(0, 0.86, -1.16), oxblood, Enum.Material.Metal, nil)
+		addPart(m, "Barrel", Vector3.new(0.28, 0.18, 0.18), CFrame.new(0, 0.65, -1.32) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "MuzzleBore", Vector3.new(0.06, 0.12, 0.12), CFrame.new(0, 0.65, -1.46) * CFrame.Angles(0, math.rad(90), 0), boreDark, Enum.Material.Metal, Enum.PartType.Cylinder)
 	end
 
 	return m
@@ -298,181 +437,462 @@ local function buildCarModel(carKind: "Sedan" | "Van" | "Coupe" | "Truck"): Mode
 end
 
 -- ============================================================================
--- SCULPTED 3D KITCHEN DISH ICONS (Every Recipe + Active Order Cloche!)
+-- SCULPTED REALISTIC 3D KITCHEN DISH ICONS (Every Recipe + Active Order Cloche!)
 -- ============================================================================
 local function buildDishModel(dishId: string): Model
 	local m = Instance.new("Model")
 	m.Name = "PreviewDish_" .. dishId
-	local porcelain = Color3.fromRGB(238, 236, 230)
-	local darkSlate = Color3.fromRGB(38, 42, 50)
-	local gold = Color3.fromRGB(214, 174, 72)
-	local salmon = Color3.fromRGB(236, 118, 86)
-	local lobsterRed = Color3.fromRGB(204, 52, 46)
-	local steakBrown = Color3.fromRGB(112, 58, 38)
-	local bunGold = Color3.fromRGB(218, 158, 82)
-	local lettuce = Color3.fromRGB(84, 174, 78)
-	local lemon = Color3.fromRGB(244, 212, 74)
-	local woodBoard = Color3.fromRGB(128, 84, 48)
+	local porcelain = Color3.fromRGB(244, 242, 236)
+	local plateRim = Color3.fromRGB(218, 182, 82)
+	local darkSlate = Color3.fromRGB(32, 36, 44)
+	local gold = Color3.fromRGB(238, 192, 62)
+	local salmon = Color3.fromRGB(246, 118, 82)
+	local lobsterRed = Color3.fromRGB(218, 44, 38)
+	local steakBrown = Color3.fromRGB(108, 52, 32)
+	local charDark = Color3.fromRGB(48, 24, 16)
+	local bunGold = Color3.fromRGB(224, 152, 68)
+	local sesameCol = Color3.fromRGB(252, 238, 196)
+	local cheddar = Color3.fromRGB(252, 194, 36)
+	local lettuce = Color3.fromRGB(76, 184, 68)
+	local lemon = Color3.fromRGB(248, 218, 62)
+	local woodBoard = Color3.fromRGB(142, 92, 52)
+	local fryGold = Color3.fromRGB(244, 194, 62)
 
 	if dishId == "ActiveOrder" then
-		-- Silver Restaurant Serving Cloche & Brass Bell Knob
-		addPart(m, "Plate", Vector3.new(0.18, 2.35, 2.35), CFrame.new(0, 0.10, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "DomeBase", Vector3.new(0.42, 1.86, 1.86), CFrame.new(0, 0.42, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(192, 198, 208), Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "DomeTop", Vector3.new(1.76, 1.18, 1.76), CFrame.new(0, 0.68, 0), Color3.fromRGB(206, 212, 222), Enum.Material.Metal, Enum.PartType.Ball)
-		addPart(m, "Knob", Vector3.new(0.36, 0.36, 0.36), CFrame.new(0, 1.32, 0), gold, Enum.Material.Metal, Enum.PartType.Ball)
+		-- Silver Fine-Dining Serving Cloche on Gold-Rimmed Porcelain Plate with Steam Plume
+		addPart(m, "PlateRim", Vector3.new(0.14, 2.52, 2.52), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), plateRim, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Plate", Vector3.new(0.18, 2.34, 2.34), CFrame.new(0, 0.11, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "DomeLip", Vector3.new(0.18, 2.02, 2.02), CFrame.new(0, 0.28, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(184, 192, 206), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "DomeBase", Vector3.new(0.42, 1.88, 1.88), CFrame.new(0, 0.50, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(204, 212, 224), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "DomeTop", Vector3.new(1.82, 1.24, 1.82), CFrame.new(0, 0.72, 0), Color3.fromRGB(224, 230, 240), Enum.Material.Metal, Enum.PartType.Ball)
+		addPart(m, "HandleNeck", Vector3.new(0.18, 0.24, 0.24), CFrame.new(0, 1.38, 0) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Knob", Vector3.new(0.38, 0.34, 0.38), CFrame.new(0, 1.56, 0), gold, Enum.Material.Metal, Enum.PartType.Ball)
 		return m
 	elseif dishId == "TropicalSmoothie" then
-		-- Tall Glass Mango-Banana Smoothie with Whipped Cream & Straw
-		addPart(m, "GlassBase", Vector3.new(0.22, 0.92, 0.92), CFrame.new(0, 0.12, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.Glass, Enum.PartType.Cylinder)
-		addPart(m, "SmoothieCup", Vector3.new(1.65, 1.05, 1.05), CFrame.new(0, 1.02, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(246, 166, 44), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "WhipCream", Vector3.new(0.95, 0.56, 0.95), CFrame.new(0, 1.92, 0), Color3.fromRGB(248, 244, 232), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "OrangeSlice", Vector3.new(0.14, 0.66, 0.66), CFrame.new(0.52, 1.85, -0.18) * CFrame.Angles(0, math.rad(25), math.rad(20)), Color3.fromRGB(242, 134, 38), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "Straw", Vector3.new(1.45, 0.14, 0.14), CFrame.new(-0.24, 2.25, 0) * CFrame.Angles(0, 0, math.rad(74)), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		-- Tall Crystal Hurricane Glass with Layered Mango-Berry Smoothie, Swirled Whipped Cream, Orange Wheel, Cherry & Bendy Straw
+		addPart(m, "GlassFoot", Vector3.new(0.16, 1.06, 1.06), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(224, 238, 248), Enum.Material.Glass, Enum.PartType.Cylinder)
+		addPart(m, "GlassStem", Vector3.new(0.32, 0.34, 0.34), CFrame.new(0, 0.28, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(224, 238, 248), Enum.Material.Glass, Enum.PartType.Cylinder)
+		addPart(m, "LayerBot", Vector3.new(0.68, 1.08, 1.08), CFrame.new(0, 0.76, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(242, 92, 68), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "LayerMid", Vector3.new(0.64, 1.18, 1.18), CFrame.new(0, 1.34, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(252, 166, 36), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "LayerTop", Vector3.new(0.34, 1.24, 1.24), CFrame.new(0, 1.78, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(254, 212, 62), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		-- Swirled triple-tier whipped cream + ruby cherry + citrus wheel + striped bendy straw
+		addPart(m, "Whip1", Vector3.new(1.06, 0.42, 1.06), CFrame.new(0, 2.02, 0), Color3.fromRGB(252, 248, 238), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Whip2", Vector3.new(0.76, 0.36, 0.76), CFrame.new(0, 2.28, 0), Color3.fromRGB(252, 248, 238), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "WhipPeak", Vector3.new(0.42, 0.28, 0.42), CFrame.new(0, 2.48, 0), Color3.fromRGB(255, 252, 244), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Cherry", Vector3.new(0.30, 0.30, 0.30), CFrame.new(0.18, 2.54, -0.14), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "OrangeRind", Vector3.new(0.12, 0.74, 0.74), CFrame.new(0.62, 1.98, -0.16) * CFrame.Angles(0, math.rad(25), math.rad(18)), Color3.fromRGB(246, 134, 24), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "OrangePulp", Vector3.new(0.15, 0.56, 0.56), CFrame.new(0.62, 1.98, -0.16) * CFrame.Angles(0, math.rad(25), math.rad(18)), Color3.fromRGB(254, 186, 56), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "StrawLower", Vector3.new(1.18, 0.12, 0.12), CFrame.new(-0.28, 2.34, 0) * CFrame.Angles(0, 0, math.rad(76)), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "StrawBend", Vector3.new(0.58, 0.12, 0.12), CFrame.new(-0.62, 2.94, 0) * CFrame.Angles(0, 0, math.rad(22)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 		return m
 	elseif dishId == "ClassicBurger" then
-		-- Iconic Multi-Layer Gourmet Cheeseburger on Plate
-		addPart(m, "Plate", Vector3.new(0.16, 2.35, 2.35), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "BottomBun", Vector3.new(0.32, 1.48, 1.48), CFrame.new(0, 0.32, 0) * CFrame.Angles(0, 0, math.rad(90)), bunGold, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "Patty", Vector3.new(0.34, 1.54, 1.54), CFrame.new(0, 0.64, 0) * CFrame.Angles(0, 0, math.rad(90)), steakBrown, Enum.Material.Fabric, Enum.PartType.Cylinder)
-		addPart(m, "Cheese", Vector3.new(1.46, 0.12, 1.46), CFrame.new(0, 0.84, 0) * CFrame.Angles(0, math.rad(22), 0), Color3.fromRGB(246, 198, 48), Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Lettuce", Vector3.new(0.16, 1.62, 1.62), CFrame.new(0, 0.96, 0) * CFrame.Angles(0, 0, math.rad(90)), lettuce, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "Tomato", Vector3.new(0.14, 1.38, 1.38), CFrame.new(0, 1.09, 0) * CFrame.Angles(0, 0, math.rad(90)), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "TopBun", Vector3.new(1.52, 0.72, 1.52), CFrame.new(0, 1.34, 0), bunGold, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		-- Mouth-Watering Gourmet Brioche Cheeseburger + Sesame Seeds + Melted Dripping Cheddar + Skewered Olive + Golden Fries!
+		addPart(m, "PlateRim", Vector3.new(0.14, 2.66, 2.66), CFrame.new(0, 0.07, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(218, 214, 206), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Plate", Vector3.new(0.18, 2.46, 2.46), CFrame.new(0, 0.10, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		local bx = -0.22
+		addPart(m, "BottomBun", Vector3.new(0.30, 1.48, 1.48), CFrame.new(bx, 0.34, 0) * CFrame.Angles(0, 0, math.rad(90)), bunGold, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		-- Ruffled layered lettuce base
+		for a = 0, 5 do
+			local ang = math.rad(a * 60)
+			addPart(m, "Let_" .. a, Vector3.new(0.56, 0.12, 0.56), CFrame.new(bx + math.cos(ang) * 0.52, 0.52, math.sin(ang) * 0.52) * CFrame.Angles(math.rad(10), ang, 0), lettuce, Enum.Material.SmoothPlastic, nil)
+		end
+		-- Thick flame-grilled beef patty with char edge
+		addPart(m, "Patty", Vector3.new(0.36, 1.56, 1.56), CFrame.new(bx, 0.72, 0) * CFrame.Angles(0, 0, math.rad(90)), steakBrown, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		-- Melted cheddar square + draped melted corner flaps!
+		addPart(m, "Cheese", Vector3.new(1.52, 0.12, 1.52), CFrame.new(bx, 0.94, 0) * CFrame.Angles(0, math.rad(28), 0), cheddar, Enum.Material.SmoothPlastic, nil)
+		addWedge(m, "CheeseDrip1", Vector3.new(0.46, 0.28, 0.18), CFrame.new(bx + 0.58, 0.80, -0.52) * CFrame.Angles(math.rad(165), math.rad(35), 0), cheddar, Enum.Material.SmoothPlastic)
+		addWedge(m, "CheeseDrip2", Vector3.new(0.46, 0.28, 0.18), CFrame.new(bx - 0.56, 0.80, -0.54) * CFrame.Angles(math.rad(165), math.rad(-35), 0), cheddar, Enum.Material.SmoothPlastic)
+		-- Twin ruby tomato slices + crisp onion ring
+		addPart(m, "Tomato1", Vector3.new(0.14, 0.86, 0.86), CFrame.new(bx - 0.26, 1.06, -0.22) * CFrame.Angles(0, 0, math.rad(90)), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Tomato2", Vector3.new(0.14, 0.86, 0.86), CFrame.new(bx + 0.26, 1.06, 0.18) * CFrame.Angles(0, 0, math.rad(90)), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		-- Glossy toasted brioche crown bun + 7 golden sesame seeds + olive skewer!
+		addPart(m, "TopBunBase", Vector3.new(0.24, 1.52, 1.52), CFrame.new(bx, 1.24, 0) * CFrame.Angles(0, 0, math.rad(90)), bunGold, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "TopBunDome", Vector3.new(1.52, 0.78, 1.52), CFrame.new(bx, 1.38, 0), Color3.fromRGB(214, 138, 52), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		for s = 0, 5 do
+			local ang = math.rad(s * 60 + 18)
+			addPart(m, "Seed_" .. s, Vector3.new(0.12, 0.06, 0.18), CFrame.new(bx + math.cos(ang) * 0.42, 1.72, math.sin(ang) * 0.42) * CFrame.Angles(0, -ang, 0), sesameCol, Enum.Material.SmoothPlastic, nil)
+		end
+		addPart(m, "SeedTop", Vector3.new(0.14, 0.06, 0.18), CFrame.new(bx, 1.78, 0), sesameCol, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Skewer", Vector3.new(0.06, 0.56, 0.06), CFrame.new(bx, 1.98, 0), woodBoard, Enum.Material.Wood, nil)
+		addPart(m, "Olive", Vector3.new(0.24, 0.24, 0.24), CFrame.new(bx, 2.04, 0), Color3.fromRGB(98, 148, 54), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		-- Golden French fries bundle tucked beside the burger on the plate!
+		for f = 0, 5 do
+			local fAng = math.rad(-18 + f * 9)
+			addPart(m, "Fry_" .. f, Vector3.new(0.14, 0.74, 0.14), CFrame.new(0.76 + (f % 2) * 0.18, 0.46, -0.32 + f * 0.12) * CFrame.Angles(fAng, math.rad(14 * f), math.rad(-22)), fryGold, Enum.Material.SmoothPlastic, nil)
+		end
 		return m
 	elseif dishId == "FreshSushi" or dishId == "GoldenTunaSashimi" then
-		-- Dark Slate Sushi Board with 3 Nigiri / Golden Tuna Slices + Wasabi
+		-- Handcrafted Cedar Geta Sushi Board with Marbled Nigiri, Soy Bowl, Ginger, Wasabi & Lacquered Chopsticks!
 		local isGolden = (dishId == "GoldenTunaSashimi")
-		local fishCol = if isGolden then Color3.fromRGB(238, 186, 58) else salmon
-		addPart(m, "Board", Vector3.new(2.25, 0.22, 1.52), CFrame.new(0, 0.14, 0), darkSlate, Enum.Material.Slate, nil)
+		local fishCol = if isGolden then gold else salmon
+		addPart(m, "BoardTop", Vector3.new(2.38, 0.18, 1.56), CFrame.new(0, 0.26, 0), woodBoard, Enum.Material.Wood, nil)
+		addPart(m, "FootL", Vector3.new(0.22, 0.20, 1.38), CFrame.new(-0.84, 0.10, 0), Color3.fromRGB(98, 62, 34), Enum.Material.Wood, nil)
+		addPart(m, "FootR", Vector3.new(0.22, 0.20, 1.38), CFrame.new(0.84, 0.10, 0), Color3.fromRGB(98, 62, 34), Enum.Material.Wood, nil)
 		for i = -1, 1 do
-			local x = i * 0.64
-			addPart(m, "Rice", Vector3.new(0.46, 0.34, 0.88), CFrame.new(x, 0.42, 0), Color3.fromRGB(246, 246, 242), Enum.Material.SmoothPlastic, nil)
-			addPart(m, "Fish", Vector3.new(0.50, 0.18, 0.98), CFrame.new(x, 0.66, 0), fishCol, if isGolden then Enum.Material.Metal else Enum.Material.SmoothPlastic, nil)
-			addPart(m, "Nori", Vector3.new(0.54, 0.44, 0.20), CFrame.new(x, 0.54, 0), Color3.fromRGB(24, 34, 24), Enum.Material.Fabric, nil)
+			local x = i * 0.64 - 0.12
+			addPart(m, "Rice_" .. i, Vector3.new(0.46, 0.34, 0.82), CFrame.new(x, 0.50, 0.08), Color3.fromRGB(250, 248, 244), Enum.Material.SmoothPlastic, nil)
+			addPart(m, "Fish_" .. i, Vector3.new(0.50, 0.16, 1.06), CFrame.new(x, 0.72, 0.08) * CFrame.Angles(math.rad(-6), 0, 0), fishCol, if isGolden then Enum.Material.Metal else Enum.Material.SmoothPlastic, nil)
+			-- Delicate white sashimi marbling stripes across each cut!
+			for st = -1, 1 do
+				addPart(m, "Marble_" .. i .. "_" .. st, Vector3.new(0.52, 0.04, 0.07), CFrame.new(x, 0.79, 0.08 + st * 0.24) * CFrame.Angles(0, math.rad(16), 0), Color3.fromRGB(252, 232, 224), Enum.Material.SmoothPlastic, nil)
+			end
+			addPart(m, "Nori_" .. i, Vector3.new(0.54, 0.44, 0.20), CFrame.new(x, 0.60, 0.08), Color3.fromRGB(20, 32, 22), Enum.Material.Fabric, nil)
 		end
-		addPart(m, "Wasabi", Vector3.new(0.32, 0.26, 0.32), CFrame.new(0.84, 0.36, -0.48), lettuce, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Wasabi", Vector3.new(0.32, 0.26, 0.32), CFrame.new(0.88, 0.44, -0.44), Color3.fromRGB(116, 198, 72), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Ginger", Vector3.new(0.38, 0.14, 0.30), CFrame.new(0.88, 0.40, 0.02) * CFrame.Angles(0, math.rad(22), 0), Color3.fromRGB(246, 178, 174), Enum.Material.SmoothPlastic, nil)
+		-- Ceramic Soy Sauce Dish
+		addPart(m, "SoyDish", Vector3.new(0.16, 0.54, 0.54), CFrame.new(0.86, 0.42, 0.46) * CFrame.Angles(0, 0, math.rad(90)), darkSlate, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "SoySauce", Vector3.new(0.18, 0.40, 0.40), CFrame.new(0.86, 0.43, 0.46) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(36, 18, 12), Enum.Material.Glass, Enum.PartType.Cylinder)
+		-- Lacquered Chopsticks along front edge
+		addPart(m, "Stick1", Vector3.new(2.15, 0.08, 0.08), CFrame.new(-0.08, 0.42, -0.62) * CFrame.Angles(0, math.rad(3), 0), Color3.fromRGB(32, 20, 18), Enum.Material.Wood, nil)
+		addPart(m, "Stick2", Vector3.new(2.15, 0.08, 0.08), CFrame.new(-0.08, 0.42, -0.50) * CFrame.Angles(0, math.rad(-2), 0), Color3.fromRGB(32, 20, 18), Enum.Material.Wood, nil)
 		return m
 	elseif dishId == "GrilledFish" then
-		-- Grilled Island Fish on Oval White Platter + Lemon
-		addPart(m, "Plate", Vector3.new(0.16, 2.45, 2.45), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "FishBody", Vector3.new(1.72, 0.48, 0.84), CFrame.new(-0.12, 0.42, 0), Color3.fromRGB(118, 158, 192), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "FishTail", Vector3.new(0.48, 0.16, 0.72), CFrame.new(0.84, 0.42, 0) * CFrame.Angles(0, math.rad(18), 0), Color3.fromRGB(98, 138, 172), Enum.Material.SmoothPlastic, nil)
-		for i = -1, 1 do
-			addPart(m, "GrillMark", Vector3.new(0.10, 0.50, 0.62), CFrame.new(-0.12 + i * 0.34, 0.44, 0), Color3.fromRGB(64, 42, 28), Enum.Material.SmoothPlastic, nil)
+		-- Whole Char-Grilled Snapper with Sculpted Forked Tail, Dorsal/Pectoral Fins, Eye, Diagonal Grill Marks & Lemon Rounds!
+		addPart(m, "Plate", Vector3.new(0.16, 2.52, 2.52), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "FishBody", Vector3.new(1.78, 0.52, 0.86), CFrame.new(-0.18, 0.44, 0), Color3.fromRGB(132, 168, 198), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "BellySheen", Vector3.new(1.38, 0.34, 0.72), CFrame.new(-0.18, 0.32, 0.16), Color3.fromRGB(224, 232, 238), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		-- Forked wedge tail fin + dorsal fin + pectoral fin
+		addWedge(m, "TailTop", Vector3.new(0.14, 0.38, 0.58), CFrame.new(0.86, 0.44, -0.18) * CFrame.Angles(math.rad(-24), math.rad(-90), 0), Color3.fromRGB(98, 134, 166), Enum.Material.SmoothPlastic)
+		addWedge(m, "TailBot", Vector3.new(0.14, 0.38, 0.58), CFrame.new(0.86, 0.44, 0.18) * CFrame.Angles(math.rad(24), math.rad(-90), 0), Color3.fromRGB(98, 134, 166), Enum.Material.SmoothPlastic)
+		addWedge(m, "DorsalFin", Vector3.new(0.12, 0.26, 0.78), CFrame.new(-0.14, 0.52, -0.44) * CFrame.Angles(0, math.rad(-90), 0), Color3.fromRGB(108, 144, 176), Enum.Material.SmoothPlastic)
+		addPart(m, "FishEye", Vector3.new(0.16, 0.16, 0.16), CFrame.new(-0.84, 0.54, -0.16), Color3.fromRGB(24, 26, 30), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		for i = -1, 2 do
+			addPart(m, "GrillMark_" .. i, Vector3.new(0.08, 0.42, 0.68), CFrame.new(-0.34 + i * 0.28, 0.52, 0) * CFrame.Angles(0, math.rad(20), 0), charDark, Enum.Material.SmoothPlastic, nil)
 		end
-		addPart(m, "Lemon", Vector3.new(0.24, 0.46, 0.46), CFrame.new(-0.48, 0.30, 0.66) * CFrame.Angles(0, 0, math.rad(90)), lemon, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Lemon1", Vector3.new(0.12, 0.54, 0.54), CFrame.new(-0.46, 0.24, 0.66) * CFrame.Angles(0, 0, math.rad(90)), lemon, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Lemon2", Vector3.new(0.12, 0.50, 0.50), CFrame.new(0.24, 0.24, 0.68) * CFrame.Angles(0, 0, math.rad(90)), lemon, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Parsley", Vector3.new(0.42, 0.16, 0.36), CFrame.new(-0.24, 0.72, 0.08), lettuce, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 		return m
 	elseif dishId == "SizzlingSteak" then
-		-- Cast-Iron Skillet with Seared Ribeye Steak & Butter Pat
-		addPart(m, "Skillet", Vector3.new(0.26, 2.15, 2.15), CFrame.new(0, 0.16, 0) * CFrame.Angles(0, 0, math.rad(90)), darkSlate, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Handle", Vector3.new(0.30, 0.18, 1.05), CFrame.new(0, 0.24, 1.48), darkSlate, Enum.Material.Metal, nil)
-		addPart(m, "Steak", Vector3.new(1.42, 0.44, 1.06), CFrame.new(0, 0.46, -0.06), steakBrown, Enum.Material.Fabric, nil)
-		addPart(m, "Butter", Vector3.new(0.42, 0.16, 0.42), CFrame.new(0, 0.74, -0.06) * CFrame.Angles(0, math.rad(30), 0), lemon, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Herb", Vector3.new(0.38, 0.12, 0.24), CFrame.new(0.46, 0.70, 0.22), lettuce, Enum.Material.SmoothPlastic, nil)
+		-- Heavy Cast-Iron Skillet with Diamond-Seared Ribeye, Melting Herb Garlic Butter, Roasted Cherry Tomatoes & Baby Potatoes!
+		addPart(m, "SkilletOuter", Vector3.new(0.32, 2.30, 2.30), CFrame.new(0, 0.18, 0) * CFrame.Angles(0, 0, math.rad(90)), darkSlate, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "SkilletInner", Vector3.new(0.24, 2.08, 2.08), CFrame.new(0, 0.24, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(44, 48, 56), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Handle", Vector3.new(0.28, 0.18, 1.08), CFrame.new(0, 0.28, 1.56), darkSlate, Enum.Material.Metal, nil)
+		addPart(m, "SteakMain", Vector3.new(1.42, 0.44, 0.98), CFrame.new(-0.14, 0.52, -0.10) * CFrame.Angles(0, math.rad(-10), 0), steakBrown, Enum.Material.Fabric, nil)
+		addPart(m, "SteakCap", Vector3.new(0.86, 0.42, 0.78), CFrame.new(0.34, 0.50, 0.08), steakBrown, Enum.Material.Fabric, Enum.PartType.Ball)
+		-- Diamond crosshatch grill sear marks!
+		for g = -1, 1 do
+			addPart(m, "SearA_" .. g, Vector3.new(0.07, 0.06, 0.92), CFrame.new(-0.14 + g * 0.32, 0.76, -0.10) * CFrame.Angles(0, math.rad(32), 0), charDark, Enum.Material.SmoothPlastic, nil)
+			addPart(m, "SearB_" .. g, Vector3.new(0.07, 0.06, 0.92), CFrame.new(-0.14 + g * 0.32, 0.76, -0.10) * CFrame.Angles(0, math.rad(-32), 0), charDark, Enum.Material.SmoothPlastic, nil)
+		end
+		addPart(m, "HerbButter", Vector3.new(0.44, 0.16, 0.44), CFrame.new(-0.08, 0.84, -0.06) * CFrame.Angles(0, math.rad(28), 0), Color3.fromRGB(252, 232, 128), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Rosemary", Vector3.new(0.58, 0.10, 0.16), CFrame.new(0.26, 0.80, -0.22) * CFrame.Angles(0, math.rad(-25), 0), lettuce, Enum.Material.SmoothPlastic, nil)
+		-- Blistered cherry tomatoes & golden roasted garlic potatoes
+		addPart(m, "Tom1", Vector3.new(0.32, 0.32, 0.32), CFrame.new(-0.62, 0.46, 0.56), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Tom2", Vector3.new(0.30, 0.30, 0.30), CFrame.new(-0.30, 0.45, 0.68), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Potato1", Vector3.new(0.42, 0.32, 0.34), CFrame.new(0.56, 0.46, -0.58), bunGold, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Potato2", Vector3.new(0.38, 0.30, 0.32), CFrame.new(0.22, 0.44, -0.72), bunGold, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 		return m
 	elseif dishId == "CrabFeast" or dishId == "KingCrabPlatter" then
-		-- Bright Crimson Crab / Giant King Crab with Raised Claws
+		-- Realistic Jointed Crimson Crab / Giant King Crab with Articulated Legs, Raised Snapper Claws, Eye Stalks & Butter Cup!
 		local isKing = (dishId == "KingCrabPlatter")
 		local plateCol = if isKing then darkSlate else porcelain
-		local crabCol = if isKing then Color3.fromRGB(224, 62, 42) else Color3.fromRGB(212, 74, 48)
-		addPart(m, "Plate", Vector3.new(0.16, 2.48, 2.48), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), plateCol, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "Shell", Vector3.new(1.22, 0.56, 1.04), CFrame.new(0, 0.44, 0.10), crabCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "ClawL", Vector3.new(0.48, 0.42, 0.72), CFrame.new(-0.78, 0.56, -0.66) * CFrame.Angles(0, math.rad(28), 0), crabCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "ClawR", Vector3.new(0.48, 0.42, 0.72), CFrame.new(0.78, 0.56, -0.66) * CFrame.Angles(0, math.rad(-28), 0), crabCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		for _, sx in ipairs({ -0.82, 0.82 }) do
-			for _, sz in ipairs({ -0.10, 0.24, 0.54 }) do
-				addPart(m, "Leg", Vector3.new(0.56, 0.14, 0.14), CFrame.new(sx, 0.30, sz), crabCol, Enum.Material.SmoothPlastic, nil)
+		local crabCol = if isKing then Color3.fromRGB(232, 56, 38) else Color3.fromRGB(218, 70, 44)
+		addPart(m, "Plate", Vector3.new(0.16, 2.58, 2.58), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), plateCol, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Carapace", Vector3.new(1.26, 0.58, 1.06), CFrame.new(0, 0.46, 0.14), crabCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "EyeL", Vector3.new(0.12, 0.22, 0.12), CFrame.new(-0.24, 0.66, -0.34), Color3.fromRGB(24, 24, 28), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "EyeR", Vector3.new(0.12, 0.22, 0.12), CFrame.new(0.24, 0.66, -0.34), Color3.fromRGB(24, 24, 28), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		-- Jointed snapper claws
+		for _, sign in ipairs({ -1, 1 }) do
+			addPart(m, "ClawArm_" .. sign, Vector3.new(0.22, 0.22, 0.58), CFrame.new(sign * 0.64, 0.48, -0.36) * CFrame.Angles(0, math.rad(-sign * 26), 0), crabCol, Enum.Material.SmoothPlastic, nil)
+			addPart(m, "PincerOuter_" .. sign, Vector3.new(0.44, 0.34, 0.64), CFrame.new(sign * 0.78, 0.58, -0.78) * CFrame.Angles(0, math.rad(sign * 26), 0), crabCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+			addWedge(m, "PincerTip_" .. sign, Vector3.new(0.18, 0.20, 0.42), CFrame.new(sign * 0.54, 0.56, -0.94) * CFrame.Angles(0, math.rad(sign * 42), 0), Color3.fromRGB(248, 224, 198), Enum.Material.SmoothPlastic)
+			for lIdx, sz in ipairs({ -0.06, 0.24, 0.52 }) do
+				addPart(m, "LegUp_" .. sign .. "_" .. lIdx, Vector3.new(0.56, 0.14, 0.14), CFrame.new(sign * 0.76, 0.44, sz) * CFrame.Angles(0, math.rad(-sign * 10 * (lIdx - 2)), math.rad(sign * 18)), crabCol, Enum.Material.SmoothPlastic, nil)
+				addPart(m, "LegLow_" .. sign .. "_" .. lIdx, Vector3.new(0.46, 0.11, 0.11), CFrame.new(sign * 1.12, 0.28, sz + 0.04) * CFrame.Angles(0, 0, math.rad(-sign * 34)), crabCol, Enum.Material.SmoothPlastic, nil)
 			end
 		end
-		addPart(m, "Lemon", Vector3.new(0.22, 0.44, 0.44), CFrame.new(0, 0.28, -0.82) * CFrame.Angles(0, 0, math.rad(90)), lemon, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "ButterCup", Vector3.new(0.26, 0.52, 0.52), CFrame.new(0, 0.28, -0.88) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "ButterMelt", Vector3.new(0.28, 0.40, 0.40), CFrame.new(0, 0.30, -0.88) * CFrame.Angles(0, 0, math.rad(90)), lemon, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 		return m
 	elseif dishId == "GoldLeafLobster" then
-		-- Gold-Leaf Lobster Thermidor on Marble Dish
-		addPart(m, "Plate", Vector3.new(0.18, 2.50, 2.50), CFrame.new(0, 0.09, 0) * CFrame.Angles(0, 0, math.rad(90)), darkSlate, Enum.Material.Marble, Enum.PartType.Cylinder)
-		addPart(m, "LobsterBody", Vector3.new(0.84, 0.54, 1.72), CFrame.new(0, 0.44, 0.06), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "GoldLeafTop", Vector3.new(0.52, 0.12, 1.18), CFrame.new(0, 0.72, 0.04), gold, Enum.Material.Metal, nil)
-		addPart(m, "ClawL", Vector3.new(0.42, 0.36, 0.68), CFrame.new(-0.62, 0.46, -0.78) * CFrame.Angles(0, math.rad(22), 0), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "ClawR", Vector3.new(0.42, 0.36, 0.68), CFrame.new(0.62, 0.46, -0.78) * CFrame.Angles(0, math.rad(-22), 0), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "TailFan", Vector3.new(0.76, 0.14, 0.44), CFrame.new(0, 0.34, 0.96), lobsterRed, Enum.Material.SmoothPlastic, nil)
+		-- Michelin Gold-Leaf Lobster Thermidor: Articulated Segmented Tail, Fanned Tail Flippers, Hinged Claws, Sweeping Antennae & 24K Gold Leaf!
+		addPart(m, "PlateRim", Vector3.new(0.14, 2.62, 2.62), CFrame.new(0, 0.07, 0) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Plate", Vector3.new(0.18, 2.46, 2.46), CFrame.new(0, 0.10, 0) * CFrame.Angles(0, 0, math.rad(90)), darkSlate, Enum.Material.Marble, Enum.PartType.Cylinder)
+		-- Segmented curved lobster body + tail rings
+		addPart(m, "HeadShell", Vector3.new(0.84, 0.56, 0.94), CFrame.new(0, 0.48, -0.34), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		for seg = 0, 3 do
+			local w = 0.76 - seg * 0.11
+			local h = 0.46 - seg * 0.05
+			addPart(m, "TailSeg_" .. seg, Vector3.new(w, h, 0.34), CFrame.new(0, 0.44 - seg * 0.04, 0.16 + seg * 0.24) * CFrame.Angles(math.rad(-seg * 5), 0, 0), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		end
+		-- Fanned 3-blade tail flippers
+		addPart(m, "TailMid", Vector3.new(0.36, 0.10, 0.44), CFrame.new(0, 0.26, 1.14), lobsterRed, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "TailL", Vector3.new(0.30, 0.10, 0.42), CFrame.new(-0.28, 0.26, 1.08) * CFrame.Angles(0, math.rad(-26), 0), lobsterRed, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "TailR", Vector3.new(0.30, 0.10, 0.42), CFrame.new(0.28, 0.26, 1.08) * CFrame.Angles(0, math.rad(26), 0), lobsterRed, Enum.Material.SmoothPlastic, nil)
+		-- Creamy thermidor gratin + shimmering 24K gold leaf strip!
+		addPart(m, "ThermidorSauce", Vector3.new(0.54, 0.16, 1.08), CFrame.new(0, 0.72, 0.04), Color3.fromRGB(246, 224, 162), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "GoldLeafTop", Vector3.new(0.42, 0.10, 0.88), CFrame.new(0, 0.82, 0.04), gold, Enum.Material.Metal, nil)
+		-- Twin hinged claws + sweeping thin golden antennae
+		for _, sign in ipairs({ -1, 1 }) do
+			addPart(m, "Arm_" .. sign, Vector3.new(0.22, 0.20, 0.46), CFrame.new(sign * 0.54, 0.44, -0.58) * CFrame.Angles(0, math.rad(-sign * 20), 0), lobsterRed, Enum.Material.SmoothPlastic, nil)
+			addPart(m, "Claw_" .. sign, Vector3.new(0.42, 0.34, 0.68), CFrame.new(sign * 0.66, 0.48, -0.94) * CFrame.Angles(0, math.rad(sign * 22), 0), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+			addPart(m, "Antenna_" .. sign, Vector3.new(0.05, 0.05, 1.12), CFrame.new(sign * 0.24, 0.58, -1.04) * CFrame.Angles(math.rad(12), math.rad(-sign * 22), 0), Color3.fromRGB(238, 124, 72), Enum.Material.SmoothPlastic, nil)
+		end
+		addPart(m, "Lemon", Vector3.new(0.14, 0.46, 0.46), CFrame.new(-0.82, 0.26, 0.44) * CFrame.Angles(0, 0, math.rad(90)), lemon, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Herb", Vector3.new(0.32, 0.14, 0.32), CFrame.new(0.76, 0.30, 0.46), lettuce, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 		return m
 	elseif dishId == "SmokedCartelRibs" then
-		-- Wooden Board + Glazed Rack of BBQ Ribs with White Bone Tips
-		addPart(m, "Board", Vector3.new(2.25, 0.22, 1.58), CFrame.new(0, 0.12, 0), woodBoard, Enum.Material.WoodPlanks, nil)
-		addPart(m, "RibRack", Vector3.new(1.76, 0.56, 0.92), CFrame.new(0, 0.50, 0.05), Color3.fromRGB(118, 46, 30), Enum.Material.SmoothPlastic, nil)
+		-- Oak Butcher Board + Sculpted Glazed BBQ Rib Rack with Bone Tips + Buttered Sweet Corn Cob!
+		addPart(m, "Board", Vector3.new(2.38, 0.22, 1.68), CFrame.new(0, 0.12, 0), woodBoard, Enum.Material.WoodPlanks, nil)
+		addPart(m, "RibRack", Vector3.new(1.80, 0.52, 0.94), CFrame.new(-0.08, 0.48, 0.16), Color3.fromRGB(116, 42, 26), Enum.Material.SmoothPlastic, nil)
 		for i = -2, 2 do
-			addPart(m, "BoneTip", Vector3.new(0.14, 0.14, 0.42), CFrame.new(i * 0.36, 0.42, -0.52), porcelain, Enum.Material.SmoothPlastic, nil)
+			addPart(m, "RibRidge_" .. i, Vector3.new(0.26, 0.58, 0.92), CFrame.new(-0.08 + i * 0.34, 0.52, 0.16), Color3.fromRGB(134, 48, 28), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+			addPart(m, "BoneTip_" .. i, Vector3.new(0.14, 0.14, 0.48), CFrame.new(-0.08 + i * 0.34, 0.38, -0.44), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
 		end
-		addPart(m, "Glaze", Vector3.new(1.60, 0.10, 0.68), CFrame.new(0, 0.80, 0.05), Color3.fromRGB(154, 58, 32), Enum.Material.Glass, nil)
+		addPart(m, "CornCob", Vector3.new(0.92, 0.38, 0.38), CFrame.new(0.46, 0.40, -0.58) * CFrame.Angles(0, math.rad(14), 0), Color3.fromRGB(248, 206, 48), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Parsley", Vector3.new(0.34, 0.16, 0.34), CFrame.new(-0.78, 0.42, -0.54), lettuce, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 		return m
 	elseif dishId == "TruffleWagyuTartare" then
-		-- Molded Ruby Wagyu Beef Tower + Golden Egg Yolk + Black Truffles
-		addPart(m, "Plate", Vector3.new(0.16, 2.28, 2.28), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), darkSlate, Enum.Material.Slate, Enum.PartType.Cylinder)
-		addPart(m, "Tartare", Vector3.new(0.68, 1.32, 1.32), CFrame.new(0, 0.48, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(168, 44, 48), Enum.Material.Fabric, Enum.PartType.Cylinder)
-		addPart(m, "EggYolk", Vector3.new(0.56, 0.36, 0.56), CFrame.new(0, 0.92, 0), Color3.fromRGB(248, 188, 36), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "TruffleL", Vector3.new(0.22, 0.10, 0.22), CFrame.new(-0.42, 0.84, -0.26), P.Obsidian, Enum.Material.Slate, nil)
-		addPart(m, "TruffleR", Vector3.new(0.22, 0.10, 0.22), CFrame.new(0.42, 0.84, 0.26), P.Obsidian, Enum.Material.Slate, nil)
+		-- Molded Ruby Wagyu Beef Tower + Glossy Egg Yolk + Shaved Black Truffles + Golden Crostini Toast!
+		addPart(m, "Plate", Vector3.new(0.16, 2.38, 2.38), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), darkSlate, Enum.Material.Slate, Enum.PartType.Cylinder)
+		addPart(m, "Tartare", Vector3.new(0.66, 1.34, 1.34), CFrame.new(-0.14, 0.48, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(178, 42, 46), Enum.Material.Fabric, Enum.PartType.Cylinder)
+		addPart(m, "EggYolk", Vector3.new(0.56, 0.38, 0.56), CFrame.new(-0.14, 0.92, 0), Color3.fromRGB(252, 186, 28), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "TruffleL", Vector3.new(0.28, 0.08, 0.28), CFrame.new(-0.56, 0.84, -0.26) * CFrame.Angles(0, math.rad(24), 0), P.Obsidian, Enum.Material.Slate, nil)
+		addPart(m, "TruffleR", Vector3.new(0.28, 0.08, 0.28), CFrame.new(0.24, 0.84, 0.26) * CFrame.Angles(0, math.rad(-18), 0), P.Obsidian, Enum.Material.Slate, nil)
+		addPart(m, "Crostini1", Vector3.new(0.14, 0.54, 0.44), CFrame.new(0.68, 0.44, -0.22) * CFrame.Angles(0, math.rad(16), math.rad(-26)), bunGold, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Crostini2", Vector3.new(0.14, 0.54, 0.44), CFrame.new(0.76, 0.40, 0.24) * CFrame.Angles(0, math.rad(-14), math.rad(-34)), bunGold, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Chives", Vector3.new(0.52, 0.06, 0.08), CFrame.new(-0.14, 1.10, -0.18) * CFrame.Angles(0, math.rad(30), 0), lettuce, Enum.Material.SmoothPlastic, nil)
 		return m
 	elseif dishId == "DonsMidnightTiramisu" then
-		-- Layered Espresso & Mascarpone Tiramisu Cube with Cocoa Top
-		addPart(m, "Plate", Vector3.new(0.16, 2.25, 2.25), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "Layer1", Vector3.new(1.36, 0.28, 1.36), CFrame.new(0, 0.30, 0), Color3.fromRGB(84, 52, 34), Enum.Material.Fabric, nil)
-		addPart(m, "Layer2", Vector3.new(1.36, 0.32, 1.36), CFrame.new(0, 0.60, 0), Color3.fromRGB(242, 232, 212), Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Layer3", Vector3.new(1.36, 0.24, 1.36), CFrame.new(0, 0.88, 0), Color3.fromRGB(84, 52, 34), Enum.Material.Fabric, nil)
-		addPart(m, "CocoaTop", Vector3.new(1.38, 0.18, 1.38), CFrame.new(0, 1.08, 0), Color3.fromRGB(58, 34, 22), Enum.Material.Fabric, nil)
-		addPart(m, "GoldMint", Vector3.new(0.36, 0.18, 0.36), CFrame.new(0, 1.24, 0), gold, Enum.Material.Metal, nil)
+		-- Layered Espresso Ladyfinger & Mascarpone Tiramisu + Piped Cream Rosettes + Chocolate Shard + Gold Leaf + Mint!
+		addPart(m, "Plate", Vector3.new(0.16, 2.38, 2.38), CFrame.new(0, 0.08, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Layer1", Vector3.new(1.38, 0.26, 1.38), CFrame.new(0, 0.29, 0), Color3.fromRGB(82, 48, 30), Enum.Material.Fabric, nil)
+		addPart(m, "Layer2", Vector3.new(1.40, 0.30, 1.40), CFrame.new(0, 0.58, 0), Color3.fromRGB(248, 240, 222), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Layer3", Vector3.new(1.38, 0.24, 1.38), CFrame.new(0, 0.85, 0), Color3.fromRGB(82, 48, 30), Enum.Material.Fabric, nil)
+		addPart(m, "CocoaTop", Vector3.new(1.42, 0.14, 1.42), CFrame.new(0, 1.04, 0), Color3.fromRGB(54, 30, 18), Enum.Material.Fabric, nil)
+		for _, off in ipairs({ { -0.38, -0.38 }, { 0.38, -0.38 }, { -0.38, 0.38 }, { 0.38, 0.38 } }) do
+			addPart(m, "PipedCream", Vector3.new(0.36, 0.26, 0.36), CFrame.new(off[1], 1.20, off[2]), Color3.fromRGB(252, 246, 232), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		end
+		addPart(m, "ChocShard", Vector3.new(0.10, 0.62, 0.44), CFrame.new(0.10, 1.36, -0.06) * CFrame.Angles(math.rad(-14), math.rad(24), math.rad(18)), Color3.fromRGB(42, 22, 14), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "GoldLeaf", Vector3.new(0.28, 0.12, 0.28), CFrame.new(-0.18, 1.18, 0.06), gold, Enum.Material.Metal, nil)
+		addWedge(m, "MintLeaf", Vector3.new(0.24, 0.08, 0.38), CFrame.new(-0.28, 1.24, -0.14) * CFrame.Angles(0, math.rad(-35), 0), lettuce, Enum.Material.SmoothPlastic)
 		return m
 	else
-		-- EmperorPlatter (Royal Gold-Rimmed Feast with Mini Crown!)
-		addPart(m, "GoldPlatter", Vector3.new(0.20, 2.55, 2.55), CFrame.new(0, 0.12, 0) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "InnerPlate", Vector3.new(0.22, 2.15, 2.15), CFrame.new(0, 0.14, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "Roast", Vector3.new(0.86, 0.56, 0.72), CFrame.new(-0.42, 0.48, 0.10), steakBrown, Enum.Material.Fabric, nil)
-		addPart(m, "Lobster", Vector3.new(0.76, 0.42, 0.72), CFrame.new(0.46, 0.42, -0.18), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "Garnish", Vector3.new(0.64, 0.28, 0.56), CFrame.new(0.18, 0.36, 0.52), lettuce, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "CrownBand", Vector3.new(0.34, 0.74, 0.74), CFrame.new(0, 0.96, 0) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		-- EmperorPlatter (Royal 24K Gold Banquet Charger with Seared Steak, Curled Lobster, Garnish & Jeweled Mini Crown!)
+		addPart(m, "GoldPlatter", Vector3.new(0.20, 2.66, 2.66), CFrame.new(0, 0.12, 0) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "InnerPlate", Vector3.new(0.22, 2.24, 2.24), CFrame.new(0, 0.14, 0) * CFrame.Angles(0, 0, math.rad(90)), porcelain, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Roast", Vector3.new(0.92, 0.56, 0.78), CFrame.new(-0.46, 0.50, 0.12) * CFrame.Angles(0, math.rad(14), 0), steakBrown, Enum.Material.Fabric, nil)
+		addPart(m, "Lobster", Vector3.new(0.76, 0.46, 0.88), CFrame.new(0.48, 0.46, -0.16), lobsterRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Garnish", Vector3.new(0.68, 0.26, 0.56), CFrame.new(0.18, 0.36, 0.56), lettuce, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Lemon", Vector3.new(0.14, 0.44, 0.44), CFrame.new(-0.56, 0.30, -0.58) * CFrame.Angles(0, 0, math.rad(90)), lemon, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "CrownBand", Vector3.new(0.32, 0.76, 0.76), CFrame.new(0, 0.98, 0) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		for i = 0, 4 do
+			local ang = math.rad(i * 72)
+			addWedge(m, "CrownTine_" .. i, Vector3.new(0.18, 0.34, 0.18), CFrame.new(math.cos(ang) * 0.32, 1.24, math.sin(ang) * 0.32), gold, Enum.Material.Metal)
+		end
 		return m
 	end
 end
 
 -- ============================================================================
--- SCULPTED 3D WAREHOUSE CRATE ICONS (Fish, Vegetable, Fruit, Meat)
+-- SCULPTED REALISTIC 3D WAREHOUSE CRATES (Real Fish, Veg, Fruit & Meat!)
 -- ============================================================================
+local function buildRealFruitCluster(m: Model, yBase: number): ()
+	-- 1. REAL GLOSSY RED APPLE (Double-lobed sculpted apple + curved wood stem + pointed emerald leaf!)
+	local appleRed = Color3.fromRGB(224, 28, 38)
+	local ax, az = -0.52, 0.18
+	addPart(m, "AppleLobeL", Vector3.new(0.56, 0.66, 0.64), CFrame.new(ax - 0.12, yBase + 0.34, az), appleRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	addPart(m, "AppleLobeR", Vector3.new(0.56, 0.66, 0.64), CFrame.new(ax + 0.12, yBase + 0.34, az), appleRed, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	addPart(m, "AppleHighlight", Vector3.new(0.22, 0.28, 0.22), CFrame.new(ax - 0.20, yBase + 0.46, az - 0.22), Color3.fromRGB(252, 128, 128), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	addPart(m, "AppleStem", Vector3.new(0.08, 0.30, 0.08), CFrame.new(ax, yBase + 0.74, az) * CFrame.Angles(0, 0, math.rad(-16)), Color3.fromRGB(98, 58, 28), Enum.Material.Wood, Enum.PartType.Cylinder)
+	addWedge(m, "AppleLeaf", Vector3.new(0.26, 0.08, 0.42), CFrame.new(ax + 0.20, yBase + 0.80, az - 0.04) * CFrame.Angles(math.rad(-14), math.rad(72), math.rad(18)), Color3.fromRGB(54, 184, 58), Enum.Material.SmoothPlastic)
+
+	-- 2. REAL TROPICAL PINEAPPLE (Textured golden-amber barrel + 6 spiky emerald crown leaves!)
+	local px, pz = 0.44, -0.22
+	addPart(m, "PineappleBody", Vector3.new(0.68, 0.92, 0.68), CFrame.new(px, yBase + 0.46, pz), Color3.fromRGB(238, 168, 28), Enum.Material.Cobblestone, Enum.PartType.Ball)
+	addPart(m, "PineappleBand", Vector3.new(0.62, 0.56, 0.62), CFrame.new(px, yBase + 0.46, pz), Color3.fromRGB(246, 194, 46), Enum.Material.Cobblestone, Enum.PartType.Ball)
+	for f = 0, 5 do
+		local ang = math.rad(f * 60)
+		addWedge(
+			m,
+			"PineCrown_" .. f,
+			Vector3.new(0.14, 0.54, 0.24),
+			CFrame.new(px + math.cos(ang) * 0.16, yBase + 1.06, pz + math.sin(ang) * 0.16)
+				* CFrame.Angles(0, -ang + math.rad(90), math.rad(24)),
+			Color3.fromRGB(48, 164, 56),
+			Enum.Material.SmoothPlastic
+		)
+	end
+
+	-- 3. REAL CURVED GOLDEN BANANA BUNCH (3 arched 3-segment crescents joined at a green stem crown!)
+	local bananaCol = Color3.fromRGB(252, 222, 44)
+	local bananaTip = Color3.fromRGB(68, 46, 22)
+	local bx, bz = 0.18, 0.42
+	addPart(m, "BananaCrown", Vector3.new(0.22, 0.18, 0.22), CFrame.new(bx - 0.36, yBase + 0.52, bz), Color3.fromRGB(122, 148, 44), Enum.Material.Wood, nil)
+	for b = -1, 1 do
+		local zOff = bz + b * 0.16
+		addPart(m, "BanA_" .. b, Vector3.new(0.36, 0.18, 0.18), CFrame.new(bx - 0.18, yBase + 0.42, zOff) * CFrame.Angles(0, 0, math.rad(-26)), bananaCol, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "BanB_" .. b, Vector3.new(0.40, 0.20, 0.20), CFrame.new(bx + 0.14, yBase + 0.34, zOff) * CFrame.Angles(0, 0, math.rad(4)), bananaCol, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "BanC_" .. b, Vector3.new(0.34, 0.16, 0.16), CFrame.new(bx + 0.44, yBase + 0.44, zOff) * CFrame.Angles(0, 0, math.rad(34)), bananaCol, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "BanTip_" .. b, Vector3.new(0.08, 0.10, 0.10), CFrame.new(bx + 0.60, yBase + 0.54, zOff), bananaTip, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	end
+
+	-- 4. REAL SLICED WATERMELON WEDGE (Dark emerald rind + white pith + ruby flesh + black seeds!)
+	local wx, wz = -0.34, -0.44
+	local wCF = CFrame.new(wx, yBase + 0.34, wz) * CFrame.Angles(math.rad(-14), math.rad(32), 0)
+	addWedge(m, "MelonFlesh", Vector3.new(0.24, 0.54, 0.72), wCF, Color3.fromRGB(238, 46, 66), Enum.Material.SmoothPlastic)
+	addPart(m, "MelonPith", Vector3.new(0.26, 0.08, 0.78), wCF * CFrame.new(0, -0.28, 0), Color3.fromRGB(236, 246, 224), Enum.Material.SmoothPlastic, nil)
+	addPart(m, "MelonRind", Vector3.new(0.28, 0.10, 0.82), wCF * CFrame.new(0, -0.34, 0), Color3.fromRGB(34, 134, 52), Enum.Material.SmoothPlastic, nil)
+	for sd = -1, 1 do
+		addPart(m, "MelonSeed_" .. sd, Vector3.new(0.27, 0.06, 0.08), wCF * CFrame.new(0, -0.06 + math.abs(sd) * 0.06, sd * 0.16), Color3.fromRGB(24, 20, 18), Enum.Material.SmoothPlastic, nil)
+	end
+end
+
 local function buildWarehouseModel(category: string): Model
 	local m = Instance.new("Model")
 	m.Name = "PreviewWarehouse_" .. category
-	local crateWood = Color3.fromRGB(134, 90, 50)
-	local crateTrim = Color3.fromRGB(92, 60, 34)
+	local crateWood = Color3.fromRGB(142, 94, 52)
+	local crateTrim = Color3.fromRGB(96, 62, 34)
 
-	-- Open-top wooden supply crate base
-	addPart(m, "CrateBase", Vector3.new(1.95, 0.98, 1.55), CFrame.new(0, 0.49, 0), crateWood, Enum.Material.WoodPlanks, nil)
-	addPart(m, "TrimBottom", Vector3.new(2.04, 0.16, 1.64), CFrame.new(0, 0.14, 0), crateTrim, Enum.Material.Wood, nil)
-	addPart(m, "TrimTop", Vector3.new(2.04, 0.16, 1.64), CFrame.new(0, 0.94, 0), crateTrim, Enum.Material.Wood, nil)
+	-- Slatted open-top wooden supply crate base
+	addPart(m, "CrateBase", Vector3.new(2.04, 0.94, 1.62), CFrame.new(0, 0.47, 0), crateWood, Enum.Material.WoodPlanks, nil)
+	addPart(m, "TrimBottom", Vector3.new(2.14, 0.16, 1.72), CFrame.new(0, 0.12, 0), crateTrim, Enum.Material.Wood, nil)
+	addPart(m, "TrimTop", Vector3.new(2.14, 0.16, 1.72), CFrame.new(0, 0.90, 0), crateTrim, Enum.Material.Wood, nil)
+	for _, cx in ipairs({ -0.98, 0.98 }) do
+		for _, cz in ipairs({ -0.78, 0.78 }) do
+			addPart(m, "Post", Vector3.new(0.18, 0.98, 0.18), CFrame.new(cx, 0.49, cz), crateTrim, Enum.Material.Wood, nil)
+		end
+	end
 
 	if category == "Fish" then
-		-- Crushed ice + 2 silver-blue fish + coral shrimp
-		addPart(m, "IceBed", Vector3.new(1.76, 0.22, 1.36), CFrame.new(0, 1.02, 0), Color3.fromRGB(204, 232, 248), Enum.Material.Ice, nil)
-		addPart(m, "Fish1", Vector3.new(1.32, 0.44, 0.54), CFrame.new(-0.22, 1.32, -0.18) * CFrame.Angles(0, math.rad(14), math.rad(18)), Color3.fromRGB(84, 152, 212), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "Tail1", Vector3.new(0.42, 0.18, 0.48), CFrame.new(0.56, 1.48, -0.28) * CFrame.Angles(0, math.rad(14), math.rad(26)), Color3.fromRGB(68, 132, 192), Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Fish2", Vector3.new(1.18, 0.38, 0.48), CFrame.new(0.24, 1.26, 0.30) * CFrame.Angles(0, math.rad(-20), math.rad(-14)), Color3.fromRGB(236, 122, 86), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		-- Crushed glistening ice bed + detailed sculpted ocean snapper & salmon with forked wedge tails, fins & jumbo curved shrimp!
+		addPart(m, "IceBed", Vector3.new(1.86, 0.24, 1.44), CFrame.new(0, 1.00, 0), Color3.fromRGB(204, 236, 252), Enum.Material.Ice, nil)
+		-- Blue Ocean Snapper
+		addPart(m, "Fish1", Vector3.new(1.42, 0.46, 0.56), CFrame.new(-0.24, 1.34, -0.20) * CFrame.Angles(0, math.rad(14), math.rad(16)), Color3.fromRGB(68, 148, 218), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addWedge(m, "Tail1A", Vector3.new(0.12, 0.30, 0.42), CFrame.new(0.56, 1.56, -0.32) * CFrame.Angles(math.rad(-20), math.rad(-76), math.rad(16)), Color3.fromRGB(54, 126, 194), Enum.Material.SmoothPlastic)
+		addWedge(m, "Tail1B", Vector3.new(0.12, 0.30, 0.42), CFrame.new(0.54, 1.42, -0.32) * CFrame.Angles(math.rad(20), math.rad(-76), math.rad(16)), Color3.fromRGB(54, 126, 194), Enum.Material.SmoothPlastic)
+		addPart(m, "Eye1", Vector3.new(0.14, 0.14, 0.14), CFrame.new(-0.76, 1.24, -0.32), Color3.fromRGB(20, 24, 30), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		-- Coral Salmon
+		addPart(m, "Fish2", Vector3.new(1.26, 0.40, 0.50), CFrame.new(0.24, 1.28, 0.32) * CFrame.Angles(0, math.rad(-18), math.rad(-14)), Color3.fromRGB(244, 118, 84), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addWedge(m, "Tail2", Vector3.new(0.12, 0.36, 0.38), CFrame.new(-0.48, 1.44, 0.48) * CFrame.Angles(0, math.rad(72), 0), Color3.fromRGB(218, 96, 66), Enum.Material.SmoothPlastic)
+		addPart(m, "Eye2", Vector3.new(0.13, 0.13, 0.13), CFrame.new(0.72, 1.20, 0.16), Color3.fromRGB(20, 24, 30), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 	elseif category == "Vegetable" then
-		-- Crisp green cabbage + orange carrots with green tops + potatoes
-		addPart(m, "Cabbage", Vector3.new(0.88, 0.84, 0.88), CFrame.new(-0.38, 1.28, 0.12), Color3.fromRGB(82, 178, 76), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "Carrot1", Vector3.new(0.95, 0.30, 0.30), CFrame.new(0.42, 1.34, -0.18) * CFrame.Angles(0, 0, math.rad(52)), Color3.fromRGB(242, 128, 36), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "CarrotLeaf", Vector3.new(0.32, 0.38, 0.32), CFrame.new(0.74, 1.78, -0.18), Color3.fromRGB(58, 148, 56), Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Potato", Vector3.new(0.62, 0.44, 0.48), CFrame.new(0.32, 1.18, 0.38), Color3.fromRGB(168, 130, 86), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		-- Layered leafy green cabbage + 2 tapered orange carrots with feathery tops + glossy ruby tomato with star calyx + golden corn cob!
+		addPart(m, "CabbageCore", Vector3.new(0.78, 0.76, 0.78), CFrame.new(-0.46, 1.30, 0.14), Color3.fromRGB(118, 206, 98), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		for lf = 0, 3 do
+			local ang = math.rad(lf * 90 + 20)
+			addPart(m, "CabLeaf_" .. lf, Vector3.new(0.46, 0.62, 0.34), CFrame.new(-0.46 + math.cos(ang) * 0.28, 1.28, 0.14 + math.sin(ang) * 0.28) * CFrame.Angles(0, -ang, 0), Color3.fromRGB(62, 168, 66), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		end
+		-- Tapered 2-stage orange carrot + leafy green crown
+		addPart(m, "CarrotTop", Vector3.new(0.56, 0.34, 0.34), CFrame.new(0.46, 1.44, -0.22) * CFrame.Angles(0, 0, math.rad(48)), Color3.fromRGB(246, 126, 28), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "CarrotTip", Vector3.new(0.48, 0.20, 0.20), CFrame.new(0.14, 1.12, -0.22) * CFrame.Angles(0, 0, math.rad(48)), Color3.fromRGB(236, 114, 22), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		for g = -1, 1 do
+			addWedge(m, "CarrotFrond_" .. g, Vector3.new(0.10, 0.42, 0.18), CFrame.new(0.74, 1.78, -0.22 + g * 0.12) * CFrame.Angles(math.rad(g * 18), 0, math.rad(-24)), Color3.fromRGB(48, 158, 52), Enum.Material.SmoothPlastic)
+		end
+		-- Glossy red farm tomato + green star calyx + golden sweet corn
+		addPart(m, "Tomato", Vector3.new(0.58, 0.50, 0.58), CFrame.new(0.42, 1.24, 0.34), Color3.fromRGB(228, 42, 42), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "TomatoStem", Vector3.new(0.24, 0.10, 0.24), CFrame.new(0.42, 1.50, 0.34), Color3.fromRGB(54, 154, 54), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Corn", Vector3.new(0.78, 0.30, 0.30), CFrame.new(-0.18, 1.22, -0.44) * CFrame.Angles(0, math.rad(22), math.rad(14)), Color3.fromRGB(252, 212, 44), Enum.Material.Cobblestone, Enum.PartType.Cylinder)
 	elseif category == "Fruit" then
-		-- Bright golden mangoes, oranges & yellow bananas
-		addPart(m, "Orange1", Vector3.new(0.72, 0.72, 0.72), CFrame.new(-0.46, 1.26, 0.16), Color3.fromRGB(244, 138, 32), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "Mango", Vector3.new(0.86, 0.62, 0.64), CFrame.new(0.34, 1.28, -0.18) * CFrame.Angles(0, math.rad(24), math.rad(14)), Color3.fromRGB(242, 178, 42), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "Banana1", Vector3.new(1.02, 0.28, 0.28), CFrame.new(0.18, 1.44, 0.34) * CFrame.Angles(0, math.rad(-18), math.rad(24)), Color3.fromRGB(248, 224, 58), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-		addPart(m, "Leaf", Vector3.new(0.36, 0.10, 0.24), CFrame.new(-0.46, 1.64, 0.16), Color3.fromRGB(68, 166, 62), Enum.Material.SmoothPlastic, nil)
+		-- Real Fruit Crate: Glossy Red Apple + Pineapple + Curved Banana Bunch + Watermelon Wedge!
+		buildRealFruitCluster(m, 0.94)
 	else
-		-- Meat: Marbled crimson beef steaks, pork roast & white butcher bone
-		addPart(m, "BeefCut", Vector3.new(1.18, 0.48, 0.92), CFrame.new(-0.24, 1.24, 0.04) * CFrame.Angles(0, math.rad(14), math.rad(12)), Color3.fromRGB(178, 48, 52), Enum.Material.Fabric, nil)
-		addPart(m, "Marbling", Vector3.new(0.34, 0.50, 0.26), CFrame.new(-0.34, 1.25, 0.04) * CFrame.Angles(0, math.rad(14), math.rad(12)), Color3.fromRGB(242, 232, 224), Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Ham", Vector3.new(0.92, 0.62, 0.68), CFrame.new(0.46, 1.28, -0.14) * CFrame.Angles(0, math.rad(-20), math.rad(-16)), Color3.fromRGB(204, 92, 86), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		addPart(m, "Bone", Vector3.new(0.56, 0.20, 0.20), CFrame.new(0.86, 1.46, -0.22) * CFrame.Angles(0, math.rad(-20), math.rad(-16)), Color3.fromRGB(244, 240, 232), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		-- Real Butcher Meat Crate: Bone-In Marbled Ribeye Steak + Smoked Ham Shank with Bone + Rosemary!
+		addPart(m, "Parchment", Vector3.new(1.88, 0.08, 1.46), CFrame.new(0, 0.98, 0), Color3.fromRGB(246, 238, 222), Enum.Material.SmoothPlastic, nil)
+		-- Marbled Tomahawk Ribeye Steak
+		local stCF = CFrame.new(-0.34, 1.28, 0.10) * CFrame.Angles(0, math.rad(14), math.rad(14))
+		addPart(m, "BeefCut", Vector3.new(1.12, 0.44, 0.90), stCF, Color3.fromRGB(184, 42, 48), Enum.Material.Fabric, nil)
+		addPart(m, "FatCap", Vector3.new(1.16, 0.46, 0.14), stCF * CFrame.new(0, 0, -0.42), Color3.fromRGB(248, 238, 228), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Marbling1", Vector3.new(0.14, 0.47, 0.56), stCF * CFrame.new(-0.22, 0, 0.04) * CFrame.Angles(0, math.rad(28), 0), Color3.fromRGB(246, 234, 226), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "RibBone", Vector3.new(0.76, 0.18, 0.18), stCF * CFrame.new(-0.78, 0, 0.22), Color3.fromRGB(248, 244, 234), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		-- Glazed Smoked Ham Shank with Bone End
+		local hamCF = CFrame.new(0.52, 1.32, -0.18) * CFrame.Angles(0, math.rad(-22), math.rad(-14))
+		addPart(m, "Ham", Vector3.new(0.92, 0.66, 0.72), hamCF, Color3.fromRGB(204, 82, 74), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "HamBone", Vector3.new(0.56, 0.20, 0.20), hamCF * CFrame.new(0.56, 0.06, 0), Color3.fromRGB(248, 244, 234), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "HerbSprig", Vector3.new(0.46, 0.10, 0.18), CFrame.new(-0.18, 1.56, 0.06) * CFrame.Angles(0, math.rad(-20), 0), Color3.fromRGB(64, 158, 62), Enum.Material.SmoothPlastic, nil)
 	end
 	return m
+end
+
+-- ============================================================================
+-- DEDICATED HERO CATEGORY ICONS (REAL FOOD, REAL FRUIT, REAL GUN, REAL NINJA!)
+-- ============================================================================
+local function buildCategoryIconModel(catId: string): (Model, "Weapon" | "Character" | "Object")
+	if catId == "Food" then
+		return buildDishModel("ClassicBurger"), "Object"
+	elseif catId == "Fruit" then
+		local m = Instance.new("Model")
+		m.Name = "CategoryIcon_Fruit"
+		buildRealFruitCluster(m, 0)
+		return m, "Object"
+	elseif catId == "Gun" then
+		return buildWeaponModel("CrimsonDragonAR"), "Weapon"
+	elseif catId == "Ammo" then
+		return buildAmmoModel("Rifle556"), "Object"
+	elseif catId == "Empire" then
+		-- Gleaming 24K Royal Gold Crown with Crimson Velvet & Ruby/Sapphire Jewels
+		local m = Instance.new("Model")
+		m.Name = "CategoryIcon_Empire"
+		local gold = Color3.fromRGB(246, 198, 48)
+		local ruby = Color3.fromRGB(224, 34, 58)
+		local sapphire = Color3.fromRGB(42, 138, 246)
+		addPart(m, "VelvetCore", Vector3.new(1.24, 0.92, 1.24), CFrame.new(0, 0.62, 0), Color3.fromRGB(154, 24, 42), Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "CrownBase", Vector3.new(0.44, 1.48, 1.48), CFrame.new(0, 0.34, 0) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "CrownRim", Vector3.new(0.14, 1.56, 1.56), CFrame.new(0, 0.14, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(255, 224, 96), Enum.Material.Metal, Enum.PartType.Cylinder)
+		for i = 0, 5 do
+			local ang = math.rad(i * 60)
+			addWedge(m, "Tine_" .. i, Vector3.new(0.24, 0.64, 0.28), CFrame.new(math.cos(ang) * 0.64, 0.84, math.sin(ang) * 0.64) * CFrame.Angles(0, -ang + math.rad(90), 0), gold, Enum.Material.Metal)
+			addPart(m, "Orb_" .. i, Vector3.new(0.20, 0.20, 0.20), CFrame.new(math.cos(ang) * 0.66, 1.20, math.sin(ang) * 0.66), Color3.fromRGB(255, 232, 128), Enum.Material.Metal, Enum.PartType.Ball)
+			addPart(m, "Gem_" .. i, Vector3.new(0.22, 0.22, 0.16), CFrame.new(math.cos(ang) * 0.74, 0.36, math.sin(ang) * 0.74) * CFrame.Angles(0, -ang + math.rad(90), 0), if i % 2 == 0 then ruby else sapphire, Enum.Material.Glass, nil)
+		end
+		addPart(m, "TopCross", Vector3.new(0.26, 0.42, 0.26), CFrame.new(0, 1.24, 0), gold, Enum.Material.Metal, Enum.PartType.Ball)
+		return m, "Object"
+	elseif catId == "Guard" then
+		-- Iconic Armored Tactical Bodyguard Bust (Ballistic Helmet, Dark Shades, Suit & Crimson Tie)
+		local m = Instance.new("Model")
+		m.Name = "CategoryIcon_Guard"
+		addPart(m, "Shoulders", Vector3.new(1.86, 0.96, 0.92), CFrame.new(0, 0.48, 0), Color3.fromRGB(26, 30, 40), Enum.Material.Fabric, nil)
+		addPart(m, "Shirt", Vector3.new(0.56, 0.88, 0.16), CFrame.new(0, 0.50, -0.44), Color3.fromRGB(244, 242, 238), Enum.Material.Fabric, nil)
+		addPart(m, "Tie", Vector3.new(0.20, 0.78, 0.18), CFrame.new(0, 0.46, -0.48), Color3.fromRGB(204, 34, 48), Enum.Material.Fabric, nil)
+		addPart(m, "Head", Vector3.new(1.04, 1.04, 1.04), CFrame.new(0, 1.48, 0), P.SkinWarm, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Helmet", Vector3.new(1.18, 0.72, 1.22), CFrame.new(0, 1.78, 0.04), Color3.fromRGB(36, 42, 54), Enum.Material.Metal, Enum.PartType.Ball)
+		addPart(m, "Shades", Vector3.new(0.96, 0.28, 0.24), CFrame.new(0, 1.50, -0.44), Color3.fromRGB(16, 20, 28), Enum.Material.Glass, nil)
+		return m, "Object"
+	else
+		-- REAL SHINOBI NINJA BUST ("Ninja"): Sleek Black Cowl, Crimson Hachimaki Headband + Riveted Steel Clan Plate + Sweeping Tails, Fierce Warrior Eyes & Crossed Twin Back Katanas!
+		local m = Instance.new("Model")
+		m.Name = "CategoryIcon_Ninja"
+		local cowlBlack = Color3.fromRGB(22, 25, 34)
+		local maskChar = Color3.fromRGB(32, 36, 48)
+		local crimson = Color3.fromRGB(218, 28, 48)
+		local steel = Color3.fromRGB(198, 206, 220)
+		local gold = Color3.fromRGB(238, 192, 62)
+
+		-- Crossed Twin Back Katanas forming the iconic X behind shoulders!
+		for _, sign in ipairs({ -1, 1 }) do
+			local cf = CFrame.new(sign * 0.16, 1.02, 0.58) * CFrame.Angles(0, 0, math.rad(-sign * 36))
+			addPart(m, "Scabbard_" .. sign, Vector3.new(0.18, 2.38, 0.20), cf, Color3.fromRGB(18, 20, 26), Enum.Material.Metal, nil)
+			addPart(m, "Tsuba_" .. sign, Vector3.new(0.46, 0.12, 0.46), cf * CFrame.new(0, 0.92, 0), gold, Enum.Material.Metal, nil)
+			addPart(m, "Hilt_" .. sign, Vector3.new(0.20, 0.68, 0.22), cf * CFrame.new(0, 1.32, 0), crimson, Enum.Material.Fabric, nil)
+			addPart(m, "Pommel_" .. sign, Vector3.new(0.22, 0.12, 0.24), cf * CFrame.new(0, 1.68, 0), gold, Enum.Material.Metal, nil)
+		end
+
+		-- Shinobi Armored Shoulders + Crimson Scarf Collar
+		addPart(m, "Shoulders", Vector3.new(1.88, 0.94, 0.92), CFrame.new(0, 0.46, 0), cowlBlack, Enum.Material.Fabric, nil)
+		addPart(m, "ArmorVest", Vector3.new(1.42, 0.78, 1.00), CFrame.new(0, 0.48, 0), Color3.fromRGB(38, 44, 58), Enum.Material.Metal, nil)
+		addPart(m, "ScarfCollar", Vector3.new(1.38, 0.30, 1.12), CFrame.new(0, 0.98, 0), crimson, Enum.Material.Fabric, nil)
+
+		-- Rounded Shinobi Head + Black Balaclava Hood + Exposed Eye Slit + Lower Cloth Mask
+		addPart(m, "FaceCore", Vector3.new(1.06, 1.06, 1.06), CFrame.new(0, 1.56, 0), P.SkinWarm, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "CowlCrown", Vector3.new(1.18, 0.68, 1.20), CFrame.new(0, 1.88, 0.04), cowlBlack, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "CowlBack", Vector3.new(1.16, 1.12, 0.76), CFrame.new(0, 1.54, 0.26), cowlBlack, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "FaceMask", Vector3.new(1.16, 0.62, 0.68), CFrame.new(0, 1.30, -0.26), maskChar, Enum.Material.Fabric, Enum.PartType.Ball)
+		-- Fierce Narrowed Shinobi Eyes!
+		addPart(m, "EyeL", Vector3.new(0.28, 0.12, 0.10), CFrame.new(-0.24, 1.62, -0.50) * CFrame.Angles(0, math.rad(14), math.rad(-14)), Color3.fromRGB(255, 252, 244), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "EyeR", Vector3.new(0.28, 0.12, 0.10), CFrame.new(0.24, 1.62, -0.50) * CFrame.Angles(0, math.rad(-14), math.rad(14)), Color3.fromRGB(255, 252, 244), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "IrisL", Vector3.new(0.11, 0.11, 0.11), CFrame.new(-0.23, 1.62, -0.53), crimson, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "IrisR", Vector3.new(0.11, 0.11, 0.11), CFrame.new(0.23, 1.62, -0.53), crimson, Enum.Material.SmoothPlastic, nil)
+		-- Bright Crimson Hachimaki Headband + Riveted Steel Clan Forehead Plate + Sweeping Ribbon Tails!
+		addPart(m, "Headband", Vector3.new(0.26, 1.24, 1.24), CFrame.new(0, 1.84, 0.02) * CFrame.Angles(0, 0, math.rad(90)), crimson, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		addPart(m, "ForeheadPlate", Vector3.new(0.76, 0.24, 0.14), CFrame.new(0, 1.84, -0.59), steel, Enum.Material.Metal, nil)
+		addPart(m, "RivetL", Vector3.new(0.08, 0.08, 0.16), CFrame.new(-0.28, 1.84, -0.60), gold, Enum.Material.Metal, nil)
+		addPart(m, "RivetR", Vector3.new(0.08, 0.08, 0.16), CFrame.new(0.28, 1.84, -0.60), gold, Enum.Material.Metal, nil)
+		addPart(m, "TailL", Vector3.new(0.18, 0.88, 0.08), CFrame.new(-0.62, 1.56, 0.42) * CFrame.Angles(math.rad(18), 0, math.rad(-34)), crimson, Enum.Material.Fabric, nil)
+		addPart(m, "TailR", Vector3.new(0.16, 0.72, 0.08), CFrame.new(0.58, 1.62, 0.44) * CFrame.Angles(math.rad(16), 0, math.rad(30)), crimson, Enum.Material.Fabric, nil)
+		return m, "Object"
+	end
 end
 
 -- ============================================================================
@@ -769,7 +1189,7 @@ local function buildEquipmentModel(itemId: string): Model
 	end
 end
 
-local function frameCameraToModel(viewport: ViewportFrame, model: Model, viewMode: "Weapon" | "Character" | "Object"): ()
+local function frameCameraToModel(viewport: ViewportFrame, model: Model, viewMode: "Weapon" | "Character" | "Object" | "IconPortrait" | "IconObject" | "IconWeapon"): ()
 	local cf, sz = model:GetBoundingBox()
 	local center = cf.Position
 	local maxDim = math.max(sz.X, sz.Y, sz.Z, 0.8)
@@ -784,12 +1204,25 @@ local function frameCameraToModel(viewport: ViewportFrame, model: Model, viewMod
 		local dist = maxDim * 1.12
 		local eye = focus + Vector3.new(dist * 0.34, dist * 0.08, -dist * 0.94)
 		cam.CFrame = CFrame.lookAt(eye, focus)
+	elseif viewMode == "IconPortrait" then
+		local focus = center + Vector3.new(0, sz.Y * 0.08, 0)
+		local dist = maxDim * 1.22
+		local eye = focus + Vector3.new(dist * 0.24, dist * 0.12, -dist * 0.96)
+		cam.CFrame = CFrame.lookAt(eye, focus)
+	elseif viewMode == "IconWeapon" then
+		local dist = maxDim * 1.24
+		local eye = center + Vector3.new(dist * 0.96, dist * 0.16, -dist * 0.22)
+		cam.CFrame = CFrame.lookAt(eye, center)
+	elseif viewMode == "IconObject" then
+		local dist = maxDim * 1.24
+		local eye = center + Vector3.new(dist * 0.48, dist * 0.42, -dist * 0.78)
+		cam.CFrame = CFrame.lookAt(eye, center)
 	elseif viewMode == "Weapon" then
-		local dist = maxDim * 1.42
-		local eye = center + Vector3.new(dist * 0.92, dist * 0.24, -dist * 0.28)
+		local dist = maxDim * 1.38
+		local eye = center + Vector3.new(dist * 0.94, dist * 0.20, -dist * 0.24)
 		cam.CFrame = CFrame.lookAt(eye, center)
 	else
-		local dist = maxDim * 1.46
+		local dist = maxDim * 1.42
 		local eye = center + Vector3.new(dist * 0.56, dist * 0.44, -dist * 0.78)
 		cam.CFrame = CFrame.lookAt(eye, center)
 	end
@@ -803,8 +1236,8 @@ local function setupViewportShell(parent: Instance, size: UDim2, pos: UDim2, bgC
 	vp.BackgroundColor3 = bgColor or Color3.fromRGB(20, 22, 29)
 	vp.BackgroundTransparency = 0
 	vp.BorderSizePixel = 0
-	vp.Ambient = Color3.fromRGB(236, 240, 248)
-	vp.LightColor = Color3.fromRGB(255, 250, 242)
+	vp.Ambient = Color3.fromRGB(242, 246, 255)
+	vp.LightColor = Color3.fromRGB(255, 250, 240)
 	vp.LightDirection = Vector3.new(-0.45, -0.70, 0.55)
 	vp.Parent = parent
 
@@ -821,9 +1254,45 @@ local function setupViewportShell(parent: Instance, size: UDim2, pos: UDim2, bgC
 	return vp
 end
 
+-- Creates a crisp, borderless transparent 3D Category Icon (Real Food, Real Fruit, Real Gun, Real Ninja, Empire Crown, Ammo, Guard)!
+function ModelPreviewHelper.CreateCategoryIcon(
+	parent: Instance,
+	catId: "Food" | "Fruit" | "Gun" | "Ninja" | "Empire" | "Ammo" | "Guard",
+	sizePx: number,
+	pos: UDim2?,
+	zIndex: number?
+): ViewportFrame
+	local vp = Instance.new("ViewportFrame")
+	vp.Name = "CategoryIcon3D_" .. catId
+	vp.Size = UDim2.fromOffset(sizePx, sizePx)
+	if pos then
+		vp.Position = pos
+	end
+	vp.BackgroundTransparency = 1
+	vp.BorderSizePixel = 0
+	vp.Active = false
+	vp.Selectable = false
+	vp.Ambient = Color3.fromRGB(248, 250, 255)
+	vp.LightColor = Color3.fromRGB(255, 252, 244)
+	vp.LightDirection = Vector3.new(-0.35, -0.65, 0.65)
+	if zIndex then
+		vp.ZIndex = zIndex
+	end
+	vp.Parent = parent
+
+	local model, rawMode = buildCategoryIconModel(catId)
+	local iconMode: "IconPortrait" | "IconObject" | "IconWeapon" = if catId == "Ninja" or catId == "Guard"
+		then "IconPortrait"
+		elseif rawMode == "Weapon" then "IconWeapon"
+		else "IconObject"
+	model.Parent = vp
+	frameCameraToModel(vp, model, iconMode)
+	return vp
+end
+
 function ModelPreviewHelper.CreatePreview(
 	parent: Instance,
-	kind: "Weapon" | "Ammo" | "Bodyguard" | "Equipment" | "Premium" | "Dish" | "Warehouse" | "Empire",
+	kind: "Weapon" | "Ammo" | "Bodyguard" | "Equipment" | "Premium" | "Dish" | "Warehouse" | "Empire" | "CategoryIcon",
 	itemId: string,
 	size: UDim2,
 	pos: UDim2,
@@ -832,9 +1301,16 @@ function ModelPreviewHelper.CreatePreview(
 ): ViewportFrame
 	local vp = setupViewportShell(parent, size, pos, bgColor, borderColor)
 	local model: Model
-	local viewMode: "Weapon" | "Character" | "Object" = "Object"
+	local viewMode: "Weapon" | "Character" | "Object" | "IconPortrait" | "IconObject" | "IconWeapon" = "Object"
 
-	if kind == "Weapon" then
+	if kind == "CategoryIcon" then
+		local catModel, rawMode = buildCategoryIconModel(itemId)
+		model = catModel
+		viewMode = if itemId == "Ninja" or itemId == "Guard"
+			then "IconPortrait"
+			elseif rawMode == "Weapon" then "IconWeapon"
+			else "IconObject"
+	elseif kind == "Weapon" then
 		model = buildWeaponModel(itemId)
 		viewMode = if itemId == "GoldenSpatula" then "Object" else "Weapon"
 	elseif kind == "Ammo" then

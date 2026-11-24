@@ -259,6 +259,7 @@ local function stepAgent(ag: RivalBladeAgent, now: number): ()
 				return
 			end
 			ag.LastAttackAt = now
+			MafiaVisualBuilder.TriggerAttackAnim(ag.Model)
 			bestH:TakeDamage(ag.Damage)
 			local clashPoint = (myPos + bestR.Position) * 0.5 + Vector3.new(0, 1.5, 0)
 			local targetStyle = tostring(bestM:GetAttribute("MercenaryType") or bestM:GetAttribute("BladeStyle") or "Samurai")
