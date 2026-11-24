@@ -1247,10 +1247,13 @@ local function updateAmmoHUD(tool: Tool?, wid: string?): ()
 
 	ammoCard.Visible = true
 	local topInset = GuiService:GetGuiInset().Y
+	local pg = Players.LocalPlayer:FindFirstChild("PlayerGui")
+	local hudScale = if pg and typeof(pg:GetAttribute("FoodEmpireHUDScale")) == "number" then (pg:GetAttribute("FoodEmpireHUDScale") :: number) else 1
+	local baseY = topInset + math.floor(156 * hudScale)
 	local isSniperEquipped = isScopeRifle(wid)
-	ammoCard.Position = UDim2.new(1, -14, 0, topInset + (if isSniperEquipped then 208 else 176))
+	ammoCard.Position = UDim2.new(1, -14, 0, baseY + (if isSniperEquipped then 32 else 0))
 	if scopeTriggerBtn then
-		scopeTriggerBtn.Position = UDim2.new(1, -14, 0, topInset + 176)
+		scopeTriggerBtn.Position = UDim2.new(1, -14, 0, baseY)
 		scopeTriggerBtn.Visible = isSniperEquipped
 	end
 	local profile = getProfile(wid)
@@ -1747,6 +1750,7 @@ local function ensureCharacterOverheadHP(char: Model): ()
 	bb.Size = UDim2.fromOffset(145, 22)
 	bb.StudsOffset = Vector3.new(0, 3.1, 0)
 	bb.MaxDistance = 120
+	bb.PlayerToHideFrom = Players.LocalPlayer
 	bb.Parent = head
 
 	local bg = Instance.new("Frame")
@@ -2520,81 +2524,13 @@ local function buildAimUI(): ()
 
 	local topInset = GuiService:GetGuiInset().Y
 
-	-- 1. Restrained Dark-Mafia Player Base HP Bar (100 / 100 HP)
-	local hpPill = Instance.new("Frame")
-	hpPill.Name = "PlayerHUDHealthBar"
-	hpPill.AnchorPoint = Vector2.new(1, 0)
-	hpPill.Position = UDim2.new(1, -14, 0, topInset + 60)
-	hpPill.Size = UDim2.fromOffset(216, 24)
-	hpPill.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
-	hpPill.Parent = gui
-	hpPillFrame = hpPill
-	local hpc = Instance.new("UICorner")
-	hpc.CornerRadius = UDim.new(0, 5)
-	hpc.Parent = hpPill
-	local hps = Instance.new("UIStroke")
-	hps.Color = Color3.fromRGB(50, 54, 64)
-	hps.Thickness = 1.2
-	hps.Parent = hpPill
-
-	local pFill = Instance.new("Frame")
-	pFill.Name = "Fill"
-	pFill.Size = UDim2.fromScale(1, 1)
-	pFill.BackgroundColor3 = Color3.fromRGB(68, 128, 86)
-	pFill.Parent = hpPill
-	local pfc = Instance.new("UICorner")
-	pfc.CornerRadius = UDim.new(0, 5)
-	pfc.Parent = pFill
-	playerHpFill = pFill
-
-	local pLbl = Instance.new("TextLabel")
-	pLbl.Size = UDim2.fromScale(1, 1)
-	pLbl.BackgroundTransparency = 1
-	pLbl.Font = Enum.Font.GothamBlack
-	pLbl.Text = "HEALTH  100 / 100"
-	pLbl.TextSize = 10
-	pLbl.TextColor3 = Color3.fromRGB(238, 236, 232)
-	pLbl.ZIndex = 3
-	pLbl.Parent = hpPill
-	playerHpLabel = pLbl
-
-	-- 2. Restrained Steel-Blue Breakable Kevlar Armor Bar (0..100 Armor)
-	local armorPill = Instance.new("Frame")
-	armorPill.Name = "PlayerHUDArmorBar"
-	armorPill.AnchorPoint = Vector2.new(1, 0)
-	armorPill.Position = UDim2.new(1, -14, 0, topInset + 88)
-	armorPill.Size = UDim2.fromOffset(216, 22)
-	armorPill.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
-	armorPill.Parent = gui
-	armorPillFrame = armorPill
-	local apc = Instance.new("UICorner")
-	apc.CornerRadius = UDim.new(0, 5)
-	apc.Parent = armorPill
-	local aps = Instance.new("UIStroke")
-	aps.Color = Color3.fromRGB(50, 54, 64)
-	aps.Thickness = 1.2
-	aps.Parent = armorPill
-
-	local aFill = Instance.new("Frame")
-	aFill.Name = "Fill"
-	aFill.Size = UDim2.fromScale(0, 1)
-	aFill.BackgroundColor3 = Color3.fromRGB(62, 98, 136)
-	aFill.Parent = armorPill
-	local afc = Instance.new("UICorner")
-	afc.CornerRadius = UDim.new(0, 5)
-	afc.Parent = aFill
-	playerArmorFill = aFill
-
-	local aLbl = Instance.new("TextLabel")
-	aLbl.Size = UDim2.fromScale(1, 1)
-	aLbl.BackgroundTransparency = 1
-	aLbl.Font = Enum.Font.GothamBold
-	aLbl.Text = "ARMOR  0 / 100"
-	aLbl.TextSize = 10
-	aLbl.TextColor3 = Color3.fromRGB(204, 208, 218)
-	aLbl.ZIndex = 3
-	aLbl.Parent = armorPill
-	playerArmorLabel = aLbl
+	-- Player HP & Armor bars are now rendered cleanly in the Bottom-Center Dual Vitals Dock inside HUDController!
+	hpPillFrame = nil
+	playerHpFill = nil
+	playerHpLabel = nil
+	armorPillFrame = nil
+	playerArmorFill = nil
+	playerArmorLabel = nil
 
 	-- 3. Weapon Ammo & Reload HUD
 	buildWeaponAmmoCard(gui)
@@ -2903,18 +2839,15 @@ function WeaponController.Start(onOpenBlackMarket: () -> ()): ()
 		local topInset = GuiService:GetGuiInset().Y
 		if topInset ~= lastSyncedTopInset then
 			lastSyncedTopInset = topInset
-			if hpPillFrame then
-				hpPillFrame.Position = UDim2.new(1, -14, 0, topInset + 60)
-			end
-			if armorPillFrame then
-				armorPillFrame.Position = UDim2.new(1, -14, 0, topInset + 88)
-			end
+			local pg = Players.LocalPlayer:FindFirstChild("PlayerGui")
+			local hudScale = if pg and typeof(pg:GetAttribute("FoodEmpireHUDScale")) == "number" then (pg:GetAttribute("FoodEmpireHUDScale") :: number) else 1
+			local baseY = topInset + math.floor(156 * hudScale)
 			if scopeTriggerBtn then
-				scopeTriggerBtn.Position = UDim2.new(1, -14, 0, topInset + 176)
+				scopeTriggerBtn.Position = UDim2.new(1, -14, 0, baseY)
 			end
 			if ammoCard then
 				local _, curWid = getEquippedToolAndId()
-				ammoCard.Position = UDim2.new(1, -14, 0, topInset + (if curWid == "ShadowSniper" then 208 else 176))
+				ammoCard.Position = UDim2.new(1, -14, 0, baseY + (if curWid == "ShadowSniper" then 32 else 0))
 			end
 		end
 

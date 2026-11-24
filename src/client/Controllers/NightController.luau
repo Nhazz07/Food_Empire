@@ -57,44 +57,58 @@ function NightController.Init(parentGui: ScreenGui, onSkip: () -> ()): ()
 	pill.Name = "DayNightClock"
 	pill.AnchorPoint = Vector2.new(1, 0)
 	pill.Position = UDim2.new(1, -14, 0, 8)
-	pill.Size = UDim2.fromOffset(216, 46)
-	pill.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
+	pill.Size = UDim2.fromOffset(216, 60)
+	pill.BackgroundColor3 = Color3.fromRGB(15, 18, 25)
 	pill.BackgroundTransparency = 0.06
 	pill.AutoButtonColor = false
 	pill.Text = ""
 	pill.Parent = parentGui
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
+	corner.CornerRadius = UDim.new(0, 8)
 	corner.Parent = pill
 	local stroke = Instance.new("UIStroke")
 	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Color = Color3.fromRGB(52, 56, 66)
+	stroke.Color = Color3.fromRGB(122, 102, 58)
 	stroke.Thickness = 1.2
 	stroke.Parent = pill
 	pillStroke = stroke
 
 	local lbl = Instance.new("TextLabel")
-	lbl.Position = UDim2.new(0, 10, 0, 4)
+	lbl.Position = UDim2.new(0, 10, 0, 6)
 	lbl.Size = UDim2.new(1, -20, 0, 20)
 	lbl.BackgroundTransparency = 1
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = "DAY  |  2:00 PM"
-	lbl.TextSize = 12
+	lbl.Text = "DAY  •  2:00 PM"
+	lbl.TextSize = 13
 	lbl.TextXAlignment = Enum.TextXAlignment.Left
-	lbl.TextColor3 = Color3.fromRGB(234, 231, 224)
+	lbl.TextColor3 = Color3.fromRGB(240, 238, 232)
 	lbl.Parent = pill
 	clockLabel = lbl
 
+	local subPill = Instance.new("Frame")
+	subPill.Name = "BonusStrip"
+	subPill.Position = UDim2.new(0, 8, 0, 31)
+	subPill.Size = UDim2.new(1, -16, 0, 22)
+	subPill.BackgroundColor3 = Color3.fromRGB(28, 25, 19)
+	subPill.BackgroundTransparency = 0.08
+	subPill.Parent = pill
+	local subCorner = Instance.new("UICorner")
+	subCorner.CornerRadius = UDim.new(0, 5)
+	subCorner.Parent = subPill
+	local subStroke = Instance.new("UIStroke")
+	subStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	subStroke.Color = Color3.fromRGB(122, 102, 58)
+	subStroke.Thickness = 1
+	subStroke.Parent = subPill
+
 	local sub = Instance.new("TextLabel")
-	sub.Position = UDim2.new(0, 10, 0, 24)
-	sub.Size = UDim2.new(1, -20, 0, 16)
+	sub.Size = UDim2.fromScale(1, 1)
 	sub.BackgroundTransparency = 1
-	sub.Font = Enum.Font.Gotham
-	sub.Text = "Click or [N] to switch phase"
-	sub.TextSize = 10
-	sub.TextXAlignment = Enum.TextXAlignment.Left
-	sub.TextColor3 = Color3.fromRGB(152, 156, 166)
-	sub.Parent = pill
+	sub.Font = Enum.Font.GothamBold
+	sub.Text = "PRESS [N] FOR NIGHT MARKET"
+	sub.TextSize = 9
+	sub.TextColor3 = Color3.fromRGB(212, 178, 102)
+	sub.Parent = subPill
 	bonusLabel = sub
 
 	clockPill = pill
@@ -128,16 +142,16 @@ function NightController.Init(parentGui: ScreenGui, onSkip: () -> ()): ()
 		local isNight = ReplicatedStorage:GetAttribute("IsNight") == true
 
 		if clockLabel and bonusLabel and clockPill and pillStroke then
-			clockLabel.Text = string.format("%s  |  %s", string.upper(phase), formatClock(c))
+			clockLabel.Text = string.format("%s  •  %s", string.upper(phase), formatClock(c))
 			if isNight then
-				bonusLabel.Text = "+35% Gold  |  Mafia Alert  [N]"
-				bonusLabel.TextColor3 = Color3.fromRGB(196, 166, 102)
+				bonusLabel.Text = "+35% GOLD  •  MAFIA ALERT [N]"
+				bonusLabel.TextColor3 = Color3.fromRGB(212, 178, 102)
 			else
-				bonusLabel.Text = "Press [N] to switch to Night"
-				bonusLabel.TextColor3 = Color3.fromRGB(152, 156, 166)
+				bonusLabel.Text = "PRESS [N] FOR NIGHT MARKET"
+				bonusLabel.TextColor3 = Color3.fromRGB(168, 176, 192)
 			end
-			clockPill.BackgroundColor3 = Color3.fromRGB(22, 24, 30):Lerp(Color3.fromRGB(14, 15, 20), nf)
-			pillStroke.Color = Color3.fromRGB(58, 62, 72):Lerp(Color3.fromRGB(118, 32, 38), nf)
+			clockPill.BackgroundColor3 = Color3.fromRGB(20, 24, 34):Lerp(Color3.fromRGB(15, 18, 25), nf)
+			pillStroke.Color = Color3.fromRGB(82, 92, 110):Lerp(Color3.fromRGB(158, 130, 72), nf)
 		end
 
 		-- Personal lantern glow so the player never gets lost in the dark

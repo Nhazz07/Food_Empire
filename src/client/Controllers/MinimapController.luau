@@ -87,24 +87,24 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	frame.AnchorPoint = Vector2.new(1, 1)
 	frame.Position = UDim2.new(1, -14, 1, -14)
 	frame.Size = UDim2.fromOffset(MAP_PIXEL_SIZE + 14, MAP_PIXEL_SIZE + 54)
-	frame.BackgroundColor3 = Color3.fromRGB(15, 17, 21)
+	frame.BackgroundColor3 = Color3.fromRGB(15, 18, 25)
 	frame.BackgroundTransparency = 0.05
 	frame.Parent = parentGui
-	makeCorner(frame, 6)
+	makeCorner(frame, 8)
 
 	local stroke = Instance.new("UIStroke")
 	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	stroke.Color = Color3.fromRGB(48, 52, 62)
-	stroke.Thickness = 1.2
+	stroke.Color = Color3.fromRGB(122, 102, 58)
+	stroke.Thickness = 1.3
 	stroke.Parent = frame
 
 	local title = Instance.new("TextLabel")
 	title.Size = UDim2.new(1, 0, 0, 22)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.GothamBlack
-	title.Text = "TACTICAL MAP  |  NORTH UP"
+	title.Text = "TACTICAL MAP  •  NORTH UP"
 	title.TextSize = 10
-	title.TextColor3 = Color3.fromRGB(196, 166, 102)
+	title.TextColor3 = Color3.fromRGB(212, 178, 102)
 	title.Parent = frame
 
 	-- Interactive Click-Anywhere Ocean + Island canvas

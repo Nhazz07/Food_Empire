@@ -7,6 +7,7 @@
 local Players = game:GetService("Players")
 local StarterGui = game:GetService("StarterGui")
 local UserInputService = game:GetService("UserInputService")
+local Workspace = game:GetService("Workspace")
 
 local ModelPreviewHelper = require("./ModelPreviewHelper")
 
@@ -14,6 +15,7 @@ local HotbarController = {}
 
 local MIN_SLOTS = 5
 local MAX_SLOTS = 9
+local SLOT_PAD = 6
 
 local KEY_CODES: { Enum.KeyCode } = {
 	Enum.KeyCode.One,
@@ -27,13 +29,13 @@ local KEY_CODES: { Enum.KeyCode } = {
 	Enum.KeyCode.Nine,
 }
 
-local BG_DEFAULT = Color3.fromRGB(16, 18, 22)
-local BG_HOVER = Color3.fromRGB(25, 28, 35)
-local BG_SELECTED = Color3.fromRGB(29, 32, 40)
-local BORDER_DEFAULT = Color3.fromRGB(44, 48, 56)
-local BORDER_HOVER = Color3.fromRGB(84, 88, 98)
-local BORDER_SELECTED = Color3.fromRGB(214, 210, 202)
-local ACCENT_OXBLOOD = Color3.fromRGB(154, 30, 38)
+local BG_DEFAULT = Color3.fromRGB(15, 18, 25)
+local BG_HOVER = Color3.fromRGB(24, 28, 38)
+local BG_SELECTED = Color3.fromRGB(28, 31, 40)
+local BORDER_DEFAULT = Color3.fromRGB(54, 60, 74)
+local BORDER_HOVER = Color3.fromRGB(118, 102, 62)
+local BORDER_SELECTED = Color3.fromRGB(212, 178, 102)
+local ACCENT_GOLD = Color3.fromRGB(212, 178, 102)
 
 type SlotWidget = {
 	Index: number,
@@ -49,11 +51,25 @@ type SlotWidget = {
 }
 
 local hotbarGui: ScreenGui? = nil
+local hotbarScale: UIScale? = nil
+local scaleConn: RBXScriptConnection? = nil
 local barFrame: Frame? = nil
 local slots: { SlotWidget } = {}
 local orderedTools: { Tool } = {}
 local activeConns: { RBXScriptConnection } = {}
 local refreshScheduled = false
+
+local function computeHudScale(): number
+	local cam = Workspace.CurrentCamera
+	if not cam then
+		return 1
+	end
+	local vp = cam.ViewportSize
+	if vp.X <= 1 or vp.Y <= 1 then
+		return 1
+	end
+	return math.clamp(math.min(vp.X / 1360, vp.Y / 760), 0.62, 1.15)
+end
 
 local function getShortDisplayName(tool: Tool): string
 	local n = tool.Name
@@ -166,21 +182,21 @@ local function applySlotVisualState(slot: SlotWidget, isSelected: boolean): ()
 	if isSelected then
 		slot.Button.BackgroundColor3 = BG_SELECTED
 		slot.Stroke.Color = BORDER_SELECTED
-		slot.Stroke.Thickness = 1.5
-		slot.NumLabel.TextColor3 = Color3.fromRGB(242, 238, 230)
-		slot.NameLabel.TextColor3 = Color3.fromRGB(244, 242, 236)
+		slot.Stroke.Thickness = 1.6
+		slot.NumLabel.TextColor3 = ACCENT_GOLD
+		slot.NameLabel.TextColor3 = Color3.fromRGB(246, 244, 238)
 	elseif slot.IsHovered and hasTool then
 		slot.Button.BackgroundColor3 = BG_HOVER
 		slot.Stroke.Color = BORDER_HOVER
-		slot.Stroke.Thickness = 1.2
-		slot.NumLabel.TextColor3 = Color3.fromRGB(212, 210, 204)
-		slot.NameLabel.TextColor3 = Color3.fromRGB(224, 222, 216)
+		slot.Stroke.Thickness = 1.3
+		slot.NumLabel.TextColor3 = Color3.fromRGB(218, 212, 196)
+		slot.NameLabel.TextColor3 = Color3.fromRGB(232, 230, 224)
 	else
 		slot.Button.BackgroundColor3 = BG_DEFAULT
 		slot.Stroke.Color = BORDER_DEFAULT
-		slot.Stroke.Thickness = 1
-		slot.NumLabel.TextColor3 = if hasTool then Color3.fromRGB(162, 166, 174) else Color3.fromRGB(86, 90, 98)
-		slot.NameLabel.TextColor3 = if hasTool then Color3.fromRGB(210, 208, 202) else Color3.fromRGB(74, 78, 86)
+		slot.Stroke.Thickness = 1.1
+		slot.NumLabel.TextColor3 = if hasTool then Color3.fromRGB(168, 174, 186) else Color3.fromRGB(86, 92, 104)
+		slot.NameLabel.TextColor3 = if hasTool then Color3.fromRGB(218, 216, 210) else Color3.fromRGB(78, 84, 96)
 	end
 end
 
@@ -188,7 +204,7 @@ local function createSlotWidget(parent: Instance, index: number): SlotWidget
 	local btn = Instance.new("TextButton")
 	btn.Name = "HotbarSlot_" .. tostring(index)
 	btn.LayoutOrder = index
-	btn.Size = UDim2.fromOffset(86, 86)
+	btn.Size = UDim2.fromOffset(78, 86)
 	btn.BackgroundColor3 = BG_DEFAULT
 	btn.BackgroundTransparency = 0.04
 	btn.BorderSizePixel = 0
@@ -197,66 +213,68 @@ local function createSlotWidget(parent: Instance, index: number): SlotWidget
 	btn.Parent = parent
 
 	local corner = Instance.new("UICorner")
-	corner.CornerRadius = UDim.new(0, 6)
+	corner.CornerRadius = UDim.new(0, 7)
 	corner.Parent = btn
 
 	local stroke = Instance.new("UIStroke")
 	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	stroke.Color = BORDER_DEFAULT
-	stroke.Thickness = 1
+	stroke.Thickness = 1.1
 	stroke.Parent = btn
 
-	-- Subtle restrained deep-crimson top bar shown ONLY on the selected slot
+	-- Subtle brushed-gold top highlight bar shown ONLY on the selected slot
 	local selBar = Instance.new("Frame")
 	selBar.Name = "SelectedIndicator"
 	selBar.Position = UDim2.new(0, 8, 0, 0)
 	selBar.Size = UDim2.new(1, -16, 0, 2)
-	selBar.BackgroundColor3 = ACCENT_OXBLOOD
+	selBar.BackgroundColor3 = ACCENT_GOLD
 	selBar.BorderSizePixel = 0
 	selBar.Visible = false
 	selBar.Parent = btn
 
-	-- 1. Visible Slot Number at the top (1, 2, 3, 4, 5)
+	-- 1. Visible Slot Number at top-left (1, 2, 3, 4, 5)
 	local numLbl = Instance.new("TextLabel")
 	numLbl.Name = "SlotNumber"
-	numLbl.Position = UDim2.new(0, 0, 0, 3)
-	numLbl.Size = UDim2.new(1, 0, 0, 14)
+	numLbl.Position = UDim2.new(0, 6, 0, 3)
+	numLbl.Size = UDim2.new(0, 18, 0, 14)
 	numLbl.BackgroundTransparency = 1
 	numLbl.Font = Enum.Font.GothamBlack
 	numLbl.Text = tostring(index)
 	numLbl.TextSize = 11
-	numLbl.TextColor3 = Color3.fromRGB(162, 166, 174)
+	numLbl.TextXAlignment = Enum.TextXAlignment.Left
+	numLbl.TextColor3 = Color3.fromRGB(168, 174, 186)
 	numLbl.Parent = btn
 
-	-- 2. Readable Category / Tool Name directly underneath the number
-	local nameLbl = Instance.new("TextLabel")
-	nameLbl.Name = "ItemName"
-	nameLbl.Position = UDim2.new(0, 4, 0, 17)
-	nameLbl.Size = UDim2.new(1, -8, 0, 16)
-	nameLbl.BackgroundTransparency = 1
-	nameLbl.Font = Enum.Font.GothamBold
-	nameLbl.Text = "Empty"
-	nameLbl.TextSize = 10
-	nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-	nameLbl.TextColor3 = Color3.fromRGB(74, 78, 86)
-	nameLbl.Parent = btn
-
-	-- 3. Consistent Aspect-Ratio Thumbnail Container directly underneath the name
+	-- 2. Consistent Aspect-Ratio Thumbnail Container in the center
 	local thumbHost = Instance.new("Frame")
 	thumbHost.Name = "ThumbnailFrame"
-	thumbHost.Position = UDim2.new(0.5, -36, 0, 36)
-	thumbHost.Size = UDim2.fromOffset(72, 44)
-	thumbHost.BackgroundColor3 = Color3.fromRGB(22, 24, 30)
+	thumbHost.AnchorPoint = Vector2.new(0.5, 0)
+	thumbHost.Position = UDim2.new(0.5, 0, 0, 19)
+	thumbHost.Size = UDim2.new(1, -12, 0, 44)
+	thumbHost.BackgroundColor3 = Color3.fromRGB(22, 26, 36)
 	thumbHost.BorderSizePixel = 0
 	thumbHost.Parent = btn
 	local tc = Instance.new("UICorner")
-	tc.CornerRadius = UDim.new(0, 4)
+	tc.CornerRadius = UDim.new(0, 5)
 	tc.Parent = thumbHost
 	local ts = Instance.new("UIStroke")
 	ts.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	ts.Color = Color3.fromRGB(44, 48, 56)
+	ts.Color = Color3.fromRGB(48, 54, 66)
 	ts.Thickness = 1
 	ts.Parent = thumbHost
+
+	-- 3. Readable Tool Name cleanly underneath thumbnail
+	local nameLbl = Instance.new("TextLabel")
+	nameLbl.Name = "ItemName"
+	nameLbl.Position = UDim2.new(0, 4, 1, -20)
+	nameLbl.Size = UDim2.new(1, -8, 0, 17)
+	nameLbl.BackgroundTransparency = 1
+	nameLbl.Font = Enum.Font.GothamBold
+	nameLbl.Text = "—"
+	nameLbl.TextSize = 9
+	nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	nameLbl.TextColor3 = Color3.fromRGB(78, 84, 96)
+	nameLbl.Parent = btn
 
 	local widget: SlotWidget = {
 		Index = index,
@@ -300,6 +318,7 @@ local function refreshHotbar(): ()
 
 	local tools, equipped = collectPlayerTools()
 	local visibleCount = math.clamp(math.max(MIN_SLOTS, #tools), MIN_SLOTS, MAX_SLOTS)
+	local slotW = if visibleCount <= 5 then 78 elseif visibleCount <= 7 then 72 else 64
 
 	while #slots < visibleCount do
 		table.insert(slots, createSlotWidget(barFrame, #slots + 1))
@@ -309,6 +328,7 @@ local function refreshHotbar(): ()
 		local isVisible = (i <= visibleCount)
 		slot.Button.Visible = isVisible
 		if isVisible then
+			slot.Button.Size = UDim2.fromOffset(slotW, 86)
 			local tool = tools[i]
 			slot.CurrentTool = tool
 			local isSelected = (tool ~= nil and tool == equipped)
@@ -339,6 +359,12 @@ local function refreshHotbar(): ()
 
 			applySlotVisualState(slot, isSelected)
 		end
+	end
+
+	local totalW = visibleCount * slotW + math.max(0, visibleCount - 1) * SLOT_PAD
+	local pg = Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if pg then
+		pg:SetAttribute("FoodEmpireHotbarHalfW", totalW * 0.5)
 	end
 end
 
@@ -410,11 +436,40 @@ function HotbarController.Init(): ()
 	gui.Parent = playerGui
 	hotbarGui = gui
 
+	-- Match FoodEmpireHUD's exact viewport-reactive UIScale so the Hotbar stays pixel-locked with flanking panels!
+	local uis = Instance.new("UIScale")
+	uis.Name = "ResponsiveHotbarScale"
+	uis.Scale = computeHudScale()
+	uis.Parent = gui
+	hotbarScale = uis
+	if scaleConn then
+		scaleConn:Disconnect()
+	end
+	local function bindResize(): ()
+		local cam = Workspace.CurrentCamera
+		if cam then
+			local function sync()
+				if hotbarScale then
+					hotbarScale.Scale = computeHudScale()
+				end
+			end
+			sync()
+			scaleConn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(sync)
+		end
+	end
+	bindResize()
+	Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+		if scaleConn then
+			scaleConn:Disconnect()
+		end
+		bindResize()
+	end)
+
 	local frame = Instance.new("Frame")
 	frame.Name = "NumberedHotbar"
 	frame.AnchorPoint = Vector2.new(0.5, 1)
-	frame.Position = UDim2.new(0.5, 0, 1, -8)
-	frame.Size = UDim2.fromOffset(820, 88)
+	frame.Position = UDim2.new(0.5, 0, 1, -30)
+	frame.Size = UDim2.fromOffset(720, 88)
 	frame.BackgroundTransparency = 1
 	frame.Parent = gui
 	barFrame = frame

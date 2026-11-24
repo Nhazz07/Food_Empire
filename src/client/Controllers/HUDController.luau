@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
 
 local SectorConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("SectorConfig")
@@ -21,6 +22,7 @@ local HUDController = {}
 
 local FONT_TITLE = Enum.Font.GothamBlack
 local FONT_BODY = Enum.Font.GothamBold
+local FONT_REG = Enum.Font.Gotham
 
 local SECTOR_TAGS: { [string]: string } = {
 	FishingPort = "PORT",
@@ -29,21 +31,31 @@ local SECTOR_TAGS: { [string]: string } = {
 	FruitOrchard = "ORCH",
 }
 
-local C_OBS = Color3.fromRGB(15, 17, 21)
-local C_CHAR = Color3.fromRGB(22, 24, 30)
-local C_BORDER = Color3.fromRGB(48, 52, 62)
-local C_BONE = Color3.fromRGB(234, 231, 224)
-local C_ASH = Color3.fromRGB(156, 160, 170)
-local C_OXBLOOD = Color3.fromRGB(134, 28, 36)
-local C_BRASS = Color3.fromRGB(168, 138, 76)
-local C_ROBUX = Color3.fromRGB(36, 94, 62)
+-- Luxury "Noir Syndicate Bistro" Palette
+local C_OBS = Color3.fromRGB(15, 18, 25)
+local C_OBS_DEEP = Color3.fromRGB(11, 13, 19)
+local C_INNER = Color3.fromRGB(22, 26, 36)
+local C_BORDER = Color3.fromRGB(54, 60, 74)
+local C_GOLD = Color3.fromRGB(212, 178, 102)
+local C_GOLD_DIM = Color3.fromRGB(122, 102, 58)
+local C_BONE = Color3.fromRGB(240, 238, 232)
+local C_ASH = Color3.fromRGB(158, 165, 180)
+local C_EMERALD = Color3.fromRGB(46, 152, 92)
+local C_EMERALD_BRIGHT = Color3.fromRGB(68, 178, 112)
+local C_OXBLOOD = Color3.fromRGB(152, 34, 44)
+local C_CRIMSON_BG = Color3.fromRGB(46, 19, 25)
+local C_STEEL = Color3.fromRGB(62, 108, 156)
+local C_VIOLET = Color3.fromRGB(142, 92, 212)
 
 local screenGui: ScreenGui? = nil
+local uiScaleInst: UIScale? = nil
 local coinsLabel: TextLabel? = nil
 local repLabel: TextLabel? = nil
 local levelLabel: TextLabel? = nil
+local xpSubLabel: TextLabel? = nil
+local xpBarFill: Frame? = nil
 local baseBadge: TextLabel? = nil
-local basePillFrame: Frame? = nil
+local baseAccentBar: Frame? = nil
 local emperorBanner: TextLabel? = nil
 local objectiveLabel: TextLabel? = nil
 local vipOrderLabel: TextLabel? = nil
@@ -52,24 +64,60 @@ local expressAcceptBtn: TextButton? = nil
 local sellBadgeBtn: TextButton? = nil
 local sellTextLabel: TextLabel? = nil
 local bikeTextLabel: TextLabel? = nil
+local bikeKeyLabel: TextLabel? = nil
+local bikeBtnRef: TextButton? = nil
 local toastLabel: TextLabel? = nil
 local receiptTicket: Frame? = nil
 local receiptHeaderLbl: TextLabel? = nil
 local receiptBodyLbl: TextLabel? = nil
-local turfSummaryLabel: TextLabel? = nil
+local turfBlocksLabel: TextLabel? = nil
+local turfIncomeLabel: TextLabel? = nil
+local turfProgressFill: Frame? = nil
 local turfAlertLabel: TextLabel? = nil
 local activeBlockBanner: Frame? = nil
 local activeBlockTitle: TextLabel? = nil
 local activeBlockOwnerPill: TextLabel? = nil
 local activeBlockFill: Frame? = nil
 local activeBlockSub: TextLabel? = nil
+
+-- Bottom-Center Integrated Combat, Vitals & Squad Widgets
+local vitalsDockFrame: Frame? = nil
+local playerHpFill: Frame? = nil
+local playerHpLabel: TextLabel? = nil
+local playerArmorFill: Frame? = nil
+local playerArmorLabel: TextLabel? = nil
+local tacticalGridFrame: Frame? = nil
+local actionClusterFrame: Frame? = nil
+local attackBtnRef: TextButton? = nil
+local recallBtnRef: TextButton? = nil
+local flashBtnRef: TextButton? = nil
+local flashMainLbl: TextLabel? = nil
+local c4BtnRef: TextButton? = nil
+local c4MainLbl: TextLabel? = nil
+local dashBtnRef: TextButton? = nil
+local dashMainLbl: TextLabel? = nil
+
 local latestTurfState: { [string]: any }? = nil
 local turfProximityConn: RBXScriptConnection? = nil
+local vitalsConn: RBXScriptConnection? = nil
+local scaleConn: RBXScriptConnection? = nil
+local hotbarWidthConn: RBXScriptConnection? = nil
+local sectorPills: { [string]: Frame } = {}
 local sectorDots: { [string]: Frame } = {}
 local sectorStatusLabels: { [string]: TextLabel } = {}
 local toastToken = 0
 local lastReceiptOrderNo = 0
 local receiptHideToken = 0
+
+local function formatNumber(n: number): string
+	local s = tostring(math.floor(n + 0.5))
+	local formatted = string.reverse(s):gsub("(%d%d%d)", "%1,")
+	formatted = string.reverse(formatted)
+	if string.sub(formatted, 1, 1) == "," then
+		formatted = string.sub(formatted, 2)
+	end
+	return formatted
+end
 
 local function makeCorner(parent: Instance, radius: number): ()
 	local c = Instance.new("UICorner")
@@ -77,150 +125,174 @@ local function makeCorner(parent: Instance, radius: number): ()
 	c.Parent = parent
 end
 
-local function makeBorderStroke(parent: Instance, color: Color3, thickness: number): ()
+local function makeBorderStroke(parent: Instance, color: Color3, thickness: number): UIStroke
 	local s = Instance.new("UIStroke")
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 	s.Color = color
 	s.Thickness = thickness
 	s.Parent = parent
+	return s
 end
 
 local function makeTextOutline(parent: GuiObject, thickness: number?): ()
 	local s = Instance.new("UIStroke")
 	s.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
-	s.Color = Color3.fromRGB(16, 20, 30)
-	s.Thickness = thickness or 1.6
-	s.Transparency = 0.12
+	s.Color = Color3.fromRGB(10, 12, 18)
+	s.Thickness = thickness or 1.4
+	s.Transparency = 0.2
 	s.Parent = parent
 end
 
-local function addGlossGradient(parent: Instance, topColor: Color3, bottomColor: Color3): ()
+local function addSubtleGradient(parent: Instance, topCol: Color3, botCol: Color3): ()
 	local g = Instance.new("UIGradient")
 	g.Rotation = 90
-	g.Color = ColorSequence.new(topColor, bottomColor)
+	g.Color = ColorSequence.new(topCol, botCol)
 	g.Parent = parent
 end
 
-local function createStatPill(
-	parent: Instance,
-	name: string,
-	layoutOrder: number,
-	accentColor: Color3,
-	tagText: string,
-	initialText: string
-): (Frame, TextLabel)
-	local pill = Instance.new("Frame")
-	pill.Name = name
-	pill.LayoutOrder = layoutOrder
-	pill.Size = UDim2.fromOffset(152, 34)
-	pill.BackgroundColor3 = C_OBS
-	pill.BackgroundTransparency = 0.05
-	pill.Parent = parent
-	makeCorner(pill, 5)
-	makeBorderStroke(pill, C_BORDER, 1)
-
-	local strip = Instance.new("Frame")
-	strip.Name = "AccentStrip"
-	strip.Size = UDim2.new(0, 3, 1, -8)
-	strip.Position = UDim2.new(0, 0, 0, 4)
-	strip.BackgroundColor3 = accentColor
-	strip.BorderSizePixel = 0
-	strip.Parent = pill
-
-	local badge = Instance.new("TextLabel")
-	badge.Name = "TagBadge"
-	badge.Position = UDim2.new(0, 8, 0.5, -10)
-	badge.Size = UDim2.fromOffset(32, 20)
-	badge.BackgroundColor3 = C_CHAR
-	badge.Font = FONT_TITLE
-	badge.Text = tagText
-	badge.TextSize = 9
-	badge.TextColor3 = accentColor
-	badge.Parent = pill
-	makeCorner(badge, 3)
-
-	local val = Instance.new("TextLabel")
-	val.Name = "ValueText"
-	val.Position = UDim2.new(0, 46, 0, 0)
-	val.Size = UDim2.new(1, -52, 1, 0)
-	val.BackgroundTransparency = 1
-	val.Font = FONT_TITLE
-	val.Text = initialText
-	val.TextSize = 12
-	val.TextXAlignment = Enum.TextXAlignment.Left
-	val.TextColor3 = C_BONE
-	val.Parent = pill
-
-	return pill, val
+local function computeHudScale(): number
+	local cam = Workspace.CurrentCamera
+	if not cam then
+		return 1
+	end
+	local vp = cam.ViewportSize
+	if vp.X <= 1 or vp.Y <= 1 then
+		return 1
+	end
+	return math.clamp(math.min(vp.X / 1360, vp.Y / 760), 0.62, 1.15)
 end
 
-local function createDockButton(
+local function createDockGridButton(
 	parent: Instance,
 	name: string,
 	labelText: string,
-	keyHint: string?,
+	keyHint: string,
 	bg: Color3,
-	accent: Color3,
+	borderCol: Color3,
+	accentText: Color3,
 	layoutOrder: number,
-	isRobuxStyle: boolean,
 	onClick: () -> ()
-): (TextButton, TextLabel)
+): TextButton
 	local btn = Instance.new("TextButton")
 	btn.Name = name
 	btn.LayoutOrder = layoutOrder
-	btn.Size = UDim2.fromOffset(106, 36)
 	btn.BackgroundColor3 = bg
 	btn.BackgroundTransparency = 0.04
 	btn.Text = ""
 	btn.AutoButtonColor = false
 	btn.Parent = parent
-	makeCorner(btn, 5)
-	makeBorderStroke(btn, if isRobuxStyle then C_BRASS else C_BORDER, 1)
-
-	local accentBar = Instance.new("Frame")
-	accentBar.Size = UDim2.new(1, -14, 0, 2)
-	accentBar.Position = UDim2.new(0, 7, 1, -2)
-	accentBar.BackgroundColor3 = accent
-	accentBar.BorderSizePixel = 0
-	accentBar.Parent = btn
+	makeCorner(btn, 6)
+	local stroke = makeBorderStroke(btn, borderCol, 1.2)
 
 	local lbl = Instance.new("TextLabel")
 	lbl.Name = "Label"
-	lbl.Position = UDim2.new(0, 8, 0, 0)
-	lbl.Size = UDim2.new(1, if keyHint then -30 else -16, 1, 0)
+	lbl.Position = UDim2.new(0, 2, 0, 8)
+	lbl.Size = UDim2.new(1, -4, 0, 16)
 	lbl.BackgroundTransparency = 1
 	lbl.Font = FONT_TITLE
 	lbl.Text = string.upper(labelText)
-	lbl.TextSize = 11
-	lbl.TextXAlignment = if keyHint then Enum.TextXAlignment.Left else Enum.TextXAlignment.Center
+	lbl.TextSize = 10
 	lbl.TextColor3 = C_BONE
 	lbl.Parent = btn
 
-	if keyHint and keyHint ~= "" then
-		local keyCap = Instance.new("TextLabel")
-		keyCap.Name = "KeyCap"
-		keyCap.AnchorPoint = Vector2.new(1, 0.5)
-		keyCap.Position = UDim2.new(1, -6, 0.5, 0)
-		keyCap.Size = UDim2.fromOffset(18, 18)
-		keyCap.BackgroundColor3 = Color3.fromRGB(11, 12, 16)
-		keyCap.Font = FONT_TITLE
-		keyCap.Text = keyHint
-		keyCap.TextSize = 10
-		keyCap.TextColor3 = C_ASH
-		keyCap.Parent = btn
-		makeCorner(keyCap, 3)
-		makeBorderStroke(keyCap, C_BORDER, 1)
-	end
+	local keyLbl = Instance.new("TextLabel")
+	keyLbl.Name = "KeyCap"
+	keyLbl.Position = UDim2.new(0, 2, 0, 26)
+	keyLbl.Size = UDim2.new(1, -4, 0, 14)
+	keyLbl.BackgroundTransparency = 1
+	keyLbl.Font = FONT_BODY
+	keyLbl.Text = "[" .. keyHint .. "]"
+	keyLbl.TextSize = 10
+	keyLbl.TextColor3 = accentText
+	keyLbl.Parent = btn
 
-	local baseBg = bg
 	btn.MouseEnter:Connect(function()
-		btn.BackgroundColor3 = baseBg:Lerp(Color3.new(1, 1, 1), 0.08)
+		btn.BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.1)
+		stroke.Color = borderCol:Lerp(Color3.new(1, 1, 1), 0.25)
 	end)
 	btn.MouseLeave:Connect(function()
-		btn.BackgroundColor3 = baseBg
+		btn.BackgroundColor3 = bg
+		stroke.Color = borderCol
 	end)
 	btn.MouseButton1Click:Connect(onClick)
-	return btn, lbl
+	return btn
+end
+
+local function createTacticalTile(
+	parent: Instance,
+	name: string,
+	titleText: string,
+	keyText: string,
+	bg: Color3,
+	borderCol: Color3,
+	keyCol: Color3,
+	layoutOrder: number,
+	cb: (() -> ())?
+): (TextButton, TextLabel, TextLabel)
+	local btn = Instance.new("TextButton")
+	btn.Name = name
+	btn.LayoutOrder = layoutOrder
+	btn.BackgroundColor3 = bg
+	btn.BackgroundTransparency = 0.05
+	btn.AutoButtonColor = false
+	btn.Text = ""
+	btn.Parent = parent
+	makeCorner(btn, 6)
+	local stroke = makeBorderStroke(btn, borderCol, 1.2)
+
+	local topLbl = Instance.new("TextLabel")
+	topLbl.Name = "Title"
+	topLbl.Position = UDim2.new(0, 2, 0, 5)
+	topLbl.Size = UDim2.new(1, -4, 0, 14)
+	topLbl.BackgroundTransparency = 1
+	topLbl.Font = FONT_TITLE
+	topLbl.Text = titleText
+	topLbl.TextSize = 10
+	topLbl.TextColor3 = C_BONE
+	topLbl.Parent = btn
+
+	local botLbl = Instance.new("TextLabel")
+	botLbl.Name = "KeyLabel"
+	botLbl.Position = UDim2.new(0, 2, 0, 21)
+	botLbl.Size = UDim2.new(1, -4, 0, 13)
+	botLbl.BackgroundTransparency = 1
+	botLbl.Font = FONT_BODY
+	botLbl.Text = keyText
+	botLbl.TextSize = 9
+	botLbl.TextColor3 = keyCol
+	botLbl.Parent = btn
+
+	btn.MouseEnter:Connect(function()
+		btn.BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.12)
+		stroke.Color = borderCol:Lerp(Color3.new(1, 1, 1), 0.2)
+	end)
+	btn.MouseLeave:Connect(function()
+		btn.BackgroundColor3 = bg
+		stroke.Color = borderCol
+	end)
+	btn.MouseButton1Click:Connect(function()
+		if cb then
+			cb()
+		end
+	end)
+	return btn, topLbl, botLbl
+end
+
+local function syncBottomClusterOffsets(): ()
+	local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+	local halfW = if playerGui and typeof(playerGui:GetAttribute("FoodEmpireHotbarHalfW")) == "number"
+		then (playerGui:GetAttribute("FoodEmpireHotbarHalfW") :: number)
+		else 207
+
+	if vitalsDockFrame then
+		vitalsDockFrame.Size = UDim2.fromOffset(math.max(360, halfW * 2), 24)
+	end
+	if tacticalGridFrame then
+		tacticalGridFrame.Position = UDim2.new(0.5, -(halfW + 10), 1, -30)
+	end
+	if actionClusterFrame then
+		actionClusterFrame.Position = UDim2.new(0.5, halfW + 10, 1, -30)
+	end
 end
 
 function HUDController.Init(
@@ -250,339 +322,888 @@ function HUDController.Init(
 	gui.Parent = playerGui
 	screenGui = gui
 
-	-- Top Stats Bar (Gold Coins, Reputation Crown, Star Level, Castle Base)
+	-- Viewport-responsive UIScale so ALL corners & docks stay zero-overlap from 720p/Studio up to 4K!
+	local uis = Instance.new("UIScale")
+	uis.Name = "ResponsiveHUDScale"
+	uis.Scale = computeHudScale()
+	uis.Parent = gui
+	uiScaleInst = uis
+	playerGui:SetAttribute("FoodEmpireHUDScale", uis.Scale)
+
+	if scaleConn then
+		scaleConn:Disconnect()
+	end
+	local function bindCameraResize(): ()
+		local cam = Workspace.CurrentCamera
+		if cam then
+			local function onResize()
+				local sc = computeHudScale()
+				if uiScaleInst then
+					uiScaleInst.Scale = sc
+				end
+				playerGui:SetAttribute("FoodEmpireHUDScale", sc)
+			end
+			onResize()
+			scaleConn = cam:GetPropertyChangedSignal("ViewportSize"):Connect(onResize)
+		end
+	end
+	bindCameraResize()
+	Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+		if scaleConn then
+			scaleConn:Disconnect()
+		end
+		bindCameraResize()
+	end)
+
+	-- =========================================================================
+	-- 1. TOP-CENTER: UNIFIED LUXURY OBSIDIAN-GOLD EMPIRE HEADER BAR + TICKER
+	-- =========================================================================
 	local topBar = Instance.new("Frame")
 	topBar.Name = "TopStatsBar"
 	topBar.AnchorPoint = Vector2.new(0.5, 0)
 	topBar.Position = UDim2.new(0.5, 0, 0, 8)
-	topBar.Size = UDim2.fromOffset(650, 44)
-	topBar.BackgroundTransparency = 1
+	topBar.Size = UDim2.fromOffset(600, 44)
+	topBar.BackgroundColor3 = C_OBS
+	topBar.BackgroundTransparency = 0.06
 	topBar.Parent = gui
+	makeCorner(topBar, 8)
+	makeBorderStroke(topBar, C_GOLD, 1.3)
+	addSubtleGradient(topBar, Color3.fromRGB(22, 26, 36), C_OBS_DEEP)
 
-	local topLayout = Instance.new("UIListLayout")
-	topLayout.FillDirection = Enum.FillDirection.Horizontal
-	topLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	topLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	topLayout.Padding = UDim.new(0, 8)
-	topLayout.Parent = topBar
+	local function addDivider(xOffset: number): ()
+		local div = Instance.new("Frame")
+		div.Position = UDim2.new(0, xOffset, 0, 8)
+		div.Size = UDim2.new(0, 1, 1, -16)
+		div.BackgroundColor3 = C_BORDER
+		div.BorderSizePixel = 0
+		div.Parent = topBar
+	end
 
-	local _, cLbl = createStatPill(topBar, "Coins", 1, C_BRASS, "GOLD", "90 Gold")
+	-- Segment 1: Base Slot (0..154)
+	local segBase = Instance.new("Frame")
+	segBase.Name = "BaseSlot"
+	segBase.Position = UDim2.new(0, 0, 0, 0)
+	segBase.Size = UDim2.new(0, 154, 1, 0)
+	segBase.BackgroundTransparency = 1
+	segBase.Parent = topBar
+
+	local bStrip = Instance.new("Frame")
+	bStrip.Name = "AccentStrip"
+	bStrip.Position = UDim2.new(0, 8, 0.5, -11)
+	bStrip.Size = UDim2.fromOffset(4, 22)
+	bStrip.BackgroundColor3 = C_GOLD
+	bStrip.BorderSizePixel = 0
+	bStrip.Parent = segBase
+	makeCorner(bStrip, 2)
+	baseAccentBar = bStrip
+
+	local baseIcon = Instance.new("TextLabel")
+	baseIcon.Position = UDim2.new(0, 17, 0.5, -11)
+	baseIcon.Size = UDim2.fromOffset(22, 22)
+	baseIcon.BackgroundColor3 = C_INNER
+	baseIcon.Font = FONT_TITLE
+	baseIcon.Text = "HQ"
+	baseIcon.TextSize = 9
+	baseIcon.TextColor3 = C_GOLD
+	baseIcon.Parent = segBase
+	makeCorner(baseIcon, 5)
+	makeBorderStroke(baseIcon, C_GOLD_DIM, 1)
+
+	local bLbl = Instance.new("TextLabel")
+	bLbl.Name = "ValueText"
+	bLbl.Position = UDim2.new(0, 45, 0, 0)
+	bLbl.Size = UDim2.new(1, -50, 1, 0)
+	bLbl.BackgroundTransparency = 1
+	bLbl.Font = FONT_TITLE
+	bLbl.Text = "BASE: --"
+	bLbl.TextSize = 12
+	bLbl.TextXAlignment = Enum.TextXAlignment.Left
+	bLbl.TextColor3 = C_BONE
+	bLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	bLbl.Parent = segBase
+	baseBadge = bLbl
+	addDivider(154)
+
+	-- Segment 2: Gold Coins (154..292)
+	local segGold = Instance.new("Frame")
+	segGold.Name = "Coins"
+	segGold.Position = UDim2.new(0, 154, 0, 0)
+	segGold.Size = UDim2.new(0, 138, 1, 0)
+	segGold.BackgroundTransparency = 1
+	segGold.Parent = topBar
+
+	local gCoin = Instance.new("TextLabel")
+	gCoin.Position = UDim2.new(0, 12, 0.5, -11)
+	gCoin.Size = UDim2.fromOffset(22, 22)
+	gCoin.BackgroundColor3 = Color3.fromRGB(218, 174, 62)
+	gCoin.Font = FONT_TITLE
+	gCoin.Text = "G"
+	gCoin.TextSize = 11
+	gCoin.TextColor3 = Color3.fromRGB(24, 18, 8)
+	gCoin.Parent = segGold
+	makeCorner(gCoin, 11)
+
+	local cLbl = Instance.new("TextLabel")
+	cLbl.Name = "ValueText"
+	cLbl.Position = UDim2.new(0, 41, 0, 0)
+	cLbl.Size = UDim2.new(1, -46, 1, 0)
+	cLbl.BackgroundTransparency = 1
+	cLbl.Font = FONT_TITLE
+	cLbl.Text = "90"
+	cLbl.TextSize = 14
+	cLbl.TextXAlignment = Enum.TextXAlignment.Left
+	cLbl.TextColor3 = C_BONE
+	cLbl.Parent = segGold
 	coinsLabel = cLbl
+	addDivider(292)
 
-	local _, rLbl = createStatPill(topBar, "Reputation", 2, C_OXBLOOD, "REP", "0 Rep")
-	repLabel = rLbl
+	-- Segment 3: Level + Integrated XP Progress Bar (292..448)
+	local segLvl = Instance.new("Frame")
+	segLvl.Name = "Level"
+	segLvl.Position = UDim2.new(0, 292, 0, 0)
+	segLvl.Size = UDim2.new(0, 156, 1, 0)
+	segLvl.BackgroundTransparency = 1
+	segLvl.Parent = topBar
 
-	local _, lLbl = createStatPill(topBar, "Level", 3, Color3.fromRGB(118, 134, 158), "LVL", "Lv.1 • 0 XP")
+	local lvBadge = Instance.new("TextLabel")
+	lvBadge.Position = UDim2.new(0, 12, 0.5, -11)
+	lvBadge.Size = UDim2.fromOffset(22, 22)
+	lvBadge.BackgroundColor3 = Color3.fromRGB(48, 36, 78)
+	lvBadge.Font = FONT_TITLE
+	lvBadge.Text = "★"
+	lvBadge.TextSize = 12
+	lvBadge.TextColor3 = C_GOLD
+	lvBadge.Parent = segLvl
+	makeCorner(lvBadge, 5)
+	makeBorderStroke(lvBadge, C_VIOLET, 1)
+
+	local lLbl = Instance.new("TextLabel")
+	lLbl.Name = "ValueText"
+	lLbl.Position = UDim2.new(0, 42, 0, 4)
+	lLbl.Size = UDim2.new(1, -48, 0, 15)
+	lLbl.BackgroundTransparency = 1
+	lLbl.Font = FONT_TITLE
+	lLbl.Text = "LV. 1"
+	lLbl.TextSize = 12
+	lLbl.TextXAlignment = Enum.TextXAlignment.Left
+	lLbl.TextColor3 = C_BONE
+	lLbl.Parent = segLvl
 	levelLabel = lLbl
 
-	local bFrame, bLbl = createStatPill(topBar, "BaseSlot", 4, Color3.fromRGB(142, 146, 156), "BASE", "Base: --")
-	basePillFrame = bFrame
-	baseBadge = bLbl
+	local xpBg = Instance.new("Frame")
+	xpBg.Position = UDim2.new(0, 42, 0, 22)
+	xpBg.Size = UDim2.new(1, -54, 0, 5)
+	xpBg.BackgroundColor3 = C_OBS_DEEP
+	xpBg.BorderSizePixel = 0
+	xpBg.Parent = segLvl
+	makeCorner(xpBg, 3)
 
-	-- Food Emperor Title Banner
+	local xpFill = Instance.new("Frame")
+	xpFill.Size = UDim2.fromScale(0.15, 1)
+	xpFill.BackgroundColor3 = C_VIOLET
+	xpFill.BorderSizePixel = 0
+	xpFill.Parent = xpBg
+	makeCorner(xpFill, 3)
+	xpBarFill = xpFill
+
+	local xpLbl = Instance.new("TextLabel")
+	xpLbl.Position = UDim2.new(0, 42, 0, 28)
+	xpLbl.Size = UDim2.new(1, -48, 0, 12)
+	xpLbl.BackgroundTransparency = 1
+	xpLbl.Font = FONT_BODY
+	xpLbl.Text = "0 XP"
+	xpLbl.TextSize = 9
+	xpLbl.TextXAlignment = Enum.TextXAlignment.Left
+	xpLbl.TextColor3 = C_ASH
+	xpLbl.Parent = segLvl
+	xpSubLabel = xpLbl
+	addDivider(448)
+
+	-- Segment 4: Reputation (448..600)
+	local segRep = Instance.new("Frame")
+	segRep.Name = "Reputation"
+	segRep.Position = UDim2.new(0, 448, 0, 0)
+	segRep.Size = UDim2.new(0, 152, 1, 0)
+	segRep.BackgroundTransparency = 1
+	segRep.Parent = topBar
+
+	local repBadge = Instance.new("TextLabel")
+	repBadge.Position = UDim2.new(0, 12, 0.5, -11)
+	repBadge.Size = UDim2.fromOffset(22, 22)
+	repBadge.BackgroundColor3 = C_CRIMSON_BG
+	repBadge.Font = FONT_TITLE
+	repBadge.Text = "R"
+	repBadge.TextSize = 11
+	repBadge.TextColor3 = Color3.fromRGB(228, 92, 102)
+	repBadge.Parent = segRep
+	makeCorner(repBadge, 5)
+	makeBorderStroke(repBadge, C_OXBLOOD, 1)
+
+	local rLbl = Instance.new("TextLabel")
+	rLbl.Name = "ValueText"
+	rLbl.Position = UDim2.new(0, 41, 0, 0)
+	rLbl.Size = UDim2.new(1, -46, 1, 0)
+	rLbl.BackgroundTransparency = 1
+	rLbl.Font = FONT_TITLE
+	rLbl.Text = "0 REP"
+	rLbl.TextSize = 13
+	rLbl.TextXAlignment = Enum.TextXAlignment.Left
+	rLbl.TextColor3 = C_BONE
+	rLbl.Parent = segRep
+	repLabel = rLbl
+
+	-- Slim Dual Sub-Ticker directly below Header Bar (Rank/Bistro Pill + Active Event Pill)
+	local tickerRow = Instance.new("Frame")
+	tickerRow.Name = "TopSubTicker"
+	tickerRow.AnchorPoint = Vector2.new(0.5, 0)
+	tickerRow.Position = UDim2.new(0.5, 0, 0, 56)
+	tickerRow.Size = UDim2.fromOffset(640, 22)
+	tickerRow.BackgroundTransparency = 1
+	tickerRow.Parent = gui
+
+	local tickerLayout = Instance.new("UIListLayout")
+	tickerLayout.FillDirection = Enum.FillDirection.Horizontal
+	tickerLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	tickerLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	tickerLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	tickerLayout.Padding = UDim.new(0, 8)
+	tickerLayout.Parent = tickerRow
+
 	local emp = Instance.new("TextLabel")
 	emp.Name = "FoodEmperorBanner"
-	emp.AnchorPoint = Vector2.new(0.5, 0)
-	emp.Position = UDim2.new(0.5, 0, 0, 48)
-	emp.Size = UDim2.fromOffset(330, 22)
+	emp.LayoutOrder = 1
+	emp.AutomaticSize = Enum.AutomaticSize.X
+	emp.Size = UDim2.fromOffset(0, 22)
 	emp.BackgroundColor3 = C_OBS
 	emp.BackgroundTransparency = 0.08
 	emp.Font = FONT_BODY
-	emp.Text = "FOOD EMPEROR: --"
-	emp.TextSize = 11
-	emp.TextColor3 = C_BRASS
-	emp.Parent = gui
-	makeCorner(emp, 4)
+	emp.Text = "STREET RUNNER  •  1★ BISTRO"
+	emp.TextSize = 10
+	emp.TextColor3 = C_BONE
+	emp.Parent = tickerRow
+	makeCorner(emp, 5)
 	makeBorderStroke(emp, C_BORDER, 1)
+	local empPad = Instance.new("UIPadding")
+	empPad.PaddingLeft = UDim.new(0, 10)
+	empPad.PaddingRight = UDim.new(0, 10)
+	empPad.Parent = emp
 	emperorBanner = emp
 
-	-- Active Central District Event Pill
 	local evBanner = Instance.new("TextLabel")
 	evBanner.Name = "ActiveEventBanner"
-	evBanner.AnchorPoint = Vector2.new(0.5, 0)
-	evBanner.Position = UDim2.new(0.5, 0, 0, 74)
-	evBanner.Size = UDim2.fromOffset(360, 22)
-	evBanner.BackgroundColor3 = Color3.fromRGB(36, 18, 22)
-	evBanner.BackgroundTransparency = 0.08
-	evBanner.Font = FONT_BODY
-	evBanner.TextSize = 11
-	evBanner.TextColor3 = C_BONE
-	evBanner.Parent = gui
-	makeCorner(evBanner, 4)
+	evBanner.LayoutOrder = 2
+	evBanner.AutomaticSize = Enum.AutomaticSize.X
+	evBanner.Size = UDim2.fromOffset(0, 22)
+	evBanner.BackgroundColor3 = C_CRIMSON_BG
+	evBanner.BackgroundTransparency = 0.06
+	evBanner.Font = FONT_TITLE
+	evBanner.TextSize = 10
+	evBanner.TextColor3 = C_GOLD
+	evBanner.Parent = tickerRow
+	makeCorner(evBanner, 5)
 	makeBorderStroke(evBanner, C_OXBLOOD, 1)
+	local evPad = Instance.new("UIPadding")
+	evPad.PaddingLeft = UDim.new(0, 10)
+	evPad.PaddingRight = UDim.new(0, 10)
+	evPad.Parent = evBanner
 
 	local function refreshEventText()
 		local title = ReplicatedStorage:GetAttribute("ActiveEventTitle")
-		evBanner.Text = string.upper(if typeof(title) == "string" then title else "CENTRAL DISTRICT MARKET OPEN")
+		evBanner.Text = string.upper(if typeof(title) == "string" then title else "CENTRAL MARKET OPEN")
 	end
 	refreshEventText()
 	ReplicatedStorage:GetAttributeChangedSignal("ActiveEventTitle"):Connect(refreshEventText)
 
-	-- Territory Shipments Strip (Top-Left)
+	-- =========================================================================
+	-- 2. LEFT SIDEBAR: COMPACT 2x2 SHIPMENTS + UNIFIED ACTIVE ORDERS (COLLAPSIBLE!)
+	-- =========================================================================
+	local leftRail = Instance.new("Frame")
+	leftRail.Name = "LeftOpsRail"
+	leftRail.Position = UDim2.new(0, 14, 0, 62)
+	leftRail.Size = UDim2.fromOffset(220, 410)
+	leftRail.BackgroundTransparency = 1
+	leftRail.Parent = gui
+
+	local leftLayout = Instance.new("UIListLayout")
+	leftLayout.FillDirection = Enum.FillDirection.Vertical
+	leftLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	leftLayout.Padding = UDim.new(0, 8)
+	leftLayout.Parent = leftRail
+
+	-- Card 1: Compact 2x2 Corner Shipments
 	local terrPanel = Instance.new("Frame")
 	terrPanel.Name = "TerritoryStrip"
-	terrPanel.Position = UDim2.new(0, 14, 0, 62)
-	terrPanel.Size = UDim2.fromOffset(214, 130)
+	terrPanel.LayoutOrder = 1
+	terrPanel.Size = UDim2.fromOffset(220, 88)
 	terrPanel.BackgroundColor3 = C_OBS
 	terrPanel.BackgroundTransparency = 0.08
-	terrPanel.Parent = gui
-	makeCorner(terrPanel, 6)
-	makeBorderStroke(terrPanel, C_BORDER, 1)
+	terrPanel.Parent = leftRail
+	makeCorner(terrPanel, 8)
+	makeBorderStroke(terrPanel, C_GOLD_DIM, 1.1)
 
 	local terrHeader = Instance.new("TextLabel")
-	terrHeader.Position = UDim2.new(0, 10, 0, 4)
-	terrHeader.Size = UDim2.new(1, -20, 0, 20)
+	terrHeader.Position = UDim2.new(0, 10, 0, 5)
+	terrHeader.Size = UDim2.new(1, -38, 0, 16)
 	terrHeader.BackgroundTransparency = 1
 	terrHeader.Font = FONT_TITLE
 	terrHeader.Text = "CORNER SHIPMENTS"
-	terrHeader.TextSize = 11
+	terrHeader.TextSize = 10
 	terrHeader.TextXAlignment = Enum.TextXAlignment.Left
-	terrHeader.TextColor3 = C_BRASS
+	terrHeader.TextColor3 = C_GOLD
 	terrHeader.Parent = terrPanel
 
-	local listHolder = Instance.new("Frame")
-	listHolder.Position = UDim2.new(0, 10, 0, 26)
-	listHolder.Size = UDim2.new(1, -20, 1, -30)
-	listHolder.BackgroundTransparency = 1
-	listHolder.Parent = terrPanel
+	local shipGrid = Instance.new("Frame")
+	shipGrid.Position = UDim2.new(0, 8, 0, 25)
+	shipGrid.Size = UDim2.new(1, -16, 0, 56)
+	shipGrid.BackgroundTransparency = 1
+	shipGrid.Parent = terrPanel
 
-	local listLayout = Instance.new("UIListLayout")
-	listLayout.Padding = UDim.new(0, 3)
-	listLayout.Parent = listHolder
+	local shipGridLayout = Instance.new("UIGridLayout")
+	shipGridLayout.CellSize = UDim2.fromOffset(99, 25)
+	shipGridLayout.CellPadding = UDim2.fromOffset(6, 5)
+	shipGridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	shipGridLayout.Parent = shipGrid
 
 	local sectorOrder = { "FishingPort", "VegetableFarm", "FruitOrchard", "Ranch" }
-	for _, sectorId in ipairs(sectorOrder) do
-		local entry = SectorConfig.Sectors[sectorId]
-		if entry then
-			local row = Instance.new("Frame")
-			row.Size = UDim2.new(1, 0, 0, 22)
-			row.BackgroundTransparency = 1
-			row.Parent = listHolder
+	for idx, sectorId in ipairs(sectorOrder) do
+		local tag = SECTOR_TAGS[sectorId] or "SEC"
+		local pill = Instance.new("Frame")
+		pill.Name = "ShipPill_" .. sectorId
+		pill.LayoutOrder = idx
+		pill.BackgroundColor3 = C_INNER
+		pill.BackgroundTransparency = 0.08
+		pill.Parent = shipGrid
+		makeCorner(pill, 5)
+		makeBorderStroke(pill, C_BORDER, 1)
+		sectorPills[sectorId] = pill
 
-			local dot = Instance.new("Frame")
-			dot.Size = UDim2.fromOffset(8, 8)
-			dot.Position = UDim2.new(0, 2, 0.5, -4)
-			dot.BackgroundColor3 = SectorConfig.FactionColors.Neutral
-			dot.Parent = row
-			makeCorner(dot, 4)
-			sectorDots[sectorId] = dot
+		local dot = Instance.new("Frame")
+		dot.Size = UDim2.fromOffset(7, 7)
+		dot.Position = UDim2.new(0, 7, 0.5, -3)
+		dot.BackgroundColor3 = SectorConfig.FactionColors.Neutral
+		dot.BorderSizePixel = 0
+		dot.Parent = pill
+		makeCorner(dot, 4)
+		sectorDots[sectorId] = dot
 
-			local nameLbl = Instance.new("TextLabel")
-			nameLbl.Position = UDim2.new(0, 16, 0, 0)
-			nameLbl.Size = UDim2.new(1, -16, 1, 0)
-			nameLbl.BackgroundTransparency = 1
-			nameLbl.Font = FONT_BODY
-			nameLbl.Text = entry.DisplayName
-			nameLbl.TextSize = 11
-			nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-			nameLbl.TextColor3 = C_BONE
-			nameLbl.Parent = row
-			sectorStatusLabels[sectorId] = nameLbl
-		end
+		local nameLbl = Instance.new("TextLabel")
+		nameLbl.Position = UDim2.new(0, 18, 0, 0)
+		nameLbl.Size = UDim2.new(1, -22, 1, 0)
+		nameLbl.BackgroundTransparency = 1
+		nameLbl.Font = FONT_BODY
+		nameLbl.Text = tag .. " • --"
+		nameLbl.TextSize = 9
+		nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+		nameLbl.TextColor3 = C_ASH
+		nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		nameLbl.Parent = pill
+		sectorStatusLabels[sectorId] = nameLbl
 	end
 
-	-- Next Objective Panel
-	local goalPanel = Instance.new("Frame")
-	goalPanel.Name = "ObjectivePanel"
-	goalPanel.Position = UDim2.new(0, 14, 0, 198)
-	goalPanel.Size = UDim2.fromOffset(214, 72)
-	goalPanel.BackgroundColor3 = C_OBS
-	goalPanel.BackgroundTransparency = 0.08
-	goalPanel.Parent = gui
-	makeCorner(goalPanel, 6)
-	makeBorderStroke(goalPanel, C_BORDER, 1)
+	-- Card 2: Unified Active Orders Card (Objective + VIP Critic + Express Delivery)
+	local ordersPanel = Instance.new("Frame")
+	ordersPanel.Name = "ActiveOrdersCard"
+	ordersPanel.LayoutOrder = 2
+	ordersPanel.Size = UDim2.fromOffset(220, 294)
+	ordersPanel.BackgroundColor3 = C_OBS
+	ordersPanel.BackgroundTransparency = 0.08
+	ordersPanel.Parent = leftRail
+	makeCorner(ordersPanel, 8)
+	makeBorderStroke(ordersPanel, C_GOLD_DIM, 1.1)
 
-	local goalHeader = Instance.new("TextLabel")
-	goalHeader.Position = UDim2.new(0, 10, 0, 4)
-	goalHeader.Size = UDim2.new(1, -20, 0, 18)
-	goalHeader.BackgroundTransparency = 1
-	goalHeader.Font = FONT_TITLE
-	goalHeader.Text = "OBJECTIVE"
-	goalHeader.TextSize = 10
-	goalHeader.TextXAlignment = Enum.TextXAlignment.Left
-	goalHeader.TextColor3 = C_BRASS
-	goalHeader.Parent = goalPanel
+	local ordersHeader = Instance.new("TextLabel")
+	ordersHeader.Position = UDim2.new(0, 10, 0, 5)
+	ordersHeader.Size = UDim2.new(1, -40, 0, 16)
+	ordersHeader.BackgroundTransparency = 1
+	ordersHeader.Font = FONT_TITLE
+	ordersHeader.Text = "ACTIVE ORDERS"
+	ordersHeader.TextSize = 10
+	ordersHeader.TextXAlignment = Enum.TextXAlignment.Left
+	ordersHeader.TextColor3 = C_GOLD
+	ordersHeader.Parent = ordersPanel
 
+	local ordersBody = Instance.new("Frame")
+	ordersBody.Name = "Body"
+	ordersBody.Position = UDim2.new(0, 8, 0, 25)
+	ordersBody.Size = UDim2.new(1, -16, 1, -33)
+	ordersBody.BackgroundTransparency = 1
+	ordersBody.Parent = ordersPanel
+
+	-- Collapse toggle button on Active Orders (minimizes during combat!)
+	local ordersCollapsed = false
+	local collapseOrdersBtn = Instance.new("TextButton")
+	collapseOrdersBtn.Name = "CollapseBtn"
+	collapseOrdersBtn.AnchorPoint = Vector2.new(1, 0)
+	collapseOrdersBtn.Position = UDim2.new(1, -7, 0, 4)
+	collapseOrdersBtn.Size = UDim2.fromOffset(20, 18)
+	collapseOrdersBtn.BackgroundColor3 = C_INNER
+	collapseOrdersBtn.Font = FONT_TITLE
+	collapseOrdersBtn.Text = "−"
+	collapseOrdersBtn.TextSize = 12
+	collapseOrdersBtn.TextColor3 = C_ASH
+	collapseOrdersBtn.Parent = ordersPanel
+	makeCorner(collapseOrdersBtn, 4)
+	makeBorderStroke(collapseOrdersBtn, C_BORDER, 1)
+	collapseOrdersBtn.MouseButton1Click:Connect(function()
+		ordersCollapsed = not ordersCollapsed
+		ordersBody.Visible = not ordersCollapsed
+		ordersPanel.Size = UDim2.fromOffset(220, if ordersCollapsed then 26 else 294)
+		collapseOrdersBtn.Text = if ordersCollapsed then "+" else "−"
+	end)
+
+	-- Also allow collapsing Shipments cleanly
+	local shipCollapsed = false
+	local collapseShipBtn = Instance.new("TextButton")
+	collapseShipBtn.Name = "CollapseBtn"
+	collapseShipBtn.AnchorPoint = Vector2.new(1, 0)
+	collapseShipBtn.Position = UDim2.new(1, -7, 0, 4)
+	collapseShipBtn.Size = UDim2.fromOffset(20, 18)
+	collapseShipBtn.BackgroundColor3 = C_INNER
+	collapseShipBtn.Font = FONT_TITLE
+	collapseShipBtn.Text = "−"
+	collapseShipBtn.TextSize = 12
+	collapseShipBtn.TextColor3 = C_ASH
+	collapseShipBtn.Parent = terrPanel
+	makeCorner(collapseShipBtn, 4)
+	makeBorderStroke(collapseShipBtn, C_BORDER, 1)
+	collapseShipBtn.MouseButton1Click:Connect(function()
+		shipCollapsed = not shipCollapsed
+		shipGrid.Visible = not shipCollapsed
+		terrPanel.Size = UDim2.fromOffset(220, if shipCollapsed then 26 else 88)
+		collapseShipBtn.Text = if shipCollapsed then "+" else "−"
+	end)
+
+	local function makeOrderSection(name: string, yPos: number, height: number, title: string): Frame
+		local sec = Instance.new("Frame")
+		sec.Name = name
+		sec.Position = UDim2.new(0, 0, 0, yPos)
+		sec.Size = UDim2.new(1, 0, 0, height)
+		sec.BackgroundColor3 = C_INNER
+		sec.BackgroundTransparency = 0.08
+		sec.Parent = ordersBody
+		makeCorner(sec, 6)
+		makeBorderStroke(sec, C_BORDER, 1)
+
+		local hdr = Instance.new("TextLabel")
+		hdr.Position = UDim2.new(0, 8, 0, 4)
+		hdr.Size = UDim2.new(1, -16, 0, 14)
+		hdr.BackgroundTransparency = 1
+		hdr.Font = FONT_TITLE
+		hdr.Text = title
+		hdr.TextSize = 9
+		hdr.TextXAlignment = Enum.TextXAlignment.Left
+		hdr.TextColor3 = C_GOLD
+		hdr.Parent = sec
+		return sec
+	end
+
+	-- Section A: Objective
+	local objSec = makeOrderSection("ObjectivePanel", 0, 76, "OBJECTIVE")
 	local goalTxt = Instance.new("TextLabel")
-	goalTxt.Position = UDim2.new(0, 10, 0, 22)
-	goalTxt.Size = UDim2.new(1, -20, 1, -26)
+	goalTxt.Position = UDim2.new(0, 8, 0, 19)
+	goalTxt.Size = UDim2.new(1, -16, 1, -23)
 	goalTxt.BackgroundTransparency = 1
-	goalTxt.Font = Enum.Font.Gotham
+	goalTxt.Font = FONT_REG
 	goalTxt.TextWrapped = true
 	goalTxt.TextXAlignment = Enum.TextXAlignment.Left
 	goalTxt.TextYAlignment = Enum.TextYAlignment.Top
-	goalTxt.TextSize = 11
+	goalTxt.TextSize = 10
 	goalTxt.TextColor3 = C_BONE
-	goalTxt.Text = "Capture Fishing Port (SE) to supply your starter Warehouse."
-	goalTxt.Parent = goalPanel
+	goalTxt.Text = "Claim a Corner Shipment at Central Plaza [E] to supply your starter Warehouse."
+	goalTxt.Parent = objSec
 	objectiveLabel = goalTxt
 
-	-- Timed VIP Food Critic Order Card
-	local vipPanel = Instance.new("Frame")
-	vipPanel.Name = "VIPOrderPanel"
-	vipPanel.Position = UDim2.new(0, 14, 0, 276)
-	vipPanel.Size = UDim2.fromOffset(214, 68)
-	vipPanel.BackgroundColor3 = C_OBS
-	vipPanel.BackgroundTransparency = 0.08
-	vipPanel.Parent = gui
-	makeCorner(vipPanel, 6)
-	makeBorderStroke(vipPanel, C_BORDER, 1)
-
-	local vipHeader = Instance.new("TextLabel")
-	vipHeader.Position = UDim2.new(0, 10, 0, 4)
-	vipHeader.Size = UDim2.new(1, -20, 0, 18)
-	vipHeader.BackgroundTransparency = 1
-	vipHeader.Font = FONT_TITLE
-	vipHeader.Text = "VIP CRITIC ORDER"
-	vipHeader.TextSize = 10
-	vipHeader.TextXAlignment = Enum.TextXAlignment.Left
-	vipHeader.TextColor3 = C_BRASS
-	vipHeader.Parent = vipPanel
-
+	-- Section B: VIP Critic
+	local vipSec = makeOrderSection("VIPOrderPanel", 82, 58, "VIP CRITIC")
 	local vipTxt = Instance.new("TextLabel")
-	vipTxt.Position = UDim2.new(0, 10, 0, 22)
-	vipTxt.Size = UDim2.new(1, -20, 1, -26)
+	vipTxt.Position = UDim2.new(0, 8, 0, 19)
+	vipTxt.Size = UDim2.new(1, -16, 1, -23)
 	vipTxt.BackgroundTransparency = 1
-	vipTxt.Font = Enum.Font.Gotham
+	vipTxt.Font = FONT_REG
 	vipTxt.TextWrapped = true
 	vipTxt.TextXAlignment = Enum.TextXAlignment.Left
 	vipTxt.TextYAlignment = Enum.TextYAlignment.Top
-	vipTxt.TextSize = 11
+	vipTxt.TextSize = 10
 	vipTxt.TextColor3 = C_BONE
 	vipTxt.Text = "Waiting for VIP Critic..."
-	vipTxt.Parent = vipPanel
+	vipTxt.Parent = vipSec
 	vipOrderLabel = vipTxt
 
-	-- Express Delivery Mission Card
-	local expPanel = Instance.new("Frame")
-	expPanel.Name = "ExpressDeliveryPanel"
-	expPanel.Position = UDim2.new(0, 14, 0, 350)
-	expPanel.Size = UDim2.fromOffset(214, 92)
-	expPanel.BackgroundColor3 = C_OBS
-	expPanel.BackgroundTransparency = 0.08
-	expPanel.Parent = gui
-	makeCorner(expPanel, 6)
-	makeBorderStroke(expPanel, C_BORDER, 1)
-
-	local expHeader = Instance.new("TextLabel")
-	expHeader.Position = UDim2.new(0, 10, 0, 4)
-	expHeader.Size = UDim2.new(1, -20, 0, 18)
-	expHeader.BackgroundTransparency = 1
-	expHeader.Font = FONT_TITLE
-	expHeader.Text = "EXPRESS DELIVERY"
-	expHeader.TextSize = 10
-	expHeader.TextXAlignment = Enum.TextXAlignment.Left
-	expHeader.TextColor3 = C_BRASS
-	expHeader.Parent = expPanel
-
+	-- Section C: Express Delivery + Emerald ACCEPT EXPRESS Button
+	local expSec = makeOrderSection("ExpressDeliveryPanel", 146, 115, "EXPRESS DELIVERY")
 	local expTxt = Instance.new("TextLabel")
-	expTxt.Position = UDim2.new(0, 10, 0, 22)
-	expTxt.Size = UDim2.new(1, -20, 0, 38)
+	expTxt.Position = UDim2.new(0, 8, 0, 19)
+	expTxt.Size = UDim2.new(1, -16, 0, 56)
 	expTxt.BackgroundTransparency = 1
-	expTxt.Font = Enum.Font.Gotham
+	expTxt.Font = FONT_REG
 	expTxt.TextWrapped = true
 	expTxt.TextXAlignment = Enum.TextXAlignment.Left
 	expTxt.TextYAlignment = Enum.TextYAlignment.Top
 	expTxt.TextSize = 10
 	expTxt.TextColor3 = C_BONE
 	expTxt.Text = "Express dispatch pending..."
-	expTxt.Parent = expPanel
+	expTxt.Parent = expSec
 	expressOrderLabel = expTxt
 
 	local expBtn = Instance.new("TextButton")
 	expBtn.Name = "AcceptExpressBtn"
-	expBtn.Position = UDim2.new(0, 10, 1, -28)
-	expBtn.Size = UDim2.new(1, -20, 0, 22)
-	expBtn.BackgroundColor3 = Color3.fromRGB(48, 86, 62)
+	expBtn.Position = UDim2.new(0, 8, 1, -33)
+	expBtn.Size = UDim2.new(1, -16, 0, 26)
+	expBtn.BackgroundColor3 = C_EMERALD
+	expBtn.AutoButtonColor = false
 	expBtn.Font = FONT_TITLE
 	expBtn.Text = "ACCEPT EXPRESS"
 	expBtn.TextSize = 10
-	expBtn.TextColor3 = C_BONE
-	expBtn.Parent = expPanel
-	makeCorner(expBtn, 4)
-	makeBorderStroke(expBtn, C_BORDER, 1)
+	expBtn.TextColor3 = Color3.new(1, 1, 1)
+	expBtn.Parent = expSec
+	makeCorner(expBtn, 5)
+	makeBorderStroke(expBtn, C_EMERALD_BRIGHT, 1)
 	expBtn.MouseButton1Click:Connect(function()
-		if onAcceptExpress then onAcceptExpress() end
+		if onAcceptExpress then
+			onAcceptExpress()
+		end
 	end)
 	expressAcceptBtn = expBtn
 
-	-- Clean Bottom Action Dock (Seated neatly ABOVE the new 1-5 Numbered Thumbnail Hotbar!)
-	local dock = Instance.new("Frame")
-	dock.Name = "BottomDock"
-	dock.AnchorPoint = Vector2.new(0.5, 1)
-	dock.Position = UDim2.new(0.5, 0, 1, -104)
-	dock.Size = UDim2.fromOffset(920, 40)
-	dock.BackgroundTransparency = 1
-	dock.Parent = gui
+	-- =========================================================================
+	-- 3. BOTTOM-LEFT: CLEAN 2x3 EMPIRE MENU DOCK (ZERO OVERLAP!)
+	-- =========================================================================
+	local menuDock = Instance.new("Frame")
+	menuDock.Name = "BottomDock"
+	menuDock.AnchorPoint = Vector2.new(0, 1)
+	menuDock.Position = UDim2.new(0, 14, 1, -14)
+	menuDock.Size = UDim2.fromOffset(220, 134)
+	menuDock.BackgroundColor3 = C_OBS
+	menuDock.BackgroundTransparency = 0.06
+	menuDock.Parent = gui
+	makeCorner(menuDock, 8)
+	makeBorderStroke(menuDock, C_GOLD_DIM, 1.2)
 
-	local dockLayout = Instance.new("UIListLayout")
-	dockLayout.FillDirection = Enum.FillDirection.Horizontal
-	dockLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	dockLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	dockLayout.Padding = UDim.new(0, 6)
-	dockLayout.Parent = dock
+	local dockTitle = Instance.new("TextLabel")
+	dockTitle.Position = UDim2.new(0, 0, 0, 4)
+	dockTitle.Size = UDim2.new(1, 0, 0, 14)
+	dockTitle.BackgroundTransparency = 1
+	dockTitle.Font = FONT_TITLE
+	dockTitle.Text = "EMPIRE MENU DOCK"
+	dockTitle.TextSize = 9
+	dockTitle.TextColor3 = C_GOLD
+	dockTitle.Parent = menuDock
 
-	createDockButton(dock, "KitchenBtn", "Kitchen", "C", C_OBS, C_BRASS, 1, false, function() onOpenMenu("Kitchen") end)
-	createDockButton(dock, "WarehouseBtn", "Storage", "B", C_OBS, Color3.fromRGB(88, 106, 128), 2, false, function() onOpenMenu("Warehouses") end)
-	createDockButton(dock, "UpgradeBtn", "Empire", "U", C_OBS, Color3.fromRGB(118, 104, 134), 3, false, function() onOpenMenu("Upgrades") end)
-	local bmBtn = createDockButton(dock, "BlackMarketBtn", "Black Market", "M", Color3.fromRGB(32, 16, 20), C_OXBLOOD, 4, false, function() onOpenMenu("BlackMarket") end)
-	bmBtn.Size = UDim2.fromOffset(128, 36)
-	createDockButton(dock, "RobuxShopBtn", "R$ Store", "P", Color3.fromRGB(18, 28, 22), C_BRASS, 5, true, function() onOpenMenu("Shop") end)
-	local sBtn, sLbl = createDockButton(dock, "SellBtn", "Sell (0)", nil, C_OBS, Color3.fromRGB(68, 114, 82), 6, false, onQuickServe)
+	local dockGrid = Instance.new("Frame")
+	dockGrid.Position = UDim2.new(0, 8, 0, 21)
+	dockGrid.Size = UDim2.new(1, -16, 1, -28)
+	dockGrid.BackgroundTransparency = 1
+	dockGrid.Parent = menuDock
+
+	local dockGridLayout = Instance.new("UIGridLayout")
+	dockGridLayout.CellSize = UDim2.fromOffset(64, 49)
+	dockGridLayout.CellPadding = UDim2.fromOffset(6, 6)
+	dockGridLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	dockGridLayout.Parent = dockGrid
+
+	createDockGridButton(dockGrid, "BaseBtn", "Base", "H", C_INNER, C_GOLD, C_GOLD, 1, function()
+		if onReturnHome then
+			onReturnHome()
+		end
+	end)
+	createDockGridButton(dockGrid, "KitchenBtn", "Kitchen", "C", C_INNER, C_BORDER, C_ASH, 2, function()
+		onOpenMenu("Kitchen")
+	end)
+	createDockGridButton(dockGrid, "WarehouseBtn", "Storage", "B", C_INNER, C_BORDER, C_ASH, 3, function()
+		onOpenMenu("Warehouses")
+	end)
+	createDockGridButton(dockGrid, "UpgradeBtn", "Empire", "U", C_INNER, C_BORDER, C_ASH, 4, function()
+		onOpenMenu("Upgrades")
+	end)
+	createDockGridButton(dockGrid, "BlackMarketBtn", "Market", "M", C_CRIMSON_BG, C_OXBLOOD, Color3.fromRGB(234, 114, 122), 5, function()
+		onOpenMenu("BlackMarket")
+	end)
+	createDockGridButton(dockGrid, "RobuxShopBtn", "Store", "P", Color3.fromRGB(28, 25, 19), C_GOLD, C_GOLD, 6, function()
+		onOpenMenu("Shop")
+	end)
+
+	-- =========================================================================
+	-- 4. BOTTOM-CENTER: DUAL HP/ARMOR BAR + LEFT 2x2 TACTICAL GRID + RIGHT SERVE/SQUAD
+	-- =========================================================================
+	local vitalsDock = Instance.new("Frame")
+	vitalsDock.Name = "BottomVitalsDock"
+	vitalsDock.AnchorPoint = Vector2.new(0.5, 1)
+	vitalsDock.Position = UDim2.new(0.5, 0, 1, -122)
+	vitalsDock.Size = UDim2.fromOffset(414, 24)
+	vitalsDock.BackgroundTransparency = 1
+	vitalsDock.Parent = gui
+	vitalsDockFrame = vitalsDock
+
+	-- Left half: HP Bar
+	local hpPill = Instance.new("Frame")
+	hpPill.Name = "PlayerHUDHealthBar"
+	hpPill.Position = UDim2.new(0, 0, 0, 0)
+	hpPill.Size = UDim2.new(0.5, -3, 1, 0)
+	hpPill.BackgroundColor3 = C_OBS_DEEP
+	hpPill.ClipsDescendants = true
+	hpPill.Parent = vitalsDock
+	makeCorner(hpPill, 6)
+	makeBorderStroke(hpPill, C_BORDER, 1.2)
+
+	local hpFill = Instance.new("Frame")
+	hpFill.Name = "Fill"
+	hpFill.Size = UDim2.fromScale(1, 1)
+	hpFill.BackgroundColor3 = C_EMERALD
+	hpFill.BorderSizePixel = 0
+	hpFill.Parent = hpPill
+	makeCorner(hpFill, 5)
+	playerHpFill = hpFill
+
+	local hpLbl = Instance.new("TextLabel")
+	hpLbl.Size = UDim2.fromScale(1, 1)
+	hpLbl.BackgroundTransparency = 1
+	hpLbl.Font = FONT_TITLE
+	hpLbl.Text = "100 / 100 HP"
+	hpLbl.TextSize = 11
+	hpLbl.TextColor3 = Color3.new(1, 1, 1)
+	hpLbl.ZIndex = 3
+	hpLbl.Parent = hpPill
+	makeTextOutline(hpLbl, 1.1)
+	playerHpLabel = hpLbl
+
+	-- Right half: Armor Bar
+	local armorPill = Instance.new("Frame")
+	armorPill.Name = "PlayerHUDArmorBar"
+	armorPill.Position = UDim2.new(0.5, 3, 0, 0)
+	armorPill.Size = UDim2.new(0.5, -3, 1, 0)
+	armorPill.BackgroundColor3 = C_OBS_DEEP
+	armorPill.ClipsDescendants = true
+	armorPill.Parent = vitalsDock
+	makeCorner(armorPill, 6)
+	makeBorderStroke(armorPill, C_BORDER, 1.2)
+
+	local arFill = Instance.new("Frame")
+	arFill.Name = "Fill"
+	arFill.Size = UDim2.fromScale(0, 1)
+	arFill.BackgroundColor3 = C_STEEL
+	arFill.BorderSizePixel = 0
+	arFill.Parent = armorPill
+	makeCorner(arFill, 5)
+	playerArmorFill = arFill
+
+	local arLbl = Instance.new("TextLabel")
+	arLbl.Size = UDim2.fromScale(1, 1)
+	arLbl.BackgroundTransparency = 1
+	arLbl.Font = FONT_BODY
+	arLbl.Text = "0 / 100 ARMOR"
+	arLbl.TextSize = 10
+	arLbl.TextColor3 = Color3.fromRGB(210, 216, 228)
+	arLbl.ZIndex = 3
+	arLbl.Parent = armorPill
+	makeTextOutline(arLbl, 1.0)
+	playerArmorLabel = arLbl
+
+	-- Left of Hotbar: 2x2 Tactical Grid (C4 [7], FLASH [6], DASH [8], BIKE [V])
+	local tacGrid = Instance.new("Frame")
+	tacGrid.Name = "SquadTacticalCommandBar"
+	tacGrid.AnchorPoint = Vector2.new(1, 1)
+	tacGrid.Position = UDim2.new(0.5, -217, 1, -30)
+	tacGrid.Size = UDim2.fromOffset(128, 86)
+	tacGrid.BackgroundTransparency = 1
+	tacGrid.Parent = gui
+	tacticalGridFrame = tacGrid
+
+	local tacLayout = Instance.new("UIGridLayout")
+	tacLayout.CellSize = UDim2.fromOffset(61, 40)
+	tacLayout.CellPadding = UDim2.fromOffset(6, 6)
+	tacLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	tacLayout.Parent = tacGrid
+
+	local c4Btn, c4Top = createTacticalTile(tacGrid, "GadgetC4Btn", "C4", "[7]", C_OBS, C_BORDER, C_GOLD, 1, onDeployC4)
+	c4BtnRef = c4Btn
+	c4MainLbl = c4Top
+	c4Btn:SetAttribute("IsGadgetBtn", "C4")
+
+	local flashBtn, flashTop = createTacticalTile(tacGrid, "GadgetFlashBtn", "FLASH", "[6]", C_OBS, C_BORDER, C_GOLD, 2, onThrowFlashbang)
+	flashBtnRef = flashBtn
+	flashMainLbl = flashTop
+	flashBtn:SetAttribute("IsGadgetBtn", "Flash")
+
+	local dashBtn, dashTop = createTacticalTile(tacGrid, "GadgetDashBtn", "DASH", "[8]", C_OBS, C_BORDER, C_ASH, 3, onTriggerShadowDash)
+	dashBtnRef = dashBtn
+	dashMainLbl = dashTop
+	dashBtn:SetAttribute("IsGadgetBtn", "Dash")
+
+	local bikeBtn, bikeTop, bikeKey = createTacticalTile(tacGrid, "ScooterBtn", "BIKE", "[V]", C_OBS, C_BORDER, C_ASH, 4, onToggleScooter)
+	bikeBtnRef = bikeBtn
+	bikeTextLabel = bikeTop
+	bikeKeyLabel = bikeKey
+
+	gui:SetAttribute("HasGadgetStrip", true)
+
+	-- Right of Hotbar: Prominent Emerald SERVE + Compact ATTACK [Y] & RECALL [Z]
+	local actCluster = Instance.new("Frame")
+	actCluster.Name = "ActionSquadCluster"
+	actCluster.AnchorPoint = Vector2.new(0, 1)
+	actCluster.Position = UDim2.new(0.5, 217, 1, -30)
+	actCluster.Size = UDim2.fromOffset(146, 86)
+	actCluster.BackgroundTransparency = 1
+	actCluster.Parent = gui
+	actionClusterFrame = actCluster
+
+	local sBtn = Instance.new("TextButton")
+	sBtn.Name = "SellBtn"
+	sBtn.Position = UDim2.new(0, 0, 0, 0)
+	sBtn.Size = UDim2.fromOffset(146, 42)
+	sBtn.BackgroundColor3 = C_EMERALD
+	sBtn.AutoButtonColor = false
+	sBtn.Text = ""
+	sBtn.Parent = actCluster
+	makeCorner(sBtn, 6)
+	makeBorderStroke(sBtn, C_EMERALD_BRIGHT, 1.3)
+
+	local sLbl = Instance.new("TextLabel")
+	sLbl.Name = "Label"
+	sLbl.Size = UDim2.fromScale(1, 1)
+	sLbl.BackgroundTransparency = 1
+	sLbl.Font = FONT_TITLE
+	sLbl.Text = "SERVE"
+	sLbl.TextSize = 14
+	sLbl.TextColor3 = Color3.new(1, 1, 1)
+	sLbl.Parent = sBtn
+	makeTextOutline(sLbl, 1.0)
+
+	sBtn.MouseButton1Click:Connect(onQuickServe)
 	sellBadgeBtn = sBtn
 	sellTextLabel = sLbl
 
-	if onToggleScooter then
-		local _, bikeLbl = createDockButton(dock, "ScooterBtn", "Bike", "V", C_OBS, Color3.fromRGB(86, 112, 122), 7, false, onToggleScooter)
-		bikeTextLabel = bikeLbl
-	end
-	if onReturnHome then
-		createDockButton(dock, "BaseBtn", "Base", "H", C_OBS, Color3.fromRGB(108, 112, 122), 8, false, onReturnHome)
+	local function makeSquadPill(name: string, xPos: number, title: string, keyStr: string, bg: Color3, borderCol: Color3, keyCol: Color3, cb: (() -> ())?): TextButton
+		local b = Instance.new("TextButton")
+		b.Name = name
+		b.Position = UDim2.new(0, xPos, 0, 48)
+		b.Size = UDim2.fromOffset(70, 38)
+		b.BackgroundColor3 = bg
+		b.AutoButtonColor = false
+		b.Text = ""
+		b.Parent = actCluster
+		makeCorner(b, 6)
+		local st = makeBorderStroke(b, borderCol, 1.2)
+
+		local t1 = Instance.new("TextLabel")
+		t1.Position = UDim2.new(0, 2, 0, 4)
+		t1.Size = UDim2.new(1, -4, 0, 14)
+		t1.BackgroundTransparency = 1
+		t1.Font = FONT_TITLE
+		t1.Text = title
+		t1.TextSize = 10
+		t1.TextColor3 = C_BONE
+		t1.Parent = b
+
+		local t2 = Instance.new("TextLabel")
+		t2.Position = UDim2.new(0, 2, 0, 20)
+		t2.Size = UDim2.new(1, -4, 0, 13)
+		t2.BackgroundTransparency = 1
+		t2.Font = FONT_BODY
+		t2.Text = keyStr
+		t2.TextSize = 9
+		t2.TextColor3 = keyCol
+		t2.Parent = b
+
+		b.MouseEnter:Connect(function()
+			b.BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.12)
+			st.Color = borderCol:Lerp(Color3.new(1, 1, 1), 0.2)
+		end)
+		b.MouseLeave:Connect(function()
+			b.BackgroundColor3 = bg
+			st.Color = borderCol
+		end)
+		b.MouseButton1Click:Connect(function()
+			if cb then
+				cb()
+			end
+		end)
+		return b
 	end
 
-	-- Subtle Controls Hint Strip (Cleanly positioned above Bottom Dock)
+	attackBtnRef = makeSquadPill("SquadAttackBtn", 0, "ATTACK", "[Y]", C_CRIMSON_BG, C_OXBLOOD, Color3.fromRGB(238, 120, 126), onSquadAttack)
+	recallBtnRef = makeSquadPill("SquadRecallBtn", 76, "RECALL", "[Z]", Color3.fromRGB(24, 32, 46), C_STEEL, Color3.fromRGB(168, 198, 232), onSquadRecall)
+
+	-- Clean Dark Translucent Controls Hint Pill tucked neatly below the Hotbar
 	local hintStrip = Instance.new("TextLabel")
 	hintStrip.Name = "ControlsHint"
 	hintStrip.AnchorPoint = Vector2.new(0.5, 1)
-	hintStrip.Position = UDim2.new(0.5, 0, 1, -146)
-	hintStrip.Size = UDim2.fromOffset(540, 16)
-	hintStrip.BackgroundTransparency = 1
-	hintStrip.Font = Enum.Font.Gotham
-	hintStrip.Text = "[1-5] Equip   |   [RMB] Aim / Scope   |   [Ctrl] Crouch   |   [Shift] Sprint   |   [M] Black Market"
-	hintStrip.TextSize = 10
-	hintStrip.TextColor3 = Color3.fromRGB(178, 180, 188)
+	hintStrip.Position = UDim2.new(0.5, 0, 1, -6)
+	hintStrip.Size = UDim2.fromOffset(414, 18)
+	hintStrip.BackgroundColor3 = C_OBS_DEEP
+	hintStrip.BackgroundTransparency = 0.14
+	hintStrip.Font = FONT_BODY
+	hintStrip.Text = "[1-5] Equip   •   [RMB] Aim   •   [Ctrl] Crouch   •   [Shift] Sprint"
+	hintStrip.TextSize = 9
+	hintStrip.TextColor3 = Color3.fromRGB(194, 198, 208)
 	hintStrip.Parent = gui
-	makeTextOutline(hintStrip, 1.0)
+	makeCorner(hintStrip, 5)
+	makeBorderStroke(hintStrip, C_BORDER, 0.8)
 
-	-- Toast Feedback Banner
+	-- Dynamically keep flanking docks aligned whenever Hotbar slot count changes (5..9 slots)
+	if hotbarWidthConn then
+		hotbarWidthConn:Disconnect()
+	end
+	hotbarWidthConn = playerGui:GetAttributeChangedSignal("FoodEmpireHotbarHalfW"):Connect(syncBottomClusterOffsets)
+	syncBottomClusterOffsets()
+
+	-- Live Player HP & Armor Bar updater (synced cleanly on Heartbeat)
+	if vitalsConn then
+		vitalsConn:Disconnect()
+	end
+	vitalsConn = RunService.Heartbeat:Connect(function()
+		local char = Players.LocalPlayer.Character
+		local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+		if char and hum and playerHpFill and playerHpLabel then
+			local baseHp = math.clamp(math.ceil(hum.Health), 0, 100)
+			local armorAttr = char:GetAttribute("Armor")
+			local armor = if typeof(armorAttr) == "number"
+				then math.clamp(math.floor(armorAttr), 0, 100)
+				else math.clamp(math.ceil(hum.Health) - 100, 0, 100)
+			local frac = math.clamp(baseHp / 100, 0, 1)
+			playerHpFill.Size = UDim2.fromScale(frac, 1)
+			playerHpLabel.Text = string.format("%d / 100 HP", baseHp)
+			playerHpFill.BackgroundColor3 = if frac > 0.5
+				then C_EMERALD
+				elseif frac > 0.25 then Color3.fromRGB(184, 146, 56)
+				else C_OXBLOOD
+
+			if playerArmorFill and playerArmorLabel then
+				playerArmorFill.Size = UDim2.fromScale(math.clamp(armor / 100, 0, 1), 1)
+				playerArmorLabel.Text = string.format("%d / 100 ARMOR", armor)
+			end
+		end
+	end)
+
+	-- =========================================================================
+	-- 5. TOAST BANNER & THERMAL RECEIPT TICKET
+	-- =========================================================================
 	local toast = Instance.new("TextLabel")
 	toast.Name = "ToastBanner"
 	toast.AnchorPoint = Vector2.new(0.5, 1)
-	toast.Position = UDim2.new(0.5, 0, 1, -200)
+	toast.Position = UDim2.new(0.5, 0, 1, -158)
 	toast.Size = UDim2.fromOffset(470, 32)
 	toast.BackgroundColor3 = C_OBS
-	toast.BackgroundTransparency = 0.05
+	toast.BackgroundTransparency = 0.04
 	toast.Font = FONT_BODY
 	toast.Text = ""
 	toast.TextSize = 12
 	toast.TextColor3 = C_BONE
 	toast.Visible = false
 	toast.Parent = gui
-	makeCorner(toast, 5)
-	makeBorderStroke(toast, C_BRASS, 1)
+	makeCorner(toast, 6)
+	makeBorderStroke(toast, C_GOLD, 1.2)
 	toastLabel = toast
 
-	-- Thermal-Paper Printed Restaurant Receipt Pop-Up (Above bottom-right Minimap)
 	local ticket = Instance.new("Frame")
 	ticket.Name = "ReceiptTicket"
 	ticket.AnchorPoint = Vector2.new(1, 1)
-	ticket.Position = UDim2.new(1, -14, 1, -184)
-	ticket.Size = UDim2.fromOffset(212, 134)
+	ticket.Position = UDim2.new(1, -14, 1, -252)
+	ticket.Size = UDim2.fromOffset(200, 128)
 	ticket.BackgroundColor3 = Color3.fromRGB(242, 238, 226)
 	ticket.Visible = false
 	ticket.Parent = gui
-	makeCorner(ticket, 5)
-	makeBorderStroke(ticket, C_BORDER, 1.2)
+	makeCorner(ticket, 6)
+	makeBorderStroke(ticket, C_GOLD_DIM, 1.2)
 	receiptTicket = ticket
 
 	local rHead = Instance.new("TextLabel")
@@ -591,10 +1212,10 @@ function HUDController.Init(
 	rHead.BackgroundColor3 = C_OBS
 	rHead.Font = FONT_TITLE
 	rHead.Text = "RECEIPT #1"
-	rHead.TextSize = 11
-	rHead.TextColor3 = C_BRASS
+	rHead.TextSize = 10
+	rHead.TextColor3 = C_GOLD
 	rHead.Parent = ticket
-	makeCorner(rHead, 4)
+	makeCorner(rHead, 5)
 	receiptHeaderLbl = rHead
 
 	local rBody = Instance.new("TextLabel")
@@ -606,72 +1227,105 @@ function HUDController.Init(
 	rBody.TextWrapped = true
 	rBody.TextXAlignment = Enum.TextXAlignment.Left
 	rBody.TextYAlignment = Enum.TextYAlignment.Top
-	rBody.TextSize = 11
+	rBody.TextSize = 10
 	rBody.TextColor3 = Color3.fromRGB(28, 30, 36)
 	rBody.Text = ""
 	rBody.Parent = ticket
 	receiptBodyLbl = rBody
 
-	-- Top-Right Urban Turf Control Card (Clean 6px spacing below Armor Bar!)
+	-- =========================================================================
+	-- 6. TOP-RIGHT: STREAMLINED URBAN TURF CONTROL CARD (BELOW NIGHT CLOCK)
+	-- =========================================================================
 	local turfCard = Instance.new("Frame")
 	turfCard.Name = "UrbanTurfCard"
 	turfCard.AnchorPoint = Vector2.new(1, 0)
-	turfCard.Position = UDim2.new(1, -14, 0, 116)
-	turfCard.Size = UDim2.fromOffset(216, 54)
+	turfCard.Position = UDim2.new(1, -14, 0, 76)
+	turfCard.Size = UDim2.fromOffset(216, 70)
 	turfCard.BackgroundColor3 = C_OBS
 	turfCard.BackgroundTransparency = 0.06
 	turfCard.Parent = gui
-	makeCorner(turfCard, 6)
-	makeBorderStroke(turfCard, C_BORDER, 1)
+	makeCorner(turfCard, 8)
+	makeBorderStroke(turfCard, C_GOLD_DIM, 1.1)
 
 	local tHead = Instance.new("TextLabel")
-	tHead.Position = UDim2.new(0, 8, 0, 3)
-	tHead.Size = UDim2.new(1, -16, 0, 15)
+	tHead.Position = UDim2.new(0, 10, 0, 6)
+	tHead.Size = UDim2.new(1, -20, 0, 14)
 	tHead.BackgroundTransparency = 1
 	tHead.Font = FONT_TITLE
 	tHead.Text = "URBAN TURF CONTROL"
 	tHead.TextSize = 10
 	tHead.TextXAlignment = Enum.TextXAlignment.Left
-	tHead.TextColor3 = C_BRASS
+	tHead.TextColor3 = C_GOLD
 	tHead.Parent = turfCard
 
-	local tSum = Instance.new("TextLabel")
-	tSum.Position = UDim2.new(0, 8, 0, 19)
-	tSum.Size = UDim2.new(1, -16, 0, 15)
-	tSum.BackgroundTransparency = 1
-	tSum.Font = FONT_BODY
-	tSum.Text = "Blocks: 0 / 16  |  +0G / 20s"
-	tSum.TextSize = 10
-	tSum.TextXAlignment = Enum.TextXAlignment.Left
-	tSum.TextColor3 = C_BONE
-	tSum.Parent = turfCard
-	turfSummaryLabel = tSum
+	local tBlocks = Instance.new("TextLabel")
+	tBlocks.Position = UDim2.new(0, 10, 0, 22)
+	tBlocks.Size = UDim2.new(0.58, -10, 0, 16)
+	tBlocks.BackgroundTransparency = 1
+	tBlocks.Font = FONT_TITLE
+	tBlocks.Text = "0 / 28 BLOCKS"
+	tBlocks.TextSize = 11
+	tBlocks.TextXAlignment = Enum.TextXAlignment.Left
+	tBlocks.TextColor3 = C_BONE
+	tBlocks.Parent = turfCard
+	turfBlocksLabel = tBlocks
+
+	local tInc = Instance.new("TextLabel")
+	tInc.AnchorPoint = Vector2.new(1, 0)
+	tInc.Position = UDim2.new(1, -10, 0, 22)
+	tInc.Size = UDim2.new(0.42, 0, 0, 16)
+	tInc.BackgroundTransparency = 1
+	tInc.Font = FONT_BODY
+	tInc.Text = "+0G/20s"
+	tInc.TextSize = 10
+	tInc.TextXAlignment = Enum.TextXAlignment.Right
+	tInc.TextColor3 = C_EMERALD_BRIGHT
+	tInc.Parent = turfCard
+	turfIncomeLabel = tInc
+
+	local tBarBg = Instance.new("Frame")
+	tBarBg.Position = UDim2.new(0, 10, 0, 42)
+	tBarBg.Size = UDim2.new(1, -20, 0, 5)
+	tBarBg.BackgroundColor3 = C_OBS_DEEP
+	tBarBg.BorderSizePixel = 0
+	tBarBg.Parent = turfCard
+	makeCorner(tBarBg, 3)
+
+	local tBarFill = Instance.new("Frame")
+	tBarFill.Size = UDim2.fromScale(0, 1)
+	tBarFill.BackgroundColor3 = C_GOLD
+	tBarFill.BorderSizePixel = 0
+	tBarFill.Parent = tBarBg
+	makeCorner(tBarFill, 3)
+	turfProgressFill = tBarFill
 
 	local tAlert = Instance.new("TextLabel")
-	tAlert.Position = UDim2.new(0, 8, 0, 35)
-	tAlert.Size = UDim2.new(1, -16, 0, 15)
+	tAlert.Position = UDim2.new(0, 10, 0, 50)
+	tAlert.Size = UDim2.new(1, -20, 0, 14)
 	tAlert.BackgroundTransparency = 1
-	tAlert.Font = Enum.Font.Gotham
-	tAlert.Text = "Click minimap blocks to raid Mafia"
-	tAlert.TextSize = 10
+	tAlert.Font = FONT_REG
+	tAlert.Text = "Engage Mafia across 28 urban blocks"
+	tAlert.TextSize = 9
 	tAlert.TextXAlignment = Enum.TextXAlignment.Left
 	tAlert.TextColor3 = C_ASH
 	tAlert.TextTruncate = Enum.TextTruncate.AtEnd
 	tAlert.Parent = turfCard
 	turfAlertLabel = tAlert
 
-	-- Contextual Block Capture Banner
+	-- =========================================================================
+	-- 7. CONTEXTUAL BLOCK CAPTURE BANNER (SHOWN ONLY INSIDE A CAPTURE PLAZA)
+	-- =========================================================================
 	local bBanner = Instance.new("Frame")
 	bBanner.Name = "ActiveBlockCaptureBanner"
 	bBanner.AnchorPoint = Vector2.new(0.5, 0)
-	bBanner.Position = UDim2.new(0.5, 0, 0, 102)
-	bBanner.Size = UDim2.fromOffset(356, 52)
+	bBanner.Position = UDim2.new(0.5, 0, 0, 84)
+	bBanner.Size = UDim2.fromOffset(368, 52)
 	bBanner.BackgroundColor3 = C_OBS
-	bBanner.BackgroundTransparency = 0.06
+	bBanner.BackgroundTransparency = 0.05
 	bBanner.Visible = false
 	bBanner.Parent = gui
-	makeCorner(bBanner, 6)
-	makeBorderStroke(bBanner, C_BORDER, 1.2)
+	makeCorner(bBanner, 8)
+	makeBorderStroke(bBanner, C_GOLD, 1.2)
 	activeBlockBanner = bBanner
 
 	local bTitle = Instance.new("TextLabel")
@@ -681,10 +1335,10 @@ function HUDController.Init(
 	bTitle.Font = FONT_TITLE
 	bTitle.TextXAlignment = Enum.TextXAlignment.Left
 	bTitle.Text = "LITTLE ITALY ROW"
-	bTitle.TextSize = 13
-	bTitle.TextColor3 = Color3.fromRGB(255, 232, 134)
+	bTitle.TextSize = 12
+	bTitle.TextColor3 = C_GOLD
 	bTitle.Parent = bBanner
-	makeTextOutline(bTitle, 1.2)
+	makeTextOutline(bTitle, 1.1)
 	activeBlockTitle = bTitle
 
 	local bOwner = Instance.new("TextLabel")
@@ -694,25 +1348,25 @@ function HUDController.Init(
 	bOwner.BackgroundColor3 = Color3.fromRGB(238, 112, 24)
 	bOwner.Font = FONT_TITLE
 	bOwner.Text = "IRON CLAW"
-	bOwner.TextSize = 11
+	bOwner.TextSize = 10
 	bOwner.TextColor3 = Color3.new(1, 1, 1)
 	bOwner.Parent = bBanner
-	makeCorner(bOwner, 6)
+	makeCorner(bOwner, 5)
 	makeTextOutline(bOwner, 1.0)
 	activeBlockOwnerPill = bOwner
 
 	local bBarBg = Instance.new("Frame")
 	bBarBg.Position = UDim2.new(0, 10, 0, 30)
-	bBarBg.Size = UDim2.new(1, -20, 0, 19)
-	bBarBg.BackgroundColor3 = Color3.fromRGB(12, 16, 26)
+	bBarBg.Size = UDim2.new(1, -20, 0, 17)
+	bBarBg.BackgroundColor3 = C_OBS_DEEP
 	bBarBg.Parent = bBanner
-	makeCorner(bBarBg, 7)
+	makeCorner(bBarBg, 5)
 
 	local bFill = Instance.new("Frame")
 	bFill.Size = UDim2.fromScale(0, 1)
-	bFill.BackgroundColor3 = Color3.fromRGB(58, 214, 118)
+	bFill.BackgroundColor3 = C_EMERALD_BRIGHT
 	bFill.Parent = bBarBg
-	makeCorner(bFill, 7)
+	makeCorner(bFill, 5)
 	activeBlockFill = bFill
 
 	local bSub = Instance.new("TextLabel")
@@ -720,7 +1374,7 @@ function HUDController.Init(
 	bSub.BackgroundTransparency = 1
 	bSub.Font = FONT_TITLE
 	bSub.Text = "MAFIA CONTROLLED"
-	bSub.TextSize = 11
+	bSub.TextSize = 10
 	bSub.TextColor3 = Color3.new(1, 1, 1)
 	bSub.ZIndex = 3
 	bSub.Parent = bBarBg
@@ -799,75 +1453,18 @@ function HUDController.Init(
 			local defs = tonumber(foundBlock.DefendersAlive) or 0
 			local prog = tonumber(foundBlock.Progress) or 0
 			if foundBlock.Status == "Contested" then
-				activeBlockSub.Text = "CONTESTED  |  Eliminate or push out rival units"
+				activeBlockSub.Text = "CONTESTED  •  Clear rival units"
 			elseif prog > 0.01 then
 				activeBlockSub.Text = string.format("%s CAPTURING... %d%%", string.upper(tostring(foundBlock.CapturingName or "CAPTURING")), math.floor(prog * 100))
 			elseif TurfConfig.IsMafiaFaction(tostring(foundBlock.Owner or "")) then
 				activeBlockSub.Text = if defs > 0
-					then string.format("%d Mafia Defender(s)  |  Clear and hold plaza", defs)
-					else "Defenders cleared  |  Hold plaza to claim"
+					then string.format("%d Mafia Defender(s)  •  Clear & hold plaza", defs)
+					else "Defenders cleared  •  Hold plaza to claim"
 			else
-				activeBlockSub.Text = string.format("Controlled (+%dG/20s)  |  %d Guard(s) on patrol", tonumber(foundBlock.IncomeGold) or 18, defs)
+				activeBlockSub.Text = string.format("Controlled (+%dG/20s)  •  %d Guard(s)", tonumber(foundBlock.IncomeGold) or 18, defs)
 			end
 		end
 	end)
-
-	-- Tactical Squad & Black Market Tier 2 Gadget Command Strip
-	local cmdStrip = Instance.new("Frame")
-	cmdStrip.Name = "SquadTacticalCommandBar"
-	cmdStrip.AnchorPoint = Vector2.new(0.5, 1)
-	cmdStrip.Position = UDim2.new(0.5, 0, 1, -166)
-	cmdStrip.Size = UDim2.fromOffset(664, 28)
-	cmdStrip.BackgroundTransparency = 1
-	cmdStrip.Parent = gui
-
-	local cmdLayout = Instance.new("UIListLayout")
-	cmdLayout.FillDirection = Enum.FillDirection.Horizontal
-	cmdLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-	cmdLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	cmdLayout.Padding = UDim.new(0, 6)
-	cmdLayout.Parent = cmdStrip
-
-	local function makeCmdBtn(name: string, text: string, width: number, bg: Color3, border: Color3, cb: (() -> ())?): TextButton
-		local b = Instance.new("TextButton")
-		b.Name = name
-		b.Size = UDim2.fromOffset(width, 26)
-		b.BackgroundColor3 = bg
-		b.AutoButtonColor = false
-		b.Font = FONT_TITLE
-		b.Text = text
-		b.TextSize = 10
-		b.TextColor3 = C_BONE
-		b.Parent = cmdStrip
-		makeCorner(b, 4)
-		makeBorderStroke(b, border, 1.2)
-		b.MouseEnter:Connect(function()
-			b.BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.12)
-		end)
-		b.MouseLeave:Connect(function()
-			b.BackgroundColor3 = bg
-		end)
-		b.MouseButton1Click:Connect(function()
-			if cb then cb() end
-		end)
-		return b
-	end
-
-	local attackBtn = makeCmdBtn("SquadAttackBtn", "ATTACK ALL  [Y]", 130, Color3.fromRGB(122, 26, 34), Color3.fromRGB(184, 52, 62), onSquadAttack)
-	local recallBtn = makeCmdBtn("SquadRecallBtn", "CALL BACK  [Z]", 122, Color3.fromRGB(36, 46, 62), Color3.fromRGB(108, 124, 148), onSquadRecall)
-	local flashBtn = makeCmdBtn("GadgetFlashBtn", "FLASH (2) [6]", 114, Color3.fromRGB(54, 52, 40), C_BRASS, onThrowFlashbang)
-	local c4Btn = makeCmdBtn("GadgetC4Btn", "C4 (1) [7]", 96, Color3.fromRGB(64, 30, 32), Color3.fromRGB(178, 56, 62), onDeployC4)
-	local dashBtn = makeCmdBtn("GadgetDashBtn", "SHADOW DASH [8]", 122, Color3.fromRGB(30, 34, 44), Color3.fromRGB(98, 114, 142), onTriggerShadowDash)
-	-- Hide squad command & locked gadget buttons until the player actually hires Bodyguards/Mafia or owns the gadget!
-	attackBtn.Visible = false
-	recallBtn.Visible = false
-	flashBtn.Visible = false
-	c4Btn.Visible = false
-	dashBtn.Visible = false
-	gui:SetAttribute("HasGadgetStrip", true)
-	flashBtn:SetAttribute("IsGadgetBtn", "Flash")
-	c4Btn:SetAttribute("IsGadgetBtn", "C4")
-	dashBtn:SetAttribute("IsGadgetBtn", "Dash")
 
 	return gui
 end
@@ -879,7 +1476,7 @@ function HUDController.ShowToast(message: string, isError: boolean?): ()
 	toastToken += 1
 	local myToken = toastToken
 	toastLabel.Text = message
-	toastLabel.TextColor3 = if isError then Color3.fromRGB(224, 118, 124) else C_BONE
+	toastLabel.TextColor3 = if isError then Color3.fromRGB(238, 124, 130) else C_BONE
 	toastLabel.Visible = true
 	task.delay(3.2, function()
 		if toastToken == myToken and toastLabel then
@@ -891,26 +1488,35 @@ end
 function HUDController.Update(state: { [string]: any }): ()
 	local profile = state.Profile
 	if profile then
+		local coins = tonumber(profile.Coins) or 0
+		local rep = tonumber(profile.Reputation) or 0
+		local lv = tonumber(profile.Level) or 1
+		local xp = tonumber(profile.EXP) or 0
+		local nextXp = math.max(100, lv * 100)
+
 		if coinsLabel then
-			coinsLabel.Text = string.format("%d Gold", profile.Coins or 0)
+			coinsLabel.Text = formatNumber(coins)
 		end
 		if repLabel then
-			repLabel.Text = string.format("%d Rep", profile.Reputation or 0)
+			repLabel.Text = formatNumber(rep) .. " REP"
 		end
 		if levelLabel then
-			levelLabel.Text = string.format("Lv.%d  |  %d XP", profile.Level or 1, profile.EXP or 0)
+			levelLabel.Text = string.format("LV. %d", lv)
+		end
+		if xpSubLabel then
+			xpSubLabel.Text = string.format("%s XP", formatNumber(xp))
+		end
+		if xpBarFill then
+			xpBarFill.Size = UDim2.fromScale(math.clamp((xp % nextXp) / nextXp, 0.08, 1), 1)
 		end
 	end
 
 	local slot = state.BaseSlot
 	if baseBadge and typeof(slot) == "string" then
-		baseBadge.Text = slot .. " Base"
+		baseBadge.Text = string.upper(slot) .. " BASE"
 		local col = SectorConfig.FactionColors[slot]
-		if col and basePillFrame then
-			local strip = basePillFrame:FindFirstChild("AccentStrip")
-			if strip and strip:IsA("Frame") then
-				strip.BackgroundColor3 = col
-			end
+		if col and baseAccentBar then
+			baseAccentBar.BackgroundColor3 = col
 		end
 	end
 
@@ -923,10 +1529,10 @@ function HUDController.Update(state: { [string]: any }): ()
 		local pv = state.PrestigeVault
 		local pLv = if typeof(pv) == "table" and typeof(pv.PrestigeLevel) == "number" then pv.PrestigeLevel else 0
 		local fam = state.SyndicateFamily
-		local famTag = if typeof(fam) == "table" and fam.InFamily and typeof(fam.FamilyName) == "string" then ("  |  " .. fam.FamilyName) else ""
-		local pTag = if pLv > 0 then string.format(" [GODFATHER P%d]", pLv) else ""
+		local famTag = if typeof(fam) == "table" and fam.InFamily and typeof(fam.FamilyName) == "string" then (" • " .. fam.FamilyName) else ""
+		local pTag = if pLv > 0 then string.format(" P%d", pLv) else ""
 		emperorBanner.Text = string.format(
-			"RANK: %s%s  |  %d-STAR BISTRO  |  EMPEROR: %s%s",
+			"%s%s  •  %d★ BISTRO  •  DON: %s%s",
 			rankTitle,
 			pTag,
 			stars,
@@ -941,27 +1547,27 @@ function HUDController.Update(state: { [string]: any }): ()
 		local ready = kitchen.ReadyTotal or 0
 		if ready > 0 then
 			sellTextLabel.Text = string.format("SELL (%d)", ready)
-			sellBadgeBtn.BackgroundColor3 = Color3.fromRGB(36, 72, 48)
+			sellBadgeBtn.BackgroundColor3 = C_EMERALD
 		elseif typeof(waiting) == "table" and waiting.IsBeingCooked then
 			sellTextLabel.Text = "COOKING"
-			sellBadgeBtn.BackgroundColor3 = Color3.fromRGB(72, 54, 28)
+			sellBadgeBtn.BackgroundColor3 = Color3.fromRGB(134, 96, 36)
 		elseif typeof(waiting) == "table" and waiting.CustomerName then
 			sellTextLabel.Text = "SERVE"
-			sellBadgeBtn.BackgroundColor3 = Color3.fromRGB(36, 72, 48)
+			sellBadgeBtn.BackgroundColor3 = C_EMERALD
 		else
-			sellTextLabel.Text = "SELL (0)"
-			sellBadgeBtn.BackgroundColor3 = C_OBS
+			sellTextLabel.Text = "SERVE"
+			sellBadgeBtn.BackgroundColor3 = Color3.fromRGB(36, 98, 62)
 		end
 	end
 
-	-- Pop up Printed Restaurant Receipt Ticket whenever a new order is rung up!
+	-- Pop up Printed Restaurant Receipt Ticket above Bottom-Right Minimap
 	local latest = state.LatestReceipt
 	if typeof(latest) == "table" and typeof(latest.OrderNo) == "number" and latest.OrderNo > lastReceiptOrderNo then
 		lastReceiptOrderNo = latest.OrderNo
 		if receiptTicket and receiptHeaderLbl and receiptBodyLbl then
-			receiptHeaderLbl.Text = string.format("RECEIPT #%d  |  PAID", latest.OrderNo)
+			receiptHeaderLbl.Text = string.format("RECEIPT #%d  •  PAID", latest.OrderNo)
 			receiptBodyLbl.Text = string.format(
-				"FOOD EMPIRE DINER\n---------------------\nGuest: %s\nItem:  %s\nChef:  %s\n---------------------\nTOTAL: +%dG | +%d Rep",
+				"FOOD EMPIRE DINER\n-------------------\nGuest: %s\nItem:  %s\nChef:  %s\n-------------------\n+%dG | +%d Rep",
 				tostring(latest.CustomerName or "Guest"),
 				tostring(latest.DishName or "Meal"),
 				tostring(latest.ChefName or "Chef"),
@@ -979,47 +1585,57 @@ function HUDController.Update(state: { [string]: any }): ()
 		end
 	end
 
-	if bikeTextLabel then
+	-- Compact 2x2 Bike Tile update
+	if bikeTextLabel and bikeKeyLabel then
 		local ownsBike = state.OwnsMotorbike == true
-		bikeTextLabel.Text = if ownsBike then "BIKE" else "BIKE [LOCK]"
+		bikeTextLabel.Text = "BIKE"
+		bikeKeyLabel.Text = if ownsBike then "[V]" else "[LOCK]"
+		bikeKeyLabel.TextColor3 = if ownsBike then C_GOLD else C_ASH
+		if bikeBtnRef then
+			bikeBtnRef.BackgroundTransparency = if ownsBike then 0.04 else 0.16
+		end
 	end
 
+	-- Compact 2x2 Corner Shipments pills
 	local shipments = state.Shipments
-	local readyShipmentCount = 0
 	if typeof(shipments) == "table" then
 		for sectorId, dot in pairs(sectorDots) do
 			local sh = shipments[sectorId]
 			local lbl = sectorStatusLabels[sectorId]
+			local pill = sectorPills[sectorId]
 			local tag = SECTOR_TAGS[sectorId] or "SEC"
 			if typeof(sh) == "table" then
-				local shortName = if sectorId == "FishingPort" then "Fish Port"
-					elseif sectorId == "VegetableFarm" then "Veg Farm"
-					elseif sectorId == "FruitOrchard" then "Orchard"
-					else "Ranch"
+				local st = if pill then pill:FindFirstChildOfClass("UIStroke") else nil
 				if sh.Phase == "EnRoute" then
-					dot.BackgroundColor3 = C_BRASS
+					dot.BackgroundColor3 = C_GOLD
+					if pill then pill.BackgroundColor3 = Color3.fromRGB(44, 36, 22) end
+					if st then st.Color = C_GOLD_DIM end
 					if lbl then
-						lbl.Text = string.format("[%s] %s: EN ROUTE", tag, shortName)
-						lbl.TextColor3 = C_BRASS
+						lbl.Text = tag .. " • EN ROUTE"
+						lbl.TextColor3 = C_GOLD
 					end
 				elseif sh.Phase == "Arrived" then
-					readyShipmentCount += 1
-					dot.BackgroundColor3 = Color3.fromRGB(78, 134, 96)
+					dot.BackgroundColor3 = C_EMERALD_BRIGHT
+					if pill then pill.BackgroundColor3 = Color3.fromRGB(22, 42, 32) end
+					if st then st.Color = C_EMERALD end
 					if lbl then
-						lbl.Text = string.format("[%s] %s: AT CENTER", tag, shortName)
-						lbl.TextColor3 = Color3.fromRGB(168, 212, 180)
+						lbl.Text = tag .. " • READY!"
+						lbl.TextColor3 = Color3.fromRGB(168, 232, 188)
 					end
 				else
-					dot.BackgroundColor3 = SectorConfig.FactionColors.Neutral
+					dot.BackgroundColor3 = C_ASH
+					if pill then pill.BackgroundColor3 = C_INNER end
+					if st then st.Color = C_BORDER end
 					if lbl then
-						lbl.Text = string.format("[%s] %s: %ds", tag, shortName, tonumber(sh.SecondsUntilNext) or 0)
-						lbl.TextColor3 = C_ASH
+						lbl.Text = string.format("%s • %ds", tag, tonumber(sh.SecondsUntilNext) or 0)
+						lbl.TextColor3 = C_BONE
 					end
 				end
 			end
 		end
 	end
 
+	-- Objective copy
 	if objectiveLabel then
 		local totalStock = 0
 		local unlockedWh = 0
@@ -1060,27 +1676,28 @@ function HUDController.Update(state: { [string]: any }): ()
 			end
 		elseif courierCount == 0 or crewCount == 0 or waiterCount == 0 then
 			objectiveLabel.Text = string.format(
-				"STEP 3: Open Empire [U] to hire Couriers (%d/2), Chefs (%d), & Waiters (%d/3).",
+				"Hire Couriers (%d/2), Chefs (%d), & Waiters (%d/3) in Empire [U].",
 				courierCount,
 				crewCount,
 				waiterCount
 			)
 		elseif typeof(branch) == "table" and not branch.Owned then
-			objectiveLabel.Text = "STEP 4: Buy the Central Park Bistro (750G in Empire [U]) & call your staff!"
+			objectiveLabel.Text = "Buy Central Park Bistro (750G in Empire [U]) & call your staff!"
 		elseif unlockedWh < 4 then
-			objectiveLabel.Text = string.format("STEP 5: Open Storage [B] and unlock all 4 Warehouses (%d/4).", unlockedWh)
+			objectiveLabel.Text = string.format("Open Storage [B] and unlock all 4 Warehouses (%d/4).", unlockedWh)
 		elseif restLv < 2 then
-			objectiveLabel.Text = "STEP 6: Upgrade Restaurant HQ [U], escort Smuggler Convoys & complete Contracts!"
+			objectiveLabel.Text = "Upgrade Restaurant HQ [U], escort Convoys & complete Contracts!"
 		else
-			objectiveLabel.Text = "Complete Syndicate Contracts [U], seize Gang War Drops & reign as Food Emperor!"
+			objectiveLabel.Text = "Conquer all 28 Turf Blocks, finish Contracts [U] & reign as Food Emperor!"
 		end
 	end
 
+	-- VIP Critic copy
 	if vipOrderLabel then
 		local vip = state.VIPOrder
 		if typeof(vip) == "table" and vip.DisplayName then
 			vipOrderLabel.Text = string.format(
-				"Serve %s\n+%dG  |  +%d Rep  (%ds)",
+				"%s\n+%dG  •  +%d Rep  •  %ds",
 				vip.DisplayName,
 				vip.BonusCoins or 0,
 				vip.BonusRep or 0,
@@ -1091,13 +1708,14 @@ function HUDController.Update(state: { [string]: any }): ()
 		end
 	end
 
+	-- Express Delivery copy & button state
 	if expressOrderLabel and expressAcceptBtn then
 		local exp = state.ExpressDelivery
 		if typeof(exp) == "table" then
 			local comboStr = if (exp.Combo or 0) > 0 then string.format(" [x%d]", exp.Combo) else ""
 			if exp.Status == "Active" then
 				expressOrderLabel.Text = string.format(
-					"%s -> %s\n%ds left  |  +%dG + Tip%s",
+					"%s -> %s\n%ds left • +%dG + Tip%s",
 					tostring(exp.DishName or "Meal"),
 					tostring(exp.DropName or "Center"),
 					tonumber(exp.Remaining) or 0,
@@ -1105,10 +1723,10 @@ function HUDController.Update(state: { [string]: any }): ()
 					comboStr
 				)
 				expressAcceptBtn.Text = string.format("EN ROUTE (%ds)", tonumber(exp.Remaining) or 0)
-				expressAcceptBtn.BackgroundColor3 = Color3.fromRGB(116, 78, 32)
+				expressAcceptBtn.BackgroundColor3 = Color3.fromRGB(134, 92, 34)
 			elseif exp.Status == "Available" then
 				expressOrderLabel.Text = string.format(
-					"%s: %s at %s\n+%dG + Speed Tip (%ds)%s",
+					"%s • %s\n%s • +%dG (%ds)%s",
 					tostring(exp.CustomerName or "Guest"),
 					tostring(exp.DishName or "Meal"),
 					tostring(exp.DropName or "Center"),
@@ -1117,15 +1735,16 @@ function HUDController.Update(state: { [string]: any }): ()
 					comboStr
 				)
 				expressAcceptBtn.Text = "ACCEPT EXPRESS"
-				expressAcceptBtn.BackgroundColor3 = Color3.fromRGB(48, 86, 62)
+				expressAcceptBtn.BackgroundColor3 = C_EMERALD
 			else
 				expressOrderLabel.Text = string.format("Next express dispatch in %ds%s", tonumber(exp.Remaining) or 5, comboStr)
 				expressAcceptBtn.Text = "STANDBY"
-				expressAcceptBtn.BackgroundColor3 = C_CHAR
+				expressAcceptBtn.BackgroundColor3 = C_BORDER
 			end
 		end
 	end
 
+	-- Top-Right Urban Turf Control Card (28 Blocks + Progress Bar)
 	local turf = state.Turf
 	if typeof(turf) == "table" then
 		latestTurfState = turf
@@ -1133,9 +1752,15 @@ function HUDController.Update(state: { [string]: any }): ()
 		local total = tonumber(turf.TotalBlocks) or 28
 		local inc = tonumber(turf.IncomePerCycle) or 0
 		local mono = tonumber(turf.Monopolies) or 0
-		if turfSummaryLabel then
-			local monoTag = if mono > 0 then string.format("  |  %d MONO", mono) else ""
-			turfSummaryLabel.Text = string.format("Blocks: %d/%d  |  +%dG/20s%s", owned, total, inc, monoTag)
+		if turfBlocksLabel then
+			turfBlocksLabel.Text = string.format("%d / %d BLOCKS", owned, total)
+		end
+		if turfIncomeLabel then
+			local monoTag = if mono > 0 then string.format(" (%dM)", mono) else ""
+			turfIncomeLabel.Text = string.format("+%dG/20s%s", inc, monoTag)
+		end
+		if turfProgressFill then
+			turfProgressFill.Size = UDim2.fromScale(math.clamp(owned / math.max(1, total), 0, 1), 1)
 		end
 		if turfAlertLabel and typeof(turf.Blocks) == "table" then
 			local myFaction = "Player_" .. tostring(Players.LocalPlayer.UserId)
@@ -1148,59 +1773,60 @@ function HUDController.Update(state: { [string]: any }): ()
 			end
 			if underAttackName then
 				turfAlertLabel.Text = "RAID ACTIVE: " .. string.upper(underAttackName)
-				turfAlertLabel.TextColor3 = Color3.fromRGB(218, 96, 102)
+				turfAlertLabel.TextColor3 = Color3.fromRGB(232, 102, 108)
 			elseif owned == 0 then
 				turfAlertLabel.Text = "Engage Mafia across 28 urban blocks"
 				turfAlertLabel.TextColor3 = C_ASH
 			else
 				turfAlertLabel.Text = "Hold all 7 in a quadrant for +50%"
-				turfAlertLabel.TextColor3 = Color3.fromRGB(154, 198, 166)
+				turfAlertLabel.TextColor3 = Color3.fromRGB(154, 212, 172)
 			end
 		end
 	end
 
-	-- Update Squad Command buttons (only shown when Bodyguards or Hired Samurai/Ninja Mafia are active!)
-	-- and Tier 2 Tactical Gadget Pills (only shown when owned / ammo > 0!)
-	if screenGui then
-		local strip = screenGui:FindFirstChild("SquadTacticalCommandBar")
-		if strip and strip:IsA("Frame") then
-			local hasGuards = (tonumber(state.BodyguardCount) or 0) > 0
-			local merc = state.MercenaryMafia
-			local hasMerc = typeof(merc) == "table" and merc.Active == true
-			local showSquadCmds = hasGuards or hasMerc
+	-- Update 2x2 Tactical Gadgets (always cleanly shown in symmetric 2x2 grid; highlights when owned/ready!)
+	local bm = state.BlackMarket
+	local flashCount = if typeof(bm) == "table" then (tonumber(bm.Flashbangs) or 0) else 0
+	local c4Count = if typeof(bm) == "table" then (tonumber(bm.C4Charges) or 0) else 0
+	local hasDash = typeof(bm) == "table" and bm.HasShadowDash == true
 
-			local atkBtn = strip:FindFirstChild("SquadAttackBtn")
-			if atkBtn and atkBtn:IsA("TextButton") then
-				atkBtn.Visible = showSquadCmds
-			end
-			local recBtn = strip:FindFirstChild("SquadRecallBtn")
-			if recBtn and recBtn:IsA("TextButton") then
-				recBtn.Visible = showSquadCmds
-			end
-
-			local bm = state.BlackMarket
-			local flashCount = if typeof(bm) == "table" then (tonumber(bm.Flashbangs) or 0) else 0
-			local c4Count = if typeof(bm) == "table" then (tonumber(bm.C4Charges) or 0) else 0
-			local hasDash = typeof(bm) == "table" and bm.HasShadowDash == true
-
-			local fBtn = strip:FindFirstChild("GadgetFlashBtn")
-			if fBtn and fBtn:IsA("TextButton") then
-				fBtn.Visible = flashCount > 0
-				fBtn.Text = string.format("FLASH (%d) [6]", flashCount)
-			end
-			local cBtn = strip:FindFirstChild("GadgetC4Btn")
-			if cBtn and cBtn:IsA("TextButton") then
-				cBtn.Visible = c4Count > 0
-				cBtn.Text = string.format("C4 (%d) [7]", c4Count)
-			end
-			local dBtn = strip:FindFirstChild("GadgetDashBtn")
-			if dBtn and dBtn:IsA("TextButton") then
-				dBtn.Visible = hasDash
-				dBtn.Text = "SHADOW DASH [8]"
-			end
-
-			strip.Visible = showSquadCmds or flashCount > 0 or c4Count > 0 or hasDash
+	if flashBtnRef and flashMainLbl then
+		flashMainLbl.Text = if flashCount > 0 then string.format("FLASH %d", flashCount) else "FLASH"
+		flashBtnRef.BackgroundColor3 = if flashCount > 0 then Color3.fromRGB(48, 42, 26) else C_OBS
+		flashBtnRef.BackgroundTransparency = if flashCount > 0 then 0.04 else 0.16
+		local st = flashBtnRef:FindFirstChildOfClass("UIStroke")
+		if st then st.Color = if flashCount > 0 then C_GOLD else C_BORDER end
+	end
+	if c4BtnRef and c4MainLbl then
+		c4MainLbl.Text = if c4Count > 0 then string.format("C4 (%d)", c4Count) else "C4"
+		c4BtnRef.BackgroundColor3 = if c4Count > 0 then C_CRIMSON_BG else C_OBS
+		c4BtnRef.BackgroundTransparency = if c4Count > 0 then 0.04 else 0.16
+		local st = c4BtnRef:FindFirstChildOfClass("UIStroke")
+		if st then st.Color = if c4Count > 0 then C_OXBLOOD else C_BORDER end
+	end
+	if dashBtnRef and dashMainLbl then
+		dashMainLbl.Text = "DASH"
+		local keyLbl = dashBtnRef:FindFirstChild("KeyLabel")
+		if keyLbl and keyLbl:IsA("TextLabel") then
+			keyLbl.Text = if hasDash then "[8]" else "[LOCK]"
+			keyLbl.TextColor3 = if hasDash then Color3.fromRGB(168, 198, 232) else C_ASH
 		end
+		dashBtnRef.BackgroundColor3 = if hasDash then Color3.fromRGB(24, 34, 48) else C_OBS
+		dashBtnRef.BackgroundTransparency = if hasDash then 0.04 else 0.16
+		local st = dashBtnRef:FindFirstChildOfClass("UIStroke")
+		if st then st.Color = if hasDash then C_STEEL else C_BORDER end
+	end
+
+	-- Update Squad Command Buttons (bright when guards/mercenaries active, subtly dimmed when none hired)
+	local hasGuards = (tonumber(state.BodyguardCount) or 0) > 0
+	local merc = state.MercenaryMafia
+	local hasMerc = typeof(merc) == "table" and merc.Active == true
+	local showSquad = hasGuards or hasMerc
+	if attackBtnRef then
+		attackBtnRef.BackgroundTransparency = if showSquad then 0.04 else 0.22
+	end
+	if recallBtnRef then
+		recallBtnRef.BackgroundTransparency = if showSquad then 0.04 else 0.22
 	end
 end
 
