@@ -15,6 +15,9 @@ local WarehouseConfig = require(
 local WeaponConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WeaponConfig")
 )
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local WarehouseService = require("./WarehouseService")
@@ -132,6 +135,70 @@ function MonetizationService.SetProChefStatus(player: Player, text: string, burs
 end
 
 local function spawnProChefModel(parent: Instance, name: string, labelText: string, worldCF: CFrame, coatCol: Color3, apronCol: Color3, hasCrown: boolean): Model
+	-- Check Studio NPCTemplates first so creators can replace legacy Pro Chefs with real Roblox R15 NPCs!
+	local tplCandidates = if hasCrown
+		then { "MasterProChef", "ProChef" }
+		else { "EliteSousChef", "SousChef" }
+	local customRig = MafiaVisualBuilder.TryBuildFromTemplate(tplCandidates, name, 1.08, worldCF * CFrame.new(0, 3.05, 0), false, nil)
+	if customRig then
+		local npc = customRig.Model
+		local footOffset = math.clamp(customRig.Root.Position.Y - (customRig.LeftFoot.Position.Y - customRig.LeftFoot.Size.Y * 0.5), 2.5, 3.8)
+		npc:PivotTo(worldCF * CFrame.new(0, footOffset, 0))
+		customRig.Root.Anchored = true
+
+		if hasCrown then
+			local sparkles = Instance.new("ParticleEmitter")
+			sparkles.Name = "CookSparkles"
+			sparkles.Color = ColorSequence.new(Color3.fromRGB(255, 224, 72), Color3.fromRGB(255, 168, 42))
+			sparkles.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.55), NumberSequenceKeypoint.new(1, 0) })
+			sparkles.Lifetime = NumberRange.new(0.6, 1.1)
+			sparkles.Rate = 4
+			sparkles.Speed = NumberRange.new(4, 9)
+			sparkles.SpreadAngle = Vector2.new(120, 120)
+			sparkles.Parent = customRig.RightHand
+		end
+
+		local bb = Instance.new("BillboardGui")
+		bb.Size = UDim2.fromOffset(195, if hasCrown then 54 else 30)
+		bb.StudsOffset = Vector3.new(0, 3.2, 0)
+		bb.MaxDistance = 105
+		bb.Parent = customRig.Head
+
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(1, 0, 0, 26)
+		lbl.BackgroundColor3 = apronCol
+		lbl.Font = Enum.Font.GothamBlack
+		lbl.Text = labelText
+		lbl.TextColor3 = Color3.new(1, 1, 1)
+		lbl.TextSize = 14
+		lbl.Parent = bb
+		Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 8)
+		local st = Instance.new("UIStroke")
+		st.Color = Color3.fromRGB(24, 24, 34)
+		st.Thickness = 2
+		st.Parent = lbl
+
+		if hasCrown then
+			local statusLbl = Instance.new("TextLabel")
+			statusLbl.Name = "ProStatusLabel"
+			statusLbl.Position = UDim2.new(0, 0, 0, 30)
+			statusLbl.Size = UDim2.new(1, 0, 0, 22)
+			statusLbl.BackgroundColor3 = Color3.fromRGB(22, 28, 42)
+			statusLbl.BackgroundTransparency = 0.1
+			statusLbl.Font = Enum.Font.GothamBold
+			statusLbl.Text = "Ready to Auto-Cook!"
+			statusLbl.TextColor3 = Color3.fromRGB(255, 232, 132)
+			statusLbl.TextSize = 11
+			statusLbl.Parent = bb
+			Instance.new("UICorner", statusLbl).CornerRadius = UDim.new(0, 6)
+		end
+
+		npc.PrimaryPart = customRig.Root
+		CollectionService:AddTag(npc, "AnimatedKitchenChef")
+		npc.Parent = parent
+		return npc
+	end
+
 	local npc = Instance.new("Model")
 	npc.Name = name
 	local cf = worldCF * CFrame.new(0, 3.9, 0)

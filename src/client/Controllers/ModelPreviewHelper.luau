@@ -57,6 +57,7 @@ local function addWedge(model: Model, name: string, size: Vector3, cf: CFrame, c
 end
 
 local function freezeModelForPreview(model: Model): Model
+	local isCustomTpl = model:GetAttribute("IsCustomNPCTemplate") == true
 	for _, desc in ipairs(model:GetDescendants()) do
 		if desc:IsA("BasePart") then
 			desc.Anchored = true
@@ -64,7 +65,9 @@ local function freezeModelForPreview(model: Model): Model
 			desc.CanTouch = false
 			desc.CanQuery = false
 			desc.CastShadow = false
-		elseif desc:IsA("JointInstance") or desc:IsA("WeldConstraint") or desc:IsA("BillboardGui") or desc:IsA("Humanoid") then
+		elseif desc:IsA("BillboardGui") then
+			desc:Destroy()
+		elseif (not isCustomTpl) and (desc:IsA("JointInstance") or desc:IsA("WeldConstraint") or desc:IsA("Humanoid")) then
 			desc:Destroy()
 		end
 	end
@@ -1380,8 +1383,15 @@ function ModelPreviewHelper.CreatePreview(
 		end
 	end
 
-	-- Parent anchored model directly to ViewportFrame for immediate, deterministic first-frame rendering!
-	model.Parent = vp
+	-- Wrap custom Roblox NPC templates in a WorldModel so Shirts, Pants, BodyColors & Layered Clothing render cleanly!
+	if model:GetAttribute("IsCustomNPCTemplate") == true then
+		local wm = Instance.new("WorldModel")
+		wm.Name = "PreviewWorld"
+		wm.Parent = vp
+		model.Parent = wm
+	else
+		model.Parent = vp
+	end
 	frameCameraToModel(vp, model, viewMode)
 	return vp
 end
