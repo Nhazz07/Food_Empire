@@ -436,7 +436,67 @@ function AmbientEffectsController.Start(): ()
 						local lk = if lLowerLeg then lLowerLeg:FindFirstChild("LeftKnee") else nil
 						local rk = if rLowerLeg then rLowerLeg:FindFirstChild("RightKnee") else nil
 
-						if speed > 0.8 then
+						local diningPose = unit:GetAttribute("DiningPose")
+						local waiterState = unit:GetAttribute("WaiterState")
+						local phaseSeed = (string.byte(unit.Name, -1) or 1) * 0.75
+
+						if diningPose == "SeatedWaiting" or diningPose == "Eating" then
+							-- Authentic R15 Seated Dining Pose (bent hips & knees on chair!)
+							if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.Angles(math.rad(86), 0, math.rad(-4)) end
+							if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.Angles(math.rad(86), 0, math.rad(4)) end
+							if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.Angles(math.rad(-86), 0, 0) end
+							if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.Angles(math.rad(-86), 0, 0) end
+
+							if diningPose == "Eating" then
+								-- Realistic Eating Cycle: dipping fork down to plate -> raising bite to mouth -> happy nod!
+								local eatWave = math.sin(elapsed * 3.1 + phaseSeed)
+								local biteLift = (eatWave + 1) * 0.5 -- 0 = plate, 1 = mouth
+								if rs and rs:IsA("Motor6D") then
+									rs.Transform = CFrame.Angles(math.rad(44 + biteLift * 46), math.rad(-14 * biteLift), math.rad(8))
+								end
+								if re and re:IsA("Motor6D") then
+									re.Transform = CFrame.Angles(math.rad(38 + biteLift * 68), 0, 0)
+								end
+								if ls and ls:IsA("Motor6D") then
+									ls.Transform = CFrame.Angles(math.rad(34), 0, math.rad(-10))
+								end
+								if le and le:IsA("Motor6D") then
+									le.Transform = CFrame.Angles(math.rad(42), 0, 0)
+								end
+								if waist and waist:IsA("Motor6D") then
+									waist.Transform = CFrame.Angles(math.rad(-7 - biteLift * 3), 0, 0)
+								end
+								if neck and neck:IsA("Motor6D") then
+									neck.Transform = CFrame.Angles(math.rad(-10 + biteLift * 14), math.sin(elapsed * 1.4 + phaseSeed) * math.rad(8), 0)
+								end
+							else
+								-- Seated Waiting: resting arms near table, looking around & occasionally waving for Waiter!
+								local lookAround = math.sin(elapsed * 1.2 + phaseSeed) * math.rad(22)
+								local signalWave = math.max(0, math.sin(elapsed * 0.55 + phaseSeed) - 0.65) / 0.35
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(38), 0, math.rad(-8)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(46), 0, 0) end
+								if rs and rs:IsA("Motor6D") then
+									rs.Transform = CFrame.Angles(math.rad(38 + signalWave * 88), 0, math.rad(8 + signalWave * 14))
+								end
+								if re and re:IsA("Motor6D") then
+									re.Transform = CFrame.Angles(math.rad(46 - signalWave * 18), 0, 0)
+								end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-4), 0, 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(2), lookAround, 0) end
+							end
+						elseif waiterState == "ServingTable" then
+							-- Polite formal Waiter table-side bow presenting the plated dish!
+							if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.identity end
+							if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.identity end
+							if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.identity end
+							if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.identity end
+							if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-16), 0, 0) end
+							if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(68), 0, math.rad(6)) end
+							if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(28), 0, 0) end
+							if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(-14), 0, math.rad(-10)) end
+							if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(48), 0, 0) end
+							if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(-8), 0, 0) end
+						elseif speed > 0.8 then
 							local freq = math.clamp(speed * 0.56, 7.2, 13.5)
 							local phase = elapsed * freq
 							local stride = math.sin(phase) * math.rad(36)
@@ -447,12 +507,22 @@ function AmbientEffectsController.Start(): ()
 							if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.Angles(stride, 0, 0) end
 							if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.Angles(lKneeBend, 0, 0) end
 							if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.Angles(rKneeBend, 0, 0) end
-							if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(armSwing, 0, math.rad(-4)) end
-							if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(-armSwing * 0.55 + math.rad(22), 0, math.rad(4)) end
-							if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(24) + math.max(0, armSwing) * 0.6, 0, 0) end
-							if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(32), 0, 0) end
-							if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-4), math.sin(phase) * math.rad(6), 0) end
-							if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(3), -math.sin(phase) * math.rad(4), 0) end
+							if waiterState == "CarryingTray" then
+								-- Waiter holds silver serving tray proudly steady & level while briskly walking to table!
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(armSwing * 0.55, 0, math.rad(-6)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(24), 0, 0) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(62), 0, math.rad(8)) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(34), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-3), math.sin(phase) * math.rad(3), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(2), 0, 0) end
+							else
+								if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(armSwing, 0, math.rad(-4)) end
+								if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(-armSwing * 0.55 + math.rad(22), 0, math.rad(4)) end
+								if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(24) + math.max(0, armSwing) * 0.6, 0, 0) end
+								if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(32), 0, 0) end
+								if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-4), math.sin(phase) * math.rad(6), 0) end
+								if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(3), -math.sin(phase) * math.rad(4), 0) end
+							end
 						else
 							-- Natural living idle breathing & subtle stance sway
 							local breath = math.sin(elapsed * 2.1)
@@ -492,6 +562,67 @@ function AmbientEffectsController.Start(): ()
 		end
 		for _, raider in ipairs(CollectionService:GetTagged("AnimatedRaiderLimbs")) do
 			animateMarchingUnit(raider)
+		end
+
+		-- 4a. Realistic 60 FPS Commercial Kitchen Chef Animations (Tossing Sauté Pan, Searing, Chopping & Plating!)
+		for _, chef in ipairs(CollectionService:GetTagged("AnimatedKitchenChef")) do
+			if chef:IsA("Model") then
+				local upperTorso = chef:FindFirstChild("UpperTorso")
+				local head = chef:FindFirstChild("Head")
+				local lUpperArm = chef:FindFirstChild("LeftUpperArm")
+				local rUpperArm = chef:FindFirstChild("RightUpperArm")
+				local lLowerArm = chef:FindFirstChild("LeftLowerArm")
+				local rLowerArm = chef:FindFirstChild("RightLowerArm")
+				local waist = if upperTorso then upperTorso:FindFirstChild("Waist") else nil
+				local neck = if head then head:FindFirstChild("Neck") else nil
+				local ls = if lUpperArm then lUpperArm:FindFirstChild("LeftShoulder") else nil
+				local rs = if rUpperArm then rUpperArm:FindFirstChild("RightShoulder") else nil
+				local le = if lLowerArm then lLowerArm:FindFirstChild("LeftElbow") else nil
+				local re = if rLowerArm then rLowerArm:FindFirstChild("RightElbow") else nil
+
+				local action = tostring(chef:GetAttribute("ChefAction") or "Searing")
+				local idx = tonumber(chef:GetAttribute("ChefIndex")) or 1
+				local seed = idx * 1.45
+
+				if action == "TossingPan" then
+					local toss = math.sin(elapsed * 5.8 + seed)
+					local flick = math.max(0, toss)
+					if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(42 + flick * 36), 0, math.rad(6)) end
+					if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(28 + flick * 34), 0, 0) end
+					-- Left hand sprinkles seasoning over the sizzling pan!
+					local sprinkle = math.sin(elapsed * 10.5 + seed)
+					if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(62 + sprinkle * 12), math.rad(14), math.rad(-10)) end
+					if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(54), 0, 0) end
+					if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-8 - flick * 4), math.sin(elapsed * 2.4 + seed) * math.rad(6), 0) end
+					if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(-14 + flick * 8), 0, 0) end
+				elseif action == "Chopping" then
+					local chop = math.sin(elapsed * 12.0 + seed)
+					if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(48 + chop * 18), math.rad(-8), math.rad(6)) end
+					if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(44 + chop * 26), 0, 0) end
+					if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(46), math.rad(12), math.rad(-8)) end
+					if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(42), 0, 0) end
+					if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-10), math.sin(elapsed * 1.8 + seed) * math.rad(5), 0) end
+					if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(-18), 0, 0) end
+				elseif action == "Plating" then
+					local sweep = math.sin(elapsed * 3.2 + seed)
+					if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(52), math.rad(sweep * 18), math.rad(8)) end
+					if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(46 + math.abs(sweep) * 16), 0, 0) end
+					if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(48), math.rad(-sweep * 14), math.rad(-8)) end
+					if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(42), 0, 0) end
+					if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-7), sweep * math.rad(12), 0) end
+					if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(-12), sweep * math.rad(10), 0) end
+				else
+					-- Searing / Stirring smoothly over stove flames
+					local stir = math.sin(elapsed * 4.6 + seed)
+					local stirY = math.cos(elapsed * 4.6 + seed)
+					if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(46 + stir * 14), math.rad(stirY * 14), math.rad(6)) end
+					if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(36 + stir * 12), 0, 0) end
+					if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(38 - stir * 8), math.rad(10), math.rad(-6)) end
+					if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(34), 0, 0) end
+					if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-8), stir * math.rad(7), 0) end
+					if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(-14), stirY * math.rad(8), 0) end
+				end
+			end
 		end
 
 		-- 4b. 60 FPS Articulated Death Collapse Animations for Rivals, Bodyguards & Mafia

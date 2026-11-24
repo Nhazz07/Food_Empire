@@ -601,6 +601,79 @@ WeaponConfig.GUNSMITH_MODS = {
 	},
 } :: { [string]: GunsmithModSpec }
 
+export type MasterySkinId = "Standard" | "Damascus" | "Crimson" | "Gold"
+
+export type MasteryTierSpec = {
+	Id: MasterySkinId,
+	DisplayName: string,
+	ShortLabel: string,
+	KillsRequired: number,
+	ReloadMult: number,
+	DamageMult: number,
+	SwatchColor: Color3,
+	BonusLabel: string,
+}
+
+WeaponConfig.MASTERY_ORDER = {
+	"Damascus",
+	"Crimson",
+	"Gold",
+} :: { MasterySkinId }
+
+WeaponConfig.MASTERY_TIERS = {
+	Standard = {
+		Id = "Standard",
+		DisplayName = "Factory Matte",
+		ShortLabel = "STD",
+		KillsRequired = 0,
+		ReloadMult = 1.00,
+		DamageMult = 1.00,
+		SwatchColor = Color3.fromRGB(72, 78, 88),
+		BonusLabel = "Standard Handling",
+	},
+	Damascus = {
+		Id = "Damascus",
+		DisplayName = "Damascus Steel",
+		ShortLabel = "DAMASCUS",
+		KillsRequired = 3,
+		ReloadMult = 0.92,
+		DamageMult = 1.00,
+		SwatchColor = Color3.fromRGB(132, 148, 168),
+		BonusLabel = "-8% Reload & Handling",
+	},
+	Crimson = {
+		Id = "Crimson",
+		DisplayName = "Crimson Lacquer",
+		ShortLabel = "CRIMSON",
+		KillsRequired = 8,
+		ReloadMult = 0.86,
+		DamageMult = 1.06,
+		SwatchColor = Color3.fromRGB(158, 30, 42),
+		BonusLabel = "-14% Reload, +6% DMG",
+	},
+	Gold = {
+		Id = "Gold",
+		DisplayName = "24K Gold Engraved",
+		ShortLabel = "24K GOLD",
+		KillsRequired = 15,
+		ReloadMult = 0.80,
+		DamageMult = 1.12,
+		SwatchColor = Color3.fromRGB(218, 174, 62),
+		BonusLabel = "-20% Reload, +12% DMG",
+	},
+} :: { [string]: MasteryTierSpec }
+
+function WeaponConfig.GetHighestUnlockedMastery(kills: number): MasterySkinId
+	if kills >= 15 then
+		return "Gold"
+	elseif kills >= 8 then
+		return "Crimson"
+	elseif kills >= 3 then
+		return "Damascus"
+	end
+	return "Standard"
+end
+
 function WeaponConfig.GetCompatibleWeaponsForAmmo(ammoId: AmmoTypeId): { string }
 	local names: { string } = {}
 	for _, wid in ipairs(WeaponConfig.WEAPON_ORDER) do

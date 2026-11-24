@@ -608,6 +608,10 @@ end
 
 local function stepApexUnit(rt: RestaurantRuntime, u: GarrisonUnit, now: number): ()
 	if not u.Model.Parent or u.Humanoid.Health <= 0 then return end
+	local stunUntil = u.Model:GetAttribute("StunnedUntil")
+	if typeof(stunUntil) == "number" and stunUntil > now then
+		return
+	end
 	local myPos = u.Root.Position
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil

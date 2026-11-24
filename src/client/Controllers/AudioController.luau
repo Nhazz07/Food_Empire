@@ -600,6 +600,30 @@ function AudioController.PlayBodyDrop(volScale: number?): ()
 	playPooled("BodyDropTail", v, 1)
 end
 
+-- Black Market Tier 2 Tactical Gadget SFX (Flashbang, C4 Breach Charge, Shadow Smoke Dash)
+function AudioController.PlayFlashbangPop(volScale: number?): ()
+	local v = volScale or 1
+	playPooled("ShotgunBlast", v * 0.85, 1.55)
+	playTone(PING_URL, 0.36 * v, 2.35, 0.04)
+end
+
+function AudioController.PlayC4Beep(volScale: number?): ()
+	local v = volScale or 1
+	playTone(PING_URL, 0.42 * v, 1.85, 0)
+end
+
+function AudioController.PlayC4Explosion(volScale: number?): ()
+	local v = volScale or 1
+	playPooled("ShotgunBoomTail", v * 1.45, 0.62)
+	playPooled("ShotgunBlast", v * 1.15, 0.68)
+end
+
+function AudioController.PlayShadowDash(volScale: number?): ()
+	local v = volScale or 1
+	playPooled("MeleeSwing", v * 1.25, 0.78)
+	playPooled("MeleeSnap", v * 0.9, 0.85)
+end
+
 function AudioController.PlayCombatSFX(kind: string, volScale: number?): ()
 	if kind == "PistolShot" or kind == "EnemyShot" then
 		AudioController.PlayPistolShot(volScale)
@@ -621,6 +645,14 @@ function AudioController.PlayCombatSFX(kind: string, volScale: number?): ()
 		AudioController.PlayShotgunPump()
 	elseif kind == "BodyDrop" then
 		AudioController.PlayBodyDrop(volScale)
+	elseif kind == "FlashbangPop" then
+		AudioController.PlayFlashbangPop(volScale)
+	elseif kind == "C4Beep" then
+		AudioController.PlayC4Beep(volScale)
+	elseif kind == "C4Explosion" then
+		AudioController.PlayC4Explosion(volScale)
+	elseif kind == "ShadowDash" then
+		AudioController.PlayShadowDash(volScale)
 	elseif kind == "PlayerHurtScream" then
 		AudioController.PlayPlayerHurtScream(volScale)
 	elseif kind == "EnemyHitScream" then

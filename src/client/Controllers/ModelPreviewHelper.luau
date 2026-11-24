@@ -649,6 +649,34 @@ local function buildEquipmentModel(itemId: string): Model
 		addPart(m, "PullRing", Vector3.new(0.10, 0.34, 0.34), CFrame.new(0.32, 1.44, 0), P.TarnishedBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
 		addPart(m, "SmokePuff", Vector3.new(0.54, 0.44, 0.54), CFrame.new(-0.18, 1.72, 0), Color3.fromRGB(204, 210, 220), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
 		return m
+	elseif itemId == "Flashbang" then
+		-- 3D M84-Style Tactical Stun Flashbang Canister with Brass Spoon & Gold Stun Ring
+		addPart(m, "Body", Vector3.new(1.36, 0.58, 0.58), CFrame.new(0, 0.68, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(156, 164, 176), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "StunBand", Vector3.new(0.24, 0.62, 0.62), CFrame.new(0, 0.92, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(224, 184, 64), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "VentBand", Vector3.new(0.22, 0.62, 0.62), CFrame.new(0, 0.34, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "FuseHead", Vector3.new(0.34, 0.38, 0.34), CFrame.new(0, 1.48, 0), P.Charcoal, Enum.Material.Metal, nil)
+		addPart(m, "SpoonLever", Vector3.new(0.12, 1.02, 0.24), CFrame.new(-0.34, 1.04, 0) * CFrame.Angles(0, 0, math.rad(-10)), P.TarnishedBrass, Enum.Material.Metal, nil)
+		addPart(m, "PinRing", Vector3.new(0.08, 0.32, 0.32), CFrame.new(0.30, 1.50, 0), Color3.fromRGB(226, 230, 238), Enum.Material.Metal, Enum.PartType.Cylinder)
+		return m
+	elseif itemId == "C4Charge" then
+		-- 3D Tactical C4 Breach Explosive Brick with Straps, Keypad Screen & Red Detonator LED
+		addPart(m, "ExplosivePack", Vector3.new(1.64, 0.64, 1.06), CFrame.new(0, 0.52, 0) * CFrame.Angles(math.rad(-22), 0, 0), Color3.fromRGB(72, 82, 66), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "StrapL", Vector3.new(0.22, 0.68, 1.12), CFrame.new(-0.48, 0.52, 0) * CFrame.Angles(math.rad(-22), 0, 0), P.Obsidian, Enum.Material.Fabric, nil)
+		addPart(m, "StrapR", Vector3.new(0.22, 0.68, 1.12), CFrame.new(0.48, 0.52, 0) * CFrame.Angles(math.rad(-22), 0, 0), P.Obsidian, Enum.Material.Fabric, nil)
+		addPart(m, "KeypadBody", Vector3.new(0.68, 0.16, 0.66), CFrame.new(0, 0.88, -0.06) * CFrame.Angles(math.rad(-22), 0, 0), P.Charcoal, Enum.Material.Metal, nil)
+		addPart(m, "Screen", Vector3.new(0.48, 0.10, 0.22), CFrame.new(0, 0.96, -0.22) * CFrame.Angles(math.rad(-22), 0, 0), Color3.fromRGB(54, 108, 72), Enum.Material.Glass, nil)
+		addPart(m, "DetonatorLED", Vector3.new(0.20, 0.14, 0.20), CFrame.new(0.26, 0.96, 0.14) * CFrame.Angles(math.rad(-22), 0, 0), Color3.fromRGB(218, 38, 48), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "Antenna", Vector3.new(0.08, 0.66, 0.08), CFrame.new(0.62, 1.08, 0.22), P.BrushedSteel, Enum.Material.Metal, nil)
+		return m
+	elseif itemId == "ShadowDash" then
+		-- 3D Ninja Shadow Smoke Emblem: Obsidian Smoke Orb + Crossed Steel Kunai + Crimson Wrap
+		addPart(m, "SmokeCore", Vector3.new(1.06, 1.06, 1.06), CFrame.new(0, 0.88, 0), Color3.fromRGB(32, 36, 46), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "SmokeCloudL", Vector3.new(0.68, 0.62, 0.68), CFrame.new(-0.56, 0.68, 0.12), Color3.fromRGB(68, 74, 88), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "SmokeCloudR", Vector3.new(0.64, 0.58, 0.64), CFrame.new(0.56, 0.72, -0.10), Color3.fromRGB(56, 62, 74), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "KunaiBlade", Vector3.new(0.22, 1.54, 0.10), CFrame.new(0, 1.12, -0.44) * CFrame.Angles(0, 0, math.rad(-32)), Color3.fromRGB(192, 200, 214), Enum.Material.Metal, nil)
+		addPart(m, "KunaiWrap", Vector3.new(0.24, 0.42, 0.16), CFrame.new(-0.34, 0.54, -0.44) * CFrame.Angles(0, 0, math.rad(-32)), P.DeepRed, Enum.Material.Fabric, nil)
+		addPart(m, "KunaiRing", Vector3.new(0.10, 0.34, 0.34), CFrame.new(-0.52, 0.24, -0.44) * CFrame.Angles(0, math.rad(90), 0), P.TarnishedBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		return m
 	elseif itemId == "KevlarVest" or itemId == "GuardKevlarPlate" or itemId == "GuardJuggernautArmor" then
 		local col = if itemId == "GuardJuggernautArmor" then Color3.fromRGB(48, 52, 60) elseif itemId == "KevlarVest" then Color3.fromRGB(36, 44, 54) else Color3.fromRGB(44, 52, 62)
 		local bulk = if itemId == "GuardJuggernautArmor" then 1.22 else 1.0

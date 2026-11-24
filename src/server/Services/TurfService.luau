@@ -598,6 +598,10 @@ local function stepAgentAI(agent: TurfAgent, now: number): ()
 	if not agent.Model.Parent or agent.Humanoid.Health <= 0 then
 		return
 	end
+	local stunUntil = agent.Model:GetAttribute("StunnedUntil")
+	if typeof(stunUntil) == "number" and stunUntil > now then
+		return
+	end
 
 	local homeState = blockStates[agent.TargetBlockId]
 	local homePlaza = if homeState then homeState.Spec.PlazaPos else agent.Root.Position

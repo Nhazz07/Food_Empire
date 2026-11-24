@@ -79,5 +79,6 @@ CentralEventService.Start()
 ScooterService.Start()
 MilestoneService.Start()
 CharacterScaleService.Start()
+BaseService.AssignPendingPlayers()
 
 print("[Food Empire] All server services initialized cleanly!")

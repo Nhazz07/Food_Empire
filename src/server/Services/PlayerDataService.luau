@@ -39,6 +39,11 @@ export type PlayerProfile = {
 	OwnedBusinesses: { [string]: boolean },
 	MenuPricing: string,
 	SmokeGrenades: number,
+	Flashbangs: number,
+	C4Charges: number,
+	HasShadowDash: boolean,
+	WeaponKills: { [string]: number },
+	WeaponSkins: { [string]: string },
 	HasPenthouseTrophy: boolean,
 	OwnsArmoredVan: boolean,
 	OwnsGetawayCoupe: boolean,
@@ -114,6 +119,11 @@ local function createDefaultProfile(): PlayerProfile
 		OwnedBusinesses = {},
 		MenuPricing = "Standard",
 		SmokeGrenades = 2,
+		Flashbangs = 0,
+		C4Charges = 0,
+		HasShadowDash = false,
+		WeaponKills = {},
+		WeaponSkins = {},
 		HasPenthouseTrophy = false,
 		OwnsArmoredVan = false,
 		OwnsGetawayCoupe = false,
@@ -483,6 +493,102 @@ function PlayerDataService.ConsumeSmokeGrenade(player: Player): boolean
 	return true
 end
 
+function PlayerDataService.AddFlashbangs(player: Player, amount: number): number
+	local profile = PlayerDataService.GetProfile(player)
+	profile.Flashbangs = math.clamp((profile.Flashbangs or 0) + math.floor(amount), 0, 12)
+	notifyChanged(player)
+	return profile.Flashbangs
+end
+
+function PlayerDataService.ConsumeFlashbang(player: Player): boolean
+	local profile = PlayerDataService.GetProfile(player)
+	if (profile.Flashbangs or 0) <= 0 then
+		return false
+	end
+	profile.Flashbangs -= 1
+	notifyChanged(player)
+	return true
+end
+
+function PlayerDataService.AddC4Charges(player: Player, amount: number): number
+	local profile = PlayerDataService.GetProfile(player)
+	profile.C4Charges = math.clamp((profile.C4Charges or 0) + math.floor(amount), 0, 8)
+	notifyChanged(player)
+	return profile.C4Charges
+end
+
+function PlayerDataService.ConsumeC4Charge(player: Player): boolean
+	local profile = PlayerDataService.GetProfile(player)
+	if (profile.C4Charges or 0) <= 0 then
+		return false
+	end
+	profile.C4Charges -= 1
+	notifyChanged(player)
+	return true
+end
+
+function PlayerDataService.UnlockShadowDash(player: Player): ()
+	local profile = PlayerDataService.GetProfile(player)
+	if not profile.HasShadowDash then
+		profile.HasShadowDash = true
+		notifyChanged(player)
+	end
+end
+
+function PlayerDataService.HasShadowDash(player: Player): boolean
+	return PlayerDataService.GetProfile(player).HasShadowDash == true
+end
+
+function PlayerDataService.GetWeaponKills(player: Player, weaponId: string): number
+	local profile = PlayerDataService.GetProfile(player)
+	return (profile.WeaponKills and profile.WeaponKills[weaponId]) or 0
+end
+
+function PlayerDataService.GetWeaponSkin(player: Player, weaponId: string): string
+	local profile = PlayerDataService.GetProfile(player)
+	return (profile.WeaponSkins and profile.WeaponSkins[weaponId]) or "Standard"
+end
+
+function PlayerDataService.AddWeaponKill(player: Player, weaponId: string): (number, string?)
+	local profile = PlayerDataService.GetProfile(player)
+	if not profile.WeaponKills then profile.WeaponKills = {} end
+	if not profile.WeaponSkins then profile.WeaponSkins = {} end
+	local prev = profile.WeaponKills[weaponId] or 0
+	local nextK = prev + 1
+	profile.WeaponKills[weaponId] = nextK
+
+	local unlocked: string? = nil
+	if prev < 3 and nextK >= 3 then
+		unlocked = "Damascus"
+	elseif prev < 8 and nextK >= 8 then
+		unlocked = "Crimson"
+	elseif prev < 15 and nextK >= 15 then
+		unlocked = "Gold"
+	end
+	if unlocked then
+		profile.WeaponSkins[weaponId] = unlocked
+	end
+	notifyChanged(player)
+	return nextK, unlocked
+end
+
+function PlayerDataService.SetWeaponSkin(player: Player, weaponId: string, skinId: string): (boolean, string)
+	local profile = PlayerDataService.GetProfile(player)
+	if not profile.WeaponKills then profile.WeaponKills = {} end
+	if not profile.WeaponSkins then profile.WeaponSkins = {} end
+	local kills = profile.WeaponKills[weaponId] or 0
+	local req = if skinId == "Gold" then 15 elseif skinId == "Crimson" then 8 elseif skinId == "Damascus" then 3 else 0
+	if skinId ~= "Standard" and skinId ~= "Damascus" and skinId ~= "Crimson" and skinId ~= "Gold" then
+		return false, "Invalid weapon finish."
+	end
+	if kills < req then
+		return false, string.format("Need %d kills with this weapon to unlock %s (%d/%d).", req, skinId, kills, req)
+	end
+	profile.WeaponSkins[weaponId] = skinId
+	notifyChanged(player)
+	return true, string.format("Equipped %s finish!", skinId)
+end
+
 function PlayerDataService.SetHasPenthouseTrophy(player: Player, owned: boolean): ()
 	local profile = PlayerDataService.GetProfile(player)
 	profile.HasPenthouseTrophy = owned
@@ -674,6 +780,29 @@ local function loadPlayer(player: Player): ()
 			if typeof(saved.SmokeGrenades) == "number" then
 				profile.SmokeGrenades = math.clamp(math.floor(saved.SmokeGrenades), 0, 12)
 			end
+			if typeof(saved.Flashbangs) == "number" then
+				profile.Flashbangs = math.clamp(math.floor(saved.Flashbangs), 0, 12)
+			end
+			if typeof(saved.C4Charges) == "number" then
+				profile.C4Charges = math.clamp(math.floor(saved.C4Charges), 0, 8)
+			end
+			if typeof(saved.HasShadowDash) == "boolean" then
+				profile.HasShadowDash = saved.HasShadowDash
+			end
+			if typeof(saved.WeaponKills) == "table" then
+				for wid, v in pairs(saved.WeaponKills) do
+					if typeof(wid) == "string" and typeof(v) == "number" then
+						profile.WeaponKills[wid] = math.max(0, math.floor(v))
+					end
+				end
+			end
+			if typeof(saved.WeaponSkins) == "table" then
+				for wid, v in pairs(saved.WeaponSkins) do
+					if typeof(wid) == "string" and typeof(v) == "string" then
+						profile.WeaponSkins[wid] = v
+					end
+				end
+			end
 			if typeof(saved.HasPenthouseTrophy) == "boolean" then
 				profile.HasPenthouseTrophy = saved.HasPenthouseTrophy
 			end
@@ -756,6 +885,11 @@ local function savePlayer(player: Player): ()
 		OwnedBusinesses = profile.OwnedBusinesses,
 		MenuPricing = profile.MenuPricing,
 		SmokeGrenades = profile.SmokeGrenades,
+		Flashbangs = profile.Flashbangs,
+		C4Charges = profile.C4Charges,
+		HasShadowDash = profile.HasShadowDash,
+		WeaponKills = profile.WeaponKills,
+		WeaponSkins = profile.WeaponSkins,
 		HasPenthouseTrophy = profile.HasPenthouseTrophy,
 		OwnsArmoredVan = profile.OwnsArmoredVan,
 		OwnsGetawayCoupe = profile.OwnsGetawayCoupe,

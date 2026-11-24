@@ -175,24 +175,78 @@ local HAIR_COLORS: { Color3 } = {
 }
 
 type DiningSpot = {
+	Space: "HQ" | "Base",
+	Zone: "Indoor" | "Patio" | "VIP",
 	TableOffset: Vector3,
+	PlateOffset: Vector3,
 	SeatOffset: Vector3,
 	WaiterOffset: Vector3,
+	IsVIP: boolean,
 }
 
-local FRONT_DINING_SPOTS: { DiningSpot } = {
-	{ TableOffset = Vector3.new(-69, 3.88, 43), SeatOffset = Vector3.new(-69, 3.55, 46.5), WaiterOffset = Vector3.new(-65.2, 4.2, 43) },
-	{ TableOffset = Vector3.new(-47, 3.88, 43), SeatOffset = Vector3.new(-47, 3.55, 46.5), WaiterOffset = Vector3.new(-43.2, 4.2, 43) },
-	{ TableOffset = Vector3.new(-69, 3.88, 62), SeatOffset = Vector3.new(-69, 3.55, 65.5), WaiterOffset = Vector3.new(-65.2, 4.2, 62) },
-	{ TableOffset = Vector3.new(-47, 3.88, 62), SeatOffset = Vector3.new(-47, 3.55, 65.5), WaiterOffset = Vector3.new(-43.2, 4.2, 62) },
-	{ TableOffset = Vector3.new(47, 3.88, 43), SeatOffset = Vector3.new(47, 3.55, 46.5), WaiterOffset = Vector3.new(43.2, 4.2, 43) },
-	{ TableOffset = Vector3.new(69, 3.88, 43), SeatOffset = Vector3.new(69, 3.55, 46.5), WaiterOffset = Vector3.new(65.2, 4.2, 43) },
-	{ TableOffset = Vector3.new(47, 3.88, 62), SeatOffset = Vector3.new(47, 3.55, 65.5), WaiterOffset = Vector3.new(43.2, 4.2, 62) },
-	{ TableOffset = Vector3.new(69, 3.88, 62), SeatOffset = Vector3.new(69, 3.55, 65.5), WaiterOffset = Vector3.new(65.2, 4.2, 62) },
+-- Unified Dining Pool: Indoor Restaurant Tables + VIP Private Booth + Outdoor String-Lit Pergola Patio!
+local ALL_DINING_SPOTS: { DiningSpot } = {
+	-- === INDOOR RESTAURANT TABLES (HQ Space) ===
+	-- Table 1 (Right Front: 18, 4.08, 6)
+	{ Space = "HQ", Zone = "Indoor", TableOffset = Vector3.new(18.0, 4.08, 6.0), PlateOffset = Vector3.new(18.0, 4.10, 7.35), SeatOffset = Vector3.new(18.0, 2.95, 9.25), WaiterOffset = Vector3.new(13.2, 3.6, 6.8), IsVIP = false },
+	{ Space = "HQ", Zone = "Indoor", TableOffset = Vector3.new(18.0, 4.08, 6.0), PlateOffset = Vector3.new(18.0, 4.10, 4.65), SeatOffset = Vector3.new(18.0, 2.95, 2.75), WaiterOffset = Vector3.new(13.2, 3.6, 5.2), IsVIP = false },
+	-- Table 2 (Right Mid: 18, 4.08, -10)
+	{ Space = "HQ", Zone = "Indoor", TableOffset = Vector3.new(18.0, 4.08, -10.0), PlateOffset = Vector3.new(18.0, 4.10, -8.65), SeatOffset = Vector3.new(18.0, 2.95, -6.75), WaiterOffset = Vector3.new(13.2, 3.6, -9.2), IsVIP = false },
+	{ Space = "HQ", Zone = "Indoor", TableOffset = Vector3.new(18.0, 4.08, -10.0), PlateOffset = Vector3.new(18.0, 4.10, -11.35), SeatOffset = Vector3.new(18.0, 2.95, -13.25), WaiterOffset = Vector3.new(13.2, 3.6, -10.8), IsVIP = false },
+	-- Table 3 (Right Back: 18, 4.08, -22)
+	{ Space = "HQ", Zone = "Indoor", TableOffset = Vector3.new(18.0, 4.08, -22.0), PlateOffset = Vector3.new(18.0, 4.10, -20.65), SeatOffset = Vector3.new(18.0, 2.95, -18.75), WaiterOffset = Vector3.new(13.2, 3.6, -21.2), IsVIP = false },
+	{ Space = "HQ", Zone = "Indoor", TableOffset = Vector3.new(18.0, 4.08, -22.0), PlateOffset = Vector3.new(18.0, 4.10, -23.35), SeatOffset = Vector3.new(18.0, 2.95, -25.25), WaiterOffset = Vector3.new(13.2, 3.6, -22.8), IsVIP = false },
+	-- Table 4 (Left Front: -22, 4.08, 6)
+	{ Space = "HQ", Zone = "Indoor", TableOffset = Vector3.new(-22.0, 4.08, 6.0), PlateOffset = Vector3.new(-22.0, 4.10, 7.35), SeatOffset = Vector3.new(-22.0, 2.95, 9.25), WaiterOffset = Vector3.new(-17.0, 3.6, 6.8), IsVIP = false },
+	{ Space = "HQ", Zone = "Indoor", TableOffset = Vector3.new(-22.0, 4.08, 6.0), PlateOffset = Vector3.new(-22.0, 4.10, 4.65), SeatOffset = Vector3.new(-22.0, 2.95, 2.75), WaiterOffset = Vector3.new(-17.0, 3.6, 5.2), IsVIP = false },
+
+	-- === OUTDOOR STRING-LIT PERGOLA PATIO (Base Space — FrontDiningPlaza!) ===
+	-- Left Pergola Patio (4 Round Marble Cafe Tables)
+	{ Space = "Base", Zone = "Patio", TableOffset = Vector3.new(-69.0, 3.72, 43.0), PlateOffset = Vector3.new(-69.0, 3.72, 44.35), SeatOffset = Vector3.new(-69.0, 2.68, 46.5), WaiterOffset = Vector3.new(-63.5, 3.6, 44.5), IsVIP = false },
+	{ Space = "Base", Zone = "Patio", TableOffset = Vector3.new(-47.0, 3.72, 43.0), PlateOffset = Vector3.new(-47.0, 3.72, 44.35), SeatOffset = Vector3.new(-47.0, 2.68, 46.5), WaiterOffset = Vector3.new(-41.8, 3.6, 44.5), IsVIP = false },
+	{ Space = "Base", Zone = "Patio", TableOffset = Vector3.new(-69.0, 3.72, 62.0), PlateOffset = Vector3.new(-69.0, 3.72, 63.35), SeatOffset = Vector3.new(-69.0, 2.68, 65.5), WaiterOffset = Vector3.new(-63.5, 3.6, 63.5), IsVIP = false },
+	{ Space = "Base", Zone = "Patio", TableOffset = Vector3.new(-47.0, 3.72, 62.0), PlateOffset = Vector3.new(-47.0, 3.72, 63.35), SeatOffset = Vector3.new(-47.0, 2.68, 65.5), WaiterOffset = Vector3.new(-41.8, 3.6, 63.5), IsVIP = false },
+	-- Right Pergola Patio (4 Round Marble Cafe Tables)
+	{ Space = "Base", Zone = "Patio", TableOffset = Vector3.new(47.0, 3.72, 43.0), PlateOffset = Vector3.new(47.0, 3.72, 44.35), SeatOffset = Vector3.new(47.0, 2.68, 46.5), WaiterOffset = Vector3.new(41.8, 3.6, 44.5), IsVIP = false },
+	{ Space = "Base", Zone = "Patio", TableOffset = Vector3.new(69.0, 3.72, 43.0), PlateOffset = Vector3.new(69.0, 3.72, 44.35), SeatOffset = Vector3.new(69.0, 2.68, 46.5), WaiterOffset = Vector3.new(63.5, 3.6, 44.5), IsVIP = false },
+	{ Space = "Base", Zone = "Patio", TableOffset = Vector3.new(47.0, 3.72, 62.0), PlateOffset = Vector3.new(47.0, 3.72, 63.35), SeatOffset = Vector3.new(47.0, 2.68, 65.5), WaiterOffset = Vector3.new(41.8, 3.6, 63.5), IsVIP = false },
+	{ Space = "Base", Zone = "Patio", TableOffset = Vector3.new(69.0, 3.72, 62.0), PlateOffset = Vector3.new(69.0, 3.72, 63.35), SeatOffset = Vector3.new(69.0, 2.68, 65.5), WaiterOffset = Vector3.new(63.5, 3.6, 63.5), IsVIP = false },
+
+	-- === OUTDOOR FRONT BISTRO TERRACE TABLES (HQ Space, right outside entrance!) ===
+	{ Space = "HQ", Zone = "Patio", TableOffset = Vector3.new(-32.5, 3.92, 28.0), PlateOffset = Vector3.new(-31.2, 3.92, 28.0), SeatOffset = Vector3.new(-29.2, 2.85, 28.0), WaiterOffset = Vector3.new(-26.0, 3.6, 26.5), IsVIP = false },
+	{ Space = "HQ", Zone = "Patio", TableOffset = Vector3.new(33.0, 3.92, 28.0), PlateOffset = Vector3.new(31.7, 3.92, 28.0), SeatOffset = Vector3.new(29.7, 2.85, 28.0), WaiterOffset = Vector3.new(26.5, 3.6, 26.5), IsVIP = false },
+
+	-- === INDOOR VIP PRIVATE BOOTH (HQ Space, unlocked with VIP Booths or HQ Lv.6+) ===
+	{ Space = "HQ", Zone = "VIP", TableOffset = Vector3.new(-25.5, 4.00, -6.5), PlateOffset = Vector3.new(-25.5, 4.02, -7.85), SeatOffset = Vector3.new(-25.5, 2.95, -9.45), WaiterOffset = Vector3.new(-19.5, 3.6, -7.2), IsVIP = true },
+	{ Space = "HQ", Zone = "VIP", TableOffset = Vector3.new(-25.5, 4.00, -6.5), PlateOffset = Vector3.new(-25.5, 4.02, -5.15), SeatOffset = Vector3.new(-25.5, 2.95, -3.55), WaiterOffset = Vector3.new(-19.5, 3.6, -5.8), IsVIP = true },
 }
+
+local function resolveSpotWorldPositions(spot: DiningSpot, bCF: CFrame, hqCF: CFrame): (Vector3, Vector3, Vector3, Vector3)
+	local refCF = if spot.Space == "Base" then bCF else hqCF
+	return (refCF * CFrame.new(spot.TableOffset)).Position,
+		(refCF * CFrame.new(spot.PlateOffset)).Position,
+		(refCF * CFrame.new(spot.SeatOffset)).Position,
+		(refCF * CFrame.new(spot.WaiterOffset)).Position
+end
+
+local function getMaxCustomersForHQ(player: Player): number
+	local prof = PlayerDataService.GetProfile(player)
+	local lv = math.clamp(prof.RestaurantLevel or 1, 1, 10)
+	local hasVip = prof.HasVIPBooths == true
+	local baseCap = if lv <= 1 then 3
+		elseif lv == 2 then 4
+		elseif lv == 3 then 6
+		elseif lv <= 5 then 7
+		elseif lv <= 7 then 9
+		elseif lv <= 9 then 11
+		else 14
+	local vipBonus = if hasVip then 2 else 0
+	return math.clamp(baseCap + vipBonus, 3, #ALL_DINING_SPOTS)
+end
 
 type WalkingCustomer = {
 	Name: string,
+	IsVIPPatron: boolean,
 	Model: Model,
 	Humanoid: Humanoid,
 	Root: BasePart,
@@ -201,6 +255,7 @@ type WalkingCustomer = {
 	TableIndex: number,
 	IsSeated: boolean,
 	TableMeal: Model?,
+	EatingFork: Part?,
 }
 
 type WaiterNPC = {
@@ -370,6 +425,28 @@ local function buildDistinctFoodOnPlate(
 		mPart("HerbSprig", Vector3.new(0.45, 0.16, 0.38), CFrame.new(0.15, 0.68, -0.25), Color3.fromRGB(64, 186, 68), Enum.Material.Grass, Enum.PartType.Ball, nil)
 	end
 
+	-- Subtle savory steam rising off fresh plated dishes when served on a dining table!
+	if not weldTarget and not isSmoothie then
+		local steam = Instance.new("ParticleEmitter")
+		steam.Name = "DishSteam"
+		steam.Color = ColorSequence.new(Color3.fromRGB(242, 238, 230))
+		steam.Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.65),
+			NumberSequenceKeypoint.new(0.5, 0.78),
+			NumberSequenceKeypoint.new(1, 1.0),
+		})
+		steam.Size = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.28),
+			NumberSequenceKeypoint.new(1, 0.85),
+		})
+		steam.Lifetime = NumberRange.new(1.0, 1.6)
+		steam.Rate = 6
+		steam.Speed = NumberRange.new(0.8, 1.6)
+		steam.SpreadAngle = Vector2.new(14, 14)
+		steam.EmissionDirection = Enum.NormalId.Top
+		steam.Parent = basePlate
+	end
+
 	meal.PrimaryPart = basePlate
 	meal.Parent = parent
 	return meal
@@ -465,11 +542,6 @@ local function setCustomerSeated(wc: WalkingCustomer, seated: boolean, seatWorld
 		return
 	end
 	wc.IsSeated = seated
-	local leftLegJoint = wc.Root:FindFirstChild("LeftLegJoint")
-	local rightLegJoint = wc.Root:FindFirstChild("RightLegJoint")
-	local leftArmJoint = wc.Root:FindFirstChild("LeftArmJoint")
-	local rightArmJoint = wc.Root:FindFirstChild("RightArmJoint")
-
 	if seated then
 		wc.Humanoid.WalkSpeed = 0
 		wc.Humanoid.HipHeight = 1.45
@@ -478,35 +550,43 @@ local function setCustomerSeated(wc: WalkingCustomer, seated: boolean, seatWorld
 			local flatLook = Vector3.new(lookAtWorldPos.X, seatWorldPos.Y, lookAtWorldPos.Z)
 			wc.Root.CFrame = CFrame.lookAt(seatWorldPos, flatLook)
 		end
-		if leftLegJoint and leftLegJoint:IsA("Motor6D") then
-			leftLegJoint.C0 = CFrame.new(-0.51, -1.16, -0.15) * CFrame.Angles(math.rad(82), 0, 0)
-		end
-		if rightLegJoint and rightLegJoint:IsA("Motor6D") then
-			rightLegJoint.C0 = CFrame.new(0.51, -1.16, -0.15) * CFrame.Angles(math.rad(82), 0, 0)
-		end
-		if leftArmJoint and leftArmJoint:IsA("Motor6D") then
-			leftArmJoint.C0 = CFrame.new(-1.41, 0.96, 0) * CFrame.Angles(math.rad(38), 0, 0)
-		end
-		if rightArmJoint and rightArmJoint:IsA("Motor6D") then
-			rightArmJoint.C0 = CFrame.new(1.41, 0.96, 0) * CFrame.Angles(math.rad(38), 0, 0)
-		end
+		wc.Model:SetAttribute("DiningPose", "SeatedWaiting")
 	else
+		wc.Model:SetAttribute("DiningPose", "Standing")
+		if wc.EatingFork and wc.EatingFork.Parent then
+			wc.EatingFork:Destroy()
+			wc.EatingFork = nil
+		end
 		wc.Root.Anchored = false
 		wc.Humanoid.HipHeight = 2.42
 		wc.Humanoid.WalkSpeed = 15
-		if leftLegJoint and leftLegJoint:IsA("Motor6D") then
-			leftLegJoint.C0 = CFrame.new(-0.51, -1.18, 0)
-		end
-		if rightLegJoint and rightLegJoint:IsA("Motor6D") then
-			rightLegJoint.C0 = CFrame.new(0.51, -1.18, 0)
-		end
-		if leftArmJoint and leftArmJoint:IsA("Motor6D") then
-			leftArmJoint.C0 = CFrame.new(-1.41, 0.96, 0)
-		end
-		if rightArmJoint and rightArmJoint:IsA("Motor6D") then
-			rightArmJoint.C0 = CFrame.new(1.41, 0.96, 0)
-		end
 	end
+end
+
+local function attachEatingFork(wc: WalkingCustomer): ()
+	if wc.EatingFork and wc.EatingFork.Parent then
+		return
+	end
+	local rHand = wc.Model:FindFirstChild("RightHand") or wc.Model:FindFirstChild("RightLowerArm")
+	if not rHand or not rHand:IsA("BasePart") then
+		return
+	end
+	local fork = Instance.new("Part")
+	fork.Name = "DiningFork"
+	fork.Size = Vector3.new(0.08, 0.06, 0.72)
+	fork.Color = Color3.fromRGB(204, 210, 222)
+	fork.Material = Enum.Material.Metal
+	fork.CanCollide = false
+	fork.CanTouch = false
+	fork.CanQuery = false
+	fork.Massless = true
+	fork.CFrame = rHand.CFrame * CFrame.new(0, -0.02, -0.40)
+	fork.Parent = wc.Model
+	local w = Instance.new("WeldConstraint")
+	w.Part0 = rHand
+	w.Part1 = fork
+	w.Parent = fork
+	wc.EatingFork = fork
 end
 
 local function moveNpcTo(model: Model, hum: Humanoid, root: BasePart, dest: Vector3, timeoutSec: number, arriveDist: number?): boolean
@@ -618,15 +698,17 @@ local function spawnWaitStaffForPlayer(player: Player): ()
 	end
 
 	local staffDefs = {
-		{ Name = "Marco", Title = "WAITER", IsFemale = false, Home = Vector3.new(-6.0, 4.2, 12.0) },
-		{ Name = "Sofia", Title = "WAITRESS", IsFemale = true, Home = Vector3.new(6.0, 4.2, 12.0) },
-		{ Name = "Luca", Title = "HEAD WAITER", IsFemale = false, Home = Vector3.new(0.0, 4.2, 14.5) },
+		{ Name = "Marco", Title = "WAITER", IsFemale = false, Home = Vector3.new(-5.5, 3.6, -5.0) },
+		{ Name = "Sofia", Title = "WAITRESS", IsFemale = true, Home = Vector3.new(5.5, 3.6, -5.0) },
+		{ Name = "Luca", Title = "HEAD WAITER", IsFemale = false, Home = Vector3.new(0.0, 3.6, -1.5) },
 	}
 	local list: { WaiterNPC } = {}
 	for i = 1, math.min(hiredCount, #staffDefs) do
 		local def = staffDefs[i]
 		local worldHome = (hq.PrimaryPart.CFrame * CFrame.new(def.Home)).Position
 		local model, hum, root, lbl = buildWaiterModel(baseModel, def.Name, def.Title, def.IsFemale, worldHome)
+		model:SetAttribute("IsWaiterStaff", true)
+		model:SetAttribute("WaiterState", "Idle")
 		table.insert(list, {
 			Name = def.Name,
 			RoleTitle = def.Title,
@@ -643,23 +725,42 @@ local function spawnWaitStaffForPlayer(player: Player): ()
 end
 
 local function pickAvailableTableIndex(player: Player): number
+	local prof = PlayerDataService.GetProfile(player)
+	local allowVIP = (prof.HasVIPBooths == true) or ((prof.RestaurantLevel or 1) >= 6)
 	local used: { [number]: boolean } = {}
+	local indoorActive = 0
+	local patioActive = 0
 	local list = activeWalkingCustomers[player]
 	if list then
 		for _, wc in ipairs(list) do
 			used[wc.TableIndex] = true
+			local sp = ALL_DINING_SPOTS[wc.TableIndex]
+			if sp then
+				if sp.Zone == "Patio" then patioActive += 1 else indoorActive += 1 end
+			end
 		end
 	end
-	local free: { number } = {}
-	for i = 1, #FRONT_DINING_SPOTS do
-		if not used[i] then
-			table.insert(free, i)
+
+	-- Balance guests cleanly across BOTH the Indoor Restaurant AND the Outdoor Pergola Patio!
+	local preferPatio = (patioActive < indoorActive)
+	local preferredFree: { number } = {}
+	local anyFree: { number } = {}
+	for i, spot in ipairs(ALL_DINING_SPOTS) do
+		if (not spot.IsVIP or allowVIP) and not used[i] then
+			table.insert(anyFree, i)
+			if (preferPatio and spot.Zone == "Patio") or ((not preferPatio) and spot.Zone ~= "Patio") then
+				table.insert(preferredFree, i)
+			end
 		end
 	end
-	if #free > 0 then
-		return free[math.random(1, #free)]
+	if #preferredFree > 0 then
+		return preferredFree[math.random(1, #preferredFree)]
 	end
-	return math.random(1, #FRONT_DINING_SPOTS)
+	if #anyFree > 0 then
+		return anyFree[math.random(1, #anyFree)]
+	end
+	local maxIdx = if allowVIP then #ALL_DINING_SPOTS else (#ALL_DINING_SPOTS - 2)
+	return math.random(1, maxIdx)
 end
 
 local function spawnSingleCityCustomer(player: Player, startDistanceZ: number): ()
@@ -673,27 +774,40 @@ local function spawnSingleCityCustomer(player: Player, startDistanceZ: number): 
 		list = {}
 		activeWalkingCustomers[player] = list
 	end
-	if #list >= 3 then
+	local hqMax = getMaxCustomersForHQ(player)
+	if #list >= hqMax then
 		return
 	end
 
+	local prof = PlayerDataService.GetProfile(player)
+	local hqLevel = prof.RestaurantLevel or 1
 	local bCF = bp.CFrame
+	local hqCF = hq.PrimaryPart.CFrame
 	local custName = CUSTOMER_NAMES[math.random(1, #CUSTOMER_NAMES)]
-	local styleIdx = math.random(1, 6)
+	local vipChance = math.clamp((hqLevel - 2) * 0.08, 0, 0.45)
+	local isVIPPatron = (hqLevel >= 3) and (math.random() < vipChance)
+	local displayName = if isVIPPatron then ("[VIP] " .. custName) else custName
+	local styleIdx = math.random(1, 8)
 	local tableIdx = pickAvailableTableIndex(player)
-	local spot = FRONT_DINING_SPOTS[tableIdx] or FRONT_DINING_SPOTS[1]
-	local preferBenchWait = (#list % 2 == 1) -- Half sit directly at a dining bench waiting for service; half walk up to front counter!
+	local spot = ALL_DINING_SPOTS[tableIdx] or ALL_DINING_SPOTS[1]
 
-	-- Spawn out on the Central Market / City Boulevard approaching your Restaurant Plaza!
-	local spawnPos = (bCF * CFrame.new(math.random(-10, 10), 4.2, startDistanceZ)).Position
-	local gatePos = (bCF * CFrame.new(math.random(-7, 7), 4.2, 112)).Position
-	local counterPos = (hq.PrimaryPart.CFrame * CFrame.new(11 + math.random(-3, 4), 4.2, 34.5)).Position
-	local seatPos = (bCF * CFrame.new(spot.SeatOffset)).Position
-	local tableLookPos = (bCF * CFrame.new(spot.TableOffset)).Position
+	-- Spawn out on the City Boulevard approaching your Castle Base Front Gate!
+	local spawnZ = math.clamp(startDistanceZ, 128, 225)
+	local spawnPos = (bCF * CFrame.new(math.random(-14, 14), 3.6, spawnZ)).Position
+	local frontGatePos = (bCF * CFrame.new(math.random(-6, 6), 3.6, 108.0)).Position
+	local restaurantOrderPos = (hqCF * CFrame.new(math.random(-5, 5), 3.6, 26.0)).Position
+	local doorPos = (hqCF * CFrame.new(math.random(-3, 3), 3.6, 18.0)).Position
+	local tableLookPos, _, seatPos, _ = resolveSpotWorldPositions(spot, bCF, hqCF)
 
-	local custModel, hum, root, bubble = buildWalkingCustomerModel(baseModel, custName, spawnPos, styleIdx)
+	local custModel, hum, root, bubble = buildWalkingCustomerModel(baseModel, displayName, spawnPos, styleIdx)
+	if isVIPPatron then
+		bubble.TextColor3 = Color3.fromRGB(238, 204, 118)
+	end
+	custModel:SetAttribute("DiningPose", "Standing")
+	custModel:SetAttribute("DiningZone", spot.Zone)
 	local wc: WalkingCustomer = {
-		Name = custName,
+		Name = displayName,
+		IsVIPPatron = isVIPPatron,
 		Model = custModel,
 		Humanoid = hum,
 		Root = root,
@@ -702,40 +816,48 @@ local function spawnSingleCityCustomer(player: Player, startDistanceZ: number): 
 		TableIndex = tableIdx,
 		IsSeated = false,
 		TableMeal = nil,
+		EatingFork = nil,
 	}
 	table.insert(list, wc)
 
-	-- Walk from Central Market Road -> Front Gate -> either Sit on Dining Bench or Front Counter!
+	-- Full Living Journey: Walk in from the City -> Front Gate -> Order at Restaurant -> Sit Indoor OR Outdoor Pergola Patio!
 	task.spawn(function()
-		moveCustomerTo(wc, gatePos, 16)
+		wc.BubbleText.Text = displayName .. ": Heading from the city to eat!"
+		moveCustomerTo(wc, frontGatePos, 15)
 		if not wc.Model.Parent or not player.Parent or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 
-		local hasWaiter = CrewService.GetWaiterCount(player) > 0
-		if preferBenchWait then
-			wc.BubbleText.Text = custName .. ": Taking a dining seat."
-			moveCustomerTo(wc, seatPos, 15)
+		-- Walk up to the Restaurant Front to order food first!
+		wc.BubbleText.Text = displayName .. ": Ordering food at the restaurant!"
+		moveCustomerTo(wc, restaurantOrderPos, 14)
+		if not wc.Model.Parent or not player.Parent or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+
+		if spot.Zone == "Patio" then
+			wc.BubbleText.Text = displayName .. ": Taking an outdoor patio table."
+			moveCustomerTo(wc, seatPos, 14)
 			if not wc.Model.Parent or not player.Parent or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
-			setCustomerSeated(wc, true, seatPos, tableLookPos)
-			wc.Phase = "SeatedWaiting"
-			local ord = waitingOrders[player]
-			if ord then
-				ord.CustomerName = wc.Name
-				wc.BubbleText.Text = string.format("%s (Seated): 1x %s please!", wc.Name, ord.DishName)
-			else
-				wc.BubbleText.Text = if hasWaiter then (custName .. ": Seated! Waiting for waiter.") else (custName .. ": Ready! Press [SERVE] or [E]!")
-			end
 		else
-			wc.BubbleText.Text = custName .. ": Stepping into the restaurant."
-			moveCustomerTo(wc, counterPos, 14)
+			wc.BubbleText.Text = displayName .. ": Stepping inside for a table."
+			moveCustomerTo(wc, doorPos, 8)
 			if not wc.Model.Parent or not player.Parent or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
-			wc.Phase = "Ordering"
-			local ord = waitingOrders[player]
-			if ord then
-				ord.CustomerName = wc.Name
-				wc.BubbleText.Text = string.format("%s: 1x %s please!", wc.Name, ord.DishName)
-			else
-				wc.BubbleText.Text = if hasWaiter then (custName .. ": Ready to order!") else (custName .. ": Ready! Press [SERVE] or [E]!")
-			end
+			local aislePos = (hqCF * CFrame.new(if spot.TableOffset.X > 0 then 9.5 else -11.0, 3.6, math.clamp(spot.TableOffset.Z, -18, 12))).Position
+			moveCustomerTo(wc, aislePos, 8)
+			if not wc.Model.Parent or not player.Parent or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			moveCustomerTo(wc, seatPos, 8)
+			if not wc.Model.Parent or not player.Parent or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+		end
+
+		setCustomerSeated(wc, true, seatPos, tableLookPos)
+		wc.Phase = "SeatedWaiting"
+		local hasWaiter = CrewService.GetWaiterCount(player) > 0
+		local ord = waitingOrders[player]
+		local zoneTag = if spot.Zone == "Patio" then "Patio" else "Indoor"
+		if ord then
+			ord.CustomerName = wc.Name
+			wc.BubbleText.Text = string.format("%s (%s): 1x %s please!", wc.Name, zoneTag, ord.DishName)
+		else
+			wc.BubbleText.Text = if hasWaiter
+				then string.format("%s (%s): Seated! Waiting for waiter.", displayName, zoneTag)
+				else string.format("%s (%s): Seated! Press [SERVE]!", displayName, zoneTag)
 		end
 		RestaurantService.PushStateToClient(player)
 	end)
@@ -803,19 +925,27 @@ local function dispatchCustomerToEatAndLeave(player: Player, earnedGold: number,
 		return
 	end
 
-	local spot = FRONT_DINING_SPOTS[servedCust.TableIndex] or FRONT_DINING_SPOTS[1]
 	local bCF = bp.CFrame
-	local seatPos = (bCF * CFrame.new(spot.SeatOffset)).Position
-	local tablePos = (bCF * CFrame.new(spot.TableOffset)).Position
-	local waiterDropPos = (bCF * CFrame.new(spot.WaiterOffset)).Position
-	local kitchenPickupPos = (hq.PrimaryPart.CFrame * CFrame.new(-14.0, 4.2, -10.0)).Position
+	local hqCF = hq.PrimaryPart.CFrame
+	local spot = ALL_DINING_SPOTS[servedCust.TableIndex] or ALL_DINING_SPOTS[1]
+	local tablePos, platePos, seatPos, waiterDropPos = resolveSpotWorldPositions(spot, bCF, hqCF)
+	local kitchenPickupPos = (hqCF * CFrame.new(-11.0, 3.6, -10.0)).Position
+	local doorWaypointPos = (hqCF * CFrame.new(0, 3.6, 22.0)).Position
 
-	-- Step 1: Ensure customer walks to their dining table and physically sits down!
+	-- VIP patron bonus tip!
+	local vipBonusGold = 0
+	if servedCust.IsVIPPatron then
+		vipBonusGold = math.max(12, math.floor(earnedGold * 0.35))
+		PlayerDataService.AddCoins(player, vipBonusGold)
+	end
+	local totalDisplayedGold = earnedGold + vipBonusGold
+
+	-- Step 1: Ensure customer walks directly to their indoor dining table and sits down!
 	local customerSeatedReady = false
 	task.spawn(function()
 		if not servedCust.IsSeated and servedCust.Model.Parent then
 			servedCust.BubbleText.Text = string.format("%s: Ordered %s! Taking a seat!", servedCust.Name, resolvedLabel)
-			moveCustomerTo(servedCust, seatPos, 12)
+			moveCustomerTo(servedCust, seatPos, 9)
 			if servedCust.Model.Parent then
 				setCustomerSeated(servedCust, true, seatPos, tablePos)
 			end
@@ -826,50 +956,71 @@ local function dispatchCustomerToEatAndLeave(player: Player, earnedGold: number,
 		customerSeatedReady = true
 	end)
 
-	-- Step 2: Dedicated Hired Waiter or Waitress walks INSIDE Kitchen -> picks up distinct 3D plated dish -> serves it right onto the customer's table!
+	-- Step 2: Dedicated Hired Waiter walks to Kitchen Pass -> picks up real 3D plated dish on silver tray -> delivers DIRECTLY to customer's table!
 	local waiter = pickWaiterForPlayer(player)
 	task.spawn(function()
 		if waiter and waiter.Model.Parent then
 			waiter.IsBusy = true
-			waiter.BubbleText.Text = string.format("PICKING UP %s FROM KITCHEN", string.upper(resolvedLabel))
-			moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, kitchenPickupPos, 9, 4.5)
+			waiter.Model:SetAttribute("WaiterState", "WalkingToKitchen")
+			waiter.BubbleText.Text = string.format("WAITER %s  |  PICKING UP %s", waiter.Name, string.upper(resolvedLabel))
+			moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, kitchenPickupPos, 7, 3.8)
 
-			-- Attach the distinct 3D plated food right onto the Waiter's silver tray!
+			-- Attach the distinct 3D plated dish right onto the Waiter's RightHand silver serving tray!
 			if waiter.Model.Parent then
 				if waiter.CarriedPlate and waiter.CarriedPlate.Parent then
 					waiter.CarriedPlate:Destroy()
 				end
-				local trayCF = waiter.Root.CFrame * CFrame.new(0, 0.38, -1.68)
-				waiter.CarriedPlate = buildDistinctFoodOnPlate(waiter.Model, trayCF, resolvedHint, waiter.Root)
+				local trayBase = waiter.Model:FindFirstChild("RightHand") or waiter.Root
+				if trayBase and trayBase:IsA("BasePart") then
+					local trayCF = if trayBase == waiter.Root
+						then waiter.Root.CFrame * CFrame.new(0, 0.38, -1.68)
+						else trayBase.CFrame * CFrame.new(0, 0.32, -0.68)
+					waiter.CarriedPlate = buildDistinctFoodOnPlate(waiter.Model, trayCF, resolvedHint, trayBase)
+				end
+				waiter.Model:SetAttribute("WaiterState", "CarryingTray")
 				waiter.BubbleText.Text = string.format("%s  |  SERVING %s", waiter.Name, servedCust.Name)
 			end
 
-			-- Walk out to the customer's Front Dining Table!
-			moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, waiterDropPos, 12, 4.5)
-
-			-- Wait briefly if customer is still walking to sit down
-			local waitStart = os.clock()
-			while not customerSeatedReady and (os.clock() - waitStart) < 5 do
-				task.wait(0.2)
+			-- Walk directly to the customer's table (whether Indoor OR out under the Outdoor Pergola Patio!)
+			if spot.Zone == "Patio" then
+				moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, doorWaypointPos, 6, 4.2)
+				moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, waiterDropPos, 13, 4.0)
+			else
+				moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, waiterDropPos, 9, 3.6)
 			end
 
-			-- Set the distinct 3D plated meal directly onto the dining table surface!
+			local waitStart = os.clock()
+			while not customerSeatedReady and (os.clock() - waitStart) < 4.5 do
+				task.wait(0.15)
+			end
+
+			-- Polite table-side presentation & set steaming 3D dish directly in front of the seated customer!
+			if waiter.Model.Parent then
+				waiter.Model:SetAttribute("WaiterState", "ServingTable")
+				waiter.BubbleText.Text = string.format("BON APPETIT, %s!", string.upper(servedCust.Name))
+				task.wait(0.45)
+			end
 			if waiter.CarriedPlate and waiter.CarriedPlate.Parent then
 				waiter.CarriedPlate:Destroy()
 				waiter.CarriedPlate = nil
 			end
 			if servedCust.Model.Parent and baseModel.Parent then
-				local plateCF = CFrame.new(tablePos) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
+				local plateCF = CFrame.new(platePos) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
 				servedCust.TableMeal = buildDistinctFoodOnPlate(baseModel, plateCF, resolvedHint, nil)
-				servedCust.BubbleText.Text = string.format("%s: Excellent %s (+%dG)", servedCust.Name, resolvedLabel, earnedGold)
+				attachEatingFork(servedCust)
+				servedCust.Model:SetAttribute("DiningPose", "Eating")
+				servedCust.BubbleText.Text = string.format("%s: Eating %s (+%dG)", servedCust.Name, resolvedLabel, totalDisplayedGold)
 			end
 
 			if waiter.Model.Parent then
-				waiter.BubbleText.Text = "SERVED  |  " .. resolvedLabel
-				task.delay(0.8, function()
+				waiter.Model:SetAttribute("WaiterState", "Idle")
+				task.delay(0.45, function()
 					if waiter.Model.Parent and hq.PrimaryPart then
+						if spot.Zone == "Patio" then
+							moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, doorWaypointPos, 10, 4.2)
+						end
 						local homePos = (hq.PrimaryPart.CFrame * CFrame.new(waiter.HomeOffset)).Position
-						moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, homePos, 10, 3.8)
+						moveNpcTo(waiter.Model, waiter.Humanoid, waiter.Root, homePos, 8, 3.4)
 						if waiter.Model.Parent then
 							waiter.BubbleText.Text = waiter.RoleTitle .. " " .. waiter.Name .. "  |  READY"
 						end
@@ -880,23 +1031,30 @@ local function dispatchCustomerToEatAndLeave(player: Player, earnedGold: number,
 				waiter.IsBusy = false
 			end
 		else
-			-- Served personally by the Owner (before hiring Waiters)
+			-- Served directly by the Owner (before hiring Waiters) -> still places steaming 3D food on the table!
 			local waitStart = os.clock()
-			while not customerSeatedReady and (os.clock() - waitStart) < 5 do
-				task.wait(0.2)
+			while not customerSeatedReady and (os.clock() - waitStart) < 4.5 do
+				task.wait(0.15)
 			end
 			if servedCust.Model.Parent and baseModel.Parent then
-				servedCust.TableMeal = buildDistinctFoodOnPlate(baseModel, CFrame.new(tablePos), resolvedHint, nil)
-				servedCust.BubbleText.Text = string.format("%s: Excellent %s (+%dG)", servedCust.Name, resolvedLabel, earnedGold)
+				local plateCF = CFrame.new(platePos) * CFrame.Angles(0, math.rad(math.random(0, 360)), 0)
+				servedCust.TableMeal = buildDistinctFoodOnPlate(baseModel, plateCF, resolvedHint, nil)
+				attachEatingFork(servedCust)
+				servedCust.Model:SetAttribute("DiningPose", "Eating")
+				servedCust.BubbleText.Text = string.format("%s: Eating %s (+%dG)", servedCust.Name, resolvedLabel, totalDisplayedGold)
 			end
 		end
 
-		-- Customer sits at the table happily enjoying their distinct food!
+		-- Customer sits inside the restaurant visibly eating their steaming 3D meal!
 		if servedCust.Model.Parent then
-			task.wait(7.5)
+			task.wait(4.2)
+			if servedCust.Model.Parent then
+				servedCust.BubbleText.Text = string.format("%s: Delicious %s!", servedCust.Name, resolvedLabel)
+			end
+			task.wait(4.0)
 		end
 
-		-- Stand up from dining bench, clear empty plate, and walk back out to the city!
+		-- Stand up from indoor or outdoor patio chair, clear empty plate, and walk ALL THE WAY BACK TO THE CITY!
 		if servedCust.TableMeal and servedCust.TableMeal.Parent then
 			servedCust.TableMeal:Destroy()
 			servedCust.TableMeal = nil
@@ -904,11 +1062,14 @@ local function dispatchCustomerToEatAndLeave(player: Player, earnedGold: number,
 		if servedCust.Model.Parent then
 			setCustomerSeated(servedCust, false, nil, nil)
 			servedCust.Phase = "Leaving"
-			servedCust.BubbleText.Text = servedCust.Name .. ": Amazing meal! Heading back to town!"
-			local gatePos = (bCF * CFrame.new(math.random(-6, 6), 4.2, 114)).Position
-			local cityExit = (bCF * CFrame.new(math.random(-12, 12), 4.2, 250)).Position
-			moveCustomerTo(servedCust, gatePos, 12)
-			moveCustomerTo(servedCust, cityExit, 14)
+			servedCust.BubbleText.Text = servedCust.Name .. ": Incredible food! Heading back to the city!"
+			if spot.Zone ~= "Patio" then
+				moveCustomerTo(servedCust, doorWaypointPos, 8)
+			end
+			local frontGateExit = (bCF * CFrame.new(math.random(-6, 6), 3.6, 108.0)).Position
+			local cityRoadExit = (bCF * CFrame.new(math.random(-16, 16), 3.6, 225.0)).Position
+			moveCustomerTo(servedCust, frontGateExit, 14)
+			moveCustomerTo(servedCust, cityRoadExit, 16)
 		end
 
 		if servedCust.Model.Parent then
@@ -921,9 +1082,9 @@ local function dispatchCustomerToEatAndLeave(player: Player, earnedGold: number,
 				table.remove(curList, idx)
 			end
 		end
-		-- Bring in a fresh customer walking in from the Central Market!
+		-- Bring in a fresh walk-in customer from the City Boulevard right away!
 		if isRunning and player.Parent then
-			spawnSingleCityCustomer(player, 215)
+			spawnSingleCityCustomer(player, 195)
 		end
 	end)
 end
@@ -931,13 +1092,15 @@ end
 local function spawnCustomersForPlayer(player: Player): ()
 	clearCustomers(player)
 	spawnWaitStaffForPlayer(player)
-	-- Spawn 2 staggered living city customers walking in from the Boulevard right away!
-	spawnSingleCityCustomer(player, 132)
-	task.delay(3.5, function()
-		if isRunning and player.Parent then
-			spawnSingleCityCustomer(player, 225)
-		end
-	end)
+	-- Stagger initial city guests walking in from the City Boulevard to fill BOTH Indoor & Outdoor Pergola Patio tables!
+	local initialCount = math.min(getMaxCustomersForHQ(player), 4)
+	for i = 1, initialCount do
+		task.delay((i - 1) * 1.6, function()
+			if isRunning and player.Parent then
+				spawnSingleCityCustomer(player, 132 + i * 18)
+			end
+		end)
+	end
 end
 
 local function updateCustomerSpeech(player: Player, text: string): ()
@@ -1919,7 +2082,21 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 		break
 	end
 	local receipt = printRestaurantReceipt(player, custName, table.concat(dishNames, ", "), totalCoins, totalRep, chefLabel)
-	dispatchCustomerToEatAndLeave(player, totalCoins, firstRecipeId or dishNames[1], dishNames[1] or "House Feast")
+	local dishesToDeliver = math.clamp(totalDishes, 1, 3)
+	local perDishGold = math.max(1, math.floor(totalCoins / dishesToDeliver))
+	for dIdx = 1, dishesToDeliver do
+		local dHint = if dIdx == 1 then (firstRecipeId or dishNames[1]) else (dishNames[dIdx] or firstRecipeId or "House Feast")
+		local dLabel = dishNames[dIdx] or dishNames[1] or "House Feast"
+		if dIdx == 1 then
+			dispatchCustomerToEatAndLeave(player, perDishGold, dHint, dLabel)
+		else
+			task.delay((dIdx - 1) * 0.45, function()
+				if isRunning and player.Parent then
+					dispatchCustomerToEatAndLeave(player, perDishGold, dHint, dLabel)
+				end
+			end)
+		end
+	end
 	task.delay(3.5, function()
 		if player.Parent and countReadyDishes(ensureKitchen(player)) == 0 then
 			spawnRandomCustomerOrder(player)
@@ -2309,6 +2486,20 @@ local function setupRemotes(): ()
 				ok, msg = BlackMarketService.BuySmokeGrenades(player)
 			elseif action == "ThrowSmokeGrenade" then
 				ok, msg = BlackMarketService.ThrowSmokeGrenade(player)
+			elseif action == "BuyFlashbangs" then
+				ok, msg = BlackMarketService.BuyFlashbangs(player)
+			elseif action == "ThrowFlashbang" then
+				ok, msg = BlackMarketService.ThrowFlashbang(player)
+			elseif action == "BuyC4Charges" then
+				ok, msg = BlackMarketService.BuyC4Charges(player)
+			elseif action == "DeployC4Charge" then
+				ok, msg = BlackMarketService.DeployC4Charge(player)
+			elseif action == "BuyShadowDash" then
+				ok, msg = BlackMarketService.BuyShadowDash(player)
+			elseif action == "TriggerShadowDash" then
+				ok, msg = BlackMarketService.TriggerShadowDash(player)
+			elseif action == "EquipWeaponMasterySkin" and typeof(arg) == "table" and typeof(arg.WeaponId) == "string" and typeof(arg.SkinId) == "string" then
+				ok, msg = BlackMarketService.EquipWeaponMasterySkin(player, arg.WeaponId, arg.SkinId)
 			elseif action == "HireMercenaryMafia" and typeof(arg) == "string" then
 				ok, msg = MercenaryMafiaService.TryHireWithGold(player, arg)
 			elseif action == "OrderMercenaryAssault" then
@@ -2574,10 +2765,10 @@ function RestaurantService.Start(): ()
 		end
 	end
 
-	-- Live Walk-In Random Customer Orders loop (Chefs auto-cook & ring up receipts for waiting customers!)
+	-- Live Walk-In Customer Loop (scaled dynamically to Restaurant HQ Level 1-10!)
 	customerOrderThread = task.spawn(function()
 		while isRunning do
-			task.wait(10)
+			task.wait(4.5)
 			if not isRunning then
 				break
 			end
@@ -2588,10 +2779,11 @@ function RestaurantService.Start(): ()
 						ord = spawnRandomCustomerOrder(p)
 						RestaurantService.PushStateToClient(p)
 					end
-					-- Ensure living city customers continuously walk in from the boulevard!
+					-- Invite walk-in diners continuously from the City Boulevard up to Restaurant HQ Level capacity!
 					local wList = activeWalkingCustomers[p]
-					if not wList or #wList < 2 then
-						spawnSingleCityCustomer(p, 215)
+					local maxGuests = getMaxCustomersForHQ(p)
+					if not wList or #wList < maxGuests then
+						spawnSingleCityCustomer(p, 195)
 					end
 					if ord and not ord.IsBeingCooked then
 						local hasChef = CrewService.GetCrewCount(p) > 0

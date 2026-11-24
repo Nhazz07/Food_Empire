@@ -68,7 +68,7 @@ function BaseSelectController.Init(parentGui: ScreenGui, onChooseBase: ChooseBas
 	overlay.BackgroundColor3 = Color3.fromRGB(10, 14, 24)
 	overlay.BackgroundTransparency = 0.32
 	overlay.ZIndex = 20
-	overlay.Visible = true
+	overlay.Visible = false
 	overlay.Parent = parentGui
 	overlayFrame = overlay
 
@@ -195,39 +195,12 @@ function BaseSelectController.Init(parentGui: ScreenGui, onChooseBase: ChooseBas
 	end
 end
 
-function BaseSelectController.Update(state: { [string]: any }): ()
+function BaseSelectController.Update(_state: { [string]: any }): ()
 	if not overlayFrame then
 		return
 	end
-
-	-- Hide selector permanently once player owns their chosen Castle Base!
-	if typeof(state.BaseSlot) == "string" and state.BaseSlot ~= "" then
-		overlayFrame.Visible = false
-		return
-	end
-
-	overlayFrame.Visible = true
-	local slots = state.BaseSlots or {}
-	for _, opt in ipairs(BASE_OPTIONS) do
-		local ownerName = slots[opt.Slot]
-		local btn = claimButtons[opt.Slot]
-		local stLbl = statusLabels[opt.Slot]
-		if btn and stLbl then
-			if typeof(ownerName) == "string" and ownerName ~= "" then
-				stLbl.Text = "🔒 Claimed by " .. ownerName
-				stLbl.TextColor3 = Color3.fromRGB(255, 134, 134)
-				btn.Text = "TAKEN"
-				btn.BackgroundColor3 = Color3.fromRGB(72, 78, 94)
-				btn.Active = false
-			else
-				stLbl.Text = "✅ Available • Starter 🐟 Fish Warehouse"
-				stLbl.TextColor3 = Color3.fromRGB(132, 242, 168)
-				btn.Text = "CLAIM " .. string.upper(opt.Slot) .. " BASE"
-				btn.BackgroundColor3 = opt.Color
-				btn.Active = true
-			end
-		end
-	end
+	-- Bases are automatically assigned at random by the server on join — never show manual base picker!
+	overlayFrame.Visible = false
 end
 
 return BaseSelectController

@@ -269,6 +269,83 @@ local function getEquippedWeaponIdForPlayer(player: Player): string?
 	return nil
 end
 
+local function applyWeaponMasteryFinish(tool: Tool, weaponId: string, skinId: string): ()
+	local tier = WeaponConfig.MASTERY_TIERS[skinId] or WeaponConfig.MASTERY_TIERS.Standard
+	tool:SetAttribute("MasterySkin", tier.Id)
+	tool:SetAttribute("MasteryReloadMult", tier.ReloadMult)
+	tool:SetAttribute("MasteryDamageMult", tier.DamageMult)
+
+	for _, desc in ipairs(tool:GetDescendants()) do
+		if desc:IsA("BasePart") and desc.Name ~= "MuzzleTip" and desc.Name ~= "GunsmithSuppressor" then
+			-- Snapshot factory appearance once so switching back to Standard restores original colors cleanly
+			if desc:GetAttribute("OrigR") == nil then
+				desc:SetAttribute("OrigR", desc.Color.R)
+				desc:SetAttribute("OrigG", desc.Color.G)
+				desc:SetAttribute("OrigB", desc.Color.B)
+				desc:SetAttribute("OrigMat", desc.Material.Name)
+			end
+
+			local lname = string.lower(desc.Name)
+			local isAccent = (lname == "frontsight" or lname == "holoreddot" or lname == "crimsondot" or lname == "scopelens")
+			local isGrip = (desc.Name == "Handle" or string.find(lname, "grip") ~= nil or string.find(lname, "stock") ~= nil or string.find(lname, "butt") ~= nil or string.find(lname, "silk") ~= nil)
+			if isAccent then
+				continue
+			end
+
+			if tier.Id == "Standard" then
+				local r = desc:GetAttribute("OrigR")
+				local g = desc:GetAttribute("OrigG")
+				local b = desc:GetAttribute("OrigB")
+				local matName = desc:GetAttribute("OrigMat")
+				if typeof(r) == "number" and typeof(g) == "number" and typeof(b) == "number" then
+					desc.Color = Color3.new(r, g, b)
+				end
+				if typeof(matName) == "string" then
+					local okM, enumVal = pcall(function()
+						return (Enum.Material :: any)[matName]
+					end)
+					if okM and enumVal then
+						desc.Material = enumVal
+					end
+				end
+			elseif tier.Id == "Damascus" then
+				if isGrip then
+					desc.Color = Color3.fromRGB(32, 36, 44)
+					desc.Material = Enum.Material.SmoothPlastic
+				elseif string.find(lname, "blade") ~= nil or string.find(lname, "slide") ~= nil or string.find(lname, "barrel") ~= nil then
+					desc.Color = Color3.fromRGB(182, 196, 214)
+					desc.Material = Enum.Material.DiamondPlate
+				else
+					desc.Color = Color3.fromRGB(84, 96, 112)
+					desc.Material = Enum.Material.Metal
+				end
+			elseif tier.Id == "Crimson" then
+				if isGrip then
+					desc.Color = Color3.fromRGB(24, 22, 26)
+					desc.Material = Enum.Material.Leather
+				elseif string.find(lname, "trim") ~= nil or string.find(lname, "tsuba") ~= nil or string.find(lname, "bolster") ~= nil or string.find(lname, "base") ~= nil then
+					desc.Color = Color3.fromRGB(196, 162, 74)
+					desc.Material = Enum.Material.Metal
+				else
+					desc.Color = Color3.fromRGB(148, 24, 34)
+					desc.Material = Enum.Material.Metal
+				end
+			elseif tier.Id == "Gold" then
+				if isGrip then
+					desc.Color = Color3.fromRGB(18, 20, 24)
+					desc.Material = Enum.Material.Leather
+				elseif string.find(lname, "barrel") ~= nil or string.find(lname, "scope") ~= nil or string.find(lname, "tube") ~= nil then
+					desc.Color = Color3.fromRGB(194, 152, 52)
+					desc.Material = Enum.Material.Metal
+				else
+					desc.Color = Color3.fromRGB(232, 188, 62)
+					desc.Material = Enum.Material.Metal
+				end
+			end
+		end
+	end
+end
+
 local function syncToolGunsmithAttachments(player: Player, weaponId: string, tool: Tool): ()
 	local hasSup = PlayerDataService.HasWeaponMod(player, weaponId, "Suppressor")
 	local hasExt = PlayerDataService.HasWeaponMod(player, weaponId, "ExtendedMag")
@@ -276,6 +353,7 @@ local function syncToolGunsmithAttachments(player: Player, weaponId: string, too
 	tool:SetAttribute("Mod_Suppressor", hasSup)
 	tool:SetAttribute("Mod_ExtendedMag", hasExt)
 	tool:SetAttribute("Mod_HeavyBarrel", hasHvy)
+	applyWeaponMasteryFinish(tool, weaponId, PlayerDataService.GetWeaponSkin(player, weaponId))
 
 	if hasSup and not tool:FindFirstChild("GunsmithSuppressor") then
 		local handle = tool:FindFirstChild("Handle")
@@ -1028,6 +1106,18 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 			if not (spec and spec.IsMelee) then
 				grantKillAmmoBonus(player, usedWeaponId)
 			end
+			if usedWeaponId then
+				local _, unlockedSkin = PlayerDataService.AddWeaponKill(player, usedWeaponId)
+				if unlockedSkin then
+					syncToolAmmoAttributes(player, usedWeaponId)
+					local mTier = WeaponConfig.MASTERY_TIERS[unlockedSkin]
+					local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+					local toastEv = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
+					if toastEv and toastEv:IsA("RemoteEvent") and mTier then
+						toastEv:FireClient(player, string.format("WEAPON MASTERY UNLOCKED: %s on %s (%s)!", mTier.DisplayName, weaponName, mTier.BonusLabel))
+					end
+				end
+			end
 			SyndicateContractService.RecordProgress(player, "EliminateHostiles", 1)
 		end
 		return true
@@ -1104,16 +1194,26 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 	local ackSeq = if typeof(shotSeq) == "number" then shotSeq else nil
 
 	local now = os.clock()
-	local cd = spec.Cooldown or 0.35
+	local skinId = PlayerDataService.GetWeaponSkin(player, weaponId)
+	local mTier = WeaponConfig.MASTERY_TIERS[skinId] or WeaponConfig.MASTERY_TIERS.Standard
+	local cd = (spec.Cooldown or 0.35) * mTier.ReloadMult
 	if lastFireAt[player] and (now - lastFireAt[player]) < (cd * 0.78) then
 		return
+	end
+
+	-- Shadow Smoke Dash Backstab Crit Check (1.5x burst on next melee/close hit!)
+	local shadowCritMult = 1.0
+	local backstabUntil = player:GetAttribute("ShadowBackstabUntil")
+	if typeof(backstabUntil) == "number" and backstabUntil > now then
+		shadowCritMult = 1.50
+		player:SetAttribute("ShadowBackstabUntil", 0)
 	end
 
 	-- Close-Quarters Blade Combat (Stiletto Mafia Knife & Kurogane Samurai Katana — zero ammo cost, wide cleave + backstab crit!)
 	if spec.IsMelee == true then
 		lastFireAt[player] = now
 		local bladeRange = spec.Range or 12
-		local bladeDmg = spec.Damage or 52
+		local bladeDmg = math.ceil((spec.Damage or 52) * mTier.DamageMult * shadowCritMult)
 		local look = root.CFrame.LookVector
 		local origin = root.Position + Vector3.new(0, 1.2, 0)
 		local slashEnd = origin + look * bladeRange
@@ -1182,7 +1282,7 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 	local hasSuppressor = (spec.AlwaysSuppressed == true) or PlayerDataService.HasWeaponMod(player, weaponId, "Suppressor")
 	local range = math.floor((spec.Range or 95) * (if hasHeavyBarrel then 1.18 else 1.0))
 	local pellets = spec.Pellets or 1
-	local dmg = math.ceil((spec.Damage or 25) * (if hasHeavyBarrel then 1.22 else 1.0))
+	local dmg = math.ceil((spec.Damage or 25) * (if hasHeavyBarrel then 1.22 else 1.0) * mTier.DamageMult * shadowCritMult)
 	local spread = (spec.Spread or (if pellets > 1 then 0.072 else 0.014)) * (if hasHeavyBarrel then 0.78 else 1.0)
 
 	local rawDir = aimPoint - origin
@@ -1288,10 +1388,14 @@ local function handleWeaponReload(player: Player, weaponId: any, action: any): (
 	local token = st.ReloadToken
 	syncToolAmmoAttributes(player, weaponId)
 
+	local mSkin = PlayerDataService.GetWeaponSkin(player, weaponId)
+	local mSpec = WeaponConfig.MASTERY_TIERS[mSkin] or WeaponConfig.MASTERY_TIERS.Standard
+	local rMult = mSpec.ReloadMult
+
 	if spec.ReloadStyle == "ShellByShell" then
-		local startTime = spec.ShellStartTime or 0.20
-		local shellTime = spec.ShellLoadTime or 0.48
-		local finishTime = spec.ShellFinishTime or 0.24
+		local startTime = (spec.ShellStartTime or 0.20) * rMult
+		local shellTime = (spec.ShellLoadTime or 0.48) * rMult
+		local finishTime = (spec.ShellFinishTime or 0.24) * rMult
 
 		sendWeaponAmmoSync(player, "ReloadStart", weaponId, {
 			ReloadStyle = "ShellByShell",
@@ -1362,7 +1466,7 @@ local function handleWeaponReload(player: Player, weaponId: any, action: any): (
 			})
 		end)
 	else
-		local reloadTime = spec.ReloadTime or 1.45
+		local reloadTime = (spec.ReloadTime or 1.45) * rMult
 		sendWeaponAmmoSync(player, "ReloadStart", weaponId, {
 			ReloadStyle = "Magazine",
 			Duration = reloadTime,
@@ -1617,6 +1721,511 @@ function BlackMarketService.ThrowSmokeGrenade(player: Player): (boolean, string)
 	return true, string.format("Tactical Smoke Screen deployed (10s stealth cover, %d left)!", rem)
 end
 
+local HOSTILE_UNIT_TAGS = {
+	"RivalAIUnit",
+	"MafiaUnit",
+	"ApexMafiaUnit",
+	"RivalSamuraiUnit",
+	"PenthouseBossUnit",
+	"TurfGuardUnit",
+}
+local lastShadowDashAt: { [Player]: number } = {}
+local lastBreachBonusAt: { [string]: number } = {}
+local SHADOW_DASH_COOLDOWN = 5.0
+
+-- ============================================================================
+-- BLACK MARKET TIER 2 TACTICAL GADGETS: FLASHBANGS, C4 BREACH CHARGES & SHADOW SMOKE DASH
+-- ============================================================================
+
+function BlackMarketService.BuyFlashbangs(player: Player): (boolean, string)
+	local prof = PlayerDataService.GetProfile(player)
+	if (prof.Flashbangs or 0) >= 12 then
+		return false, "Flashbangs full (12/12)! Press [6] to stun rival squads."
+	end
+	if not PlayerDataService.SpendCoins(player, 240) then
+		return false, "Need 240 Gold to buy 3x Tactical Flashbangs!"
+	end
+	local newCount = PlayerDataService.AddFlashbangs(player, 3)
+	return true, string.format("Bought 3x Tactical Flashbangs (%d/12). Press [6] to stun enemies for 4s!", newCount)
+end
+
+function BlackMarketService.ThrowFlashbang(player: Player): (boolean, string)
+	local char = player.Character
+	local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
+	if not char or not root or not root:IsA("BasePart") then
+		return false, "Character unavailable!"
+	end
+	if not PlayerDataService.ConsumeFlashbang(player) then
+		return false, "Out of Flashbangs! Buy 3x (240G) in Black Market [M] -> Gear."
+	end
+
+	local startPos = root.Position + Vector3.new(0, 1.4, 0)
+	local look = root.CFrame.LookVector
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = { char }
+	local hitWall = Workspace:Raycast(startPos, look * 16, rayParams)
+	local landPos = if hitWall then (hitWall.Position - look * 1.4) else (root.Position + look * 15 + Vector3.new(0, -1.2, 0))
+
+	-- 3D Cylindrical Stun Canister
+	local can = Instance.new("Part")
+	can.Name = "TacticalFlashbang"
+	can.Shape = Enum.PartType.Cylinder
+	can.Size = Vector3.new(0.82, 0.34, 0.34)
+	can.CFrame = CFrame.new(landPos) * CFrame.Angles(0, 0, math.rad(90))
+	can.Color = Color3.fromRGB(168, 174, 184)
+	can.Material = Enum.Material.Metal
+	can.Anchored = true
+	can.CanCollide = false
+	can.Parent = Workspace
+
+	local myFaction = "Player_" .. tostring(player.UserId)
+	emitCombatSFX("MeleeSwing", startPos, nil)
+
+	task.delay(0.32, function()
+		if can.Parent then can:Destroy() end
+		local now = os.clock()
+
+		-- Bright White-Gold Concussion Flash Sphere + Expanding Shock Ring
+		local flash = Instance.new("Part")
+		flash.Name = "FlashbangBurst"
+		flash.Shape = Enum.PartType.Ball
+		flash.Size = Vector3.new(4, 4, 4)
+		flash.CFrame = CFrame.new(landPos + Vector3.new(0, 1.2, 0))
+		flash.Color = Color3.fromRGB(255, 250, 224)
+		flash.Material = Enum.Material.Neon
+		flash.Transparency = 0.08
+		flash.Anchored = true
+		flash.CanCollide = false
+		flash.CastShadow = false
+		flash.Parent = Workspace
+
+		local pl = Instance.new("PointLight")
+		pl.Color = Color3.fromRGB(255, 248, 220)
+		pl.Brightness = 8
+		pl.Range = 46
+		pl.Shadows = false
+		pl.Parent = flash
+
+		local ring = Instance.new("Part")
+		ring.Name = "FlashShockRing"
+		ring.Shape = Enum.PartType.Cylinder
+		ring.Size = Vector3.new(0.18, 3, 3)
+		ring.CFrame = CFrame.new(landPos + Vector3.new(0, 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
+		ring.Color = Color3.fromRGB(244, 236, 198)
+		ring.Material = Enum.Material.Neon
+		ring.Transparency = 0.25
+		ring.Anchored = true
+		ring.CanCollide = false
+		ring.Parent = Workspace
+
+		emitCombatSFX("FlashbangPop", landPos, nil)
+
+		task.spawn(function()
+			for step = 1, 10 do
+				task.wait(0.028)
+				local u = step / 10
+				if flash.Parent then
+					local sz = 4 + u * 26
+					flash.Size = Vector3.new(sz, sz, sz)
+					flash.Transparency = 0.08 + u * 0.92
+					pl.Brightness = 8 * (1 - u)
+				end
+				if ring.Parent then
+					local rsz = 3 + u * 44
+					ring.Size = Vector3.new(0.16, rsz, rsz)
+					ring.Transparency = 0.25 + u * 0.75
+				end
+			end
+			if flash.Parent then flash:Destroy() end
+			if ring.Parent then ring:Destroy() end
+		end)
+
+		-- Stun & Disorient all hostile Samurai, Ninja, Mafia & Turf squads within 32 studs for 4.0 seconds!
+		local stunnedCount = 0
+		local seen: { [Model]: boolean } = {}
+		for _, tagName in ipairs(HOSTILE_UNIT_TAGS) do
+			for _, unit in ipairs(CollectionService:GetTagged(tagName)) do
+				if unit:IsA("Model") and not seen[unit] then
+					if tagName == "TurfGuardUnit" and unit:GetAttribute("Faction") == myFaction then
+						continue
+					end
+					seen[unit] = true
+					local uRoot = unit:FindFirstChild("HumanoidRootPart")
+					local uHum = unit:FindFirstChildOfClass("Humanoid")
+					if uRoot and uRoot:IsA("BasePart") and uHum and uHum.Health > 0 then
+						if (uRoot.Position - landPos).Magnitude <= 32 then
+							stunnedCount += 1
+							unit:SetAttribute("StunnedUntil", now + 4.0)
+							local prevSpeed = unit:GetAttribute("PreStunWalkSpeed")
+							if typeof(prevSpeed) ~= "number" or prevSpeed <= 0 then
+								local curSpd = if uHum.WalkSpeed > 0 then uHum.WalkSpeed else 14
+								unit:SetAttribute("PreStunWalkSpeed", curSpd)
+							end
+							uHum.WalkSpeed = 0
+
+							-- Visible Disoriented Stun Halo & Spark Emitter above stunned enemy head
+							local head = unit:FindFirstChild("Head")
+							if head and head:IsA("BasePart") then
+								local oldHalo = head:FindFirstChild("FlashStunFX")
+								if oldHalo then oldHalo:Destroy() end
+								local pe = Instance.new("ParticleEmitter")
+								pe.Name = "FlashStunFX"
+								pe.Color = ColorSequence.new(Color3.fromRGB(255, 232, 128), Color3.fromRGB(255, 255, 255))
+								pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.42), NumberSequenceKeypoint.new(1, 0) })
+								pe.Lifetime = NumberRange.new(0.4, 0.7)
+								pe.Rate = 18
+								pe.Speed = NumberRange.new(2.5, 5.5)
+								pe.SpreadAngle = Vector2.new(180, 180)
+								pe.LightEmission = 0.9
+								pe.Parent = head
+
+								task.delay(4.0, function()
+									if pe.Parent then pe:Destroy() end
+									if unit.Parent and uHum.Parent and uHum.Health > 0 then
+										local su = unit:GetAttribute("StunnedUntil")
+										if typeof(su) ~= "number" or os.clock() >= su - 0.05 then
+											local restore = unit:GetAttribute("PreStunWalkSpeed")
+											uHum.WalkSpeed = if typeof(restore) == "number" and restore > 0 then restore else 14
+										end
+									end
+								end)
+							end
+						end
+					end
+				end
+			end
+		end
+
+		if stunnedCount > 0 then
+			emitCombatSFX("EnemyHitScream", landPos, nil)
+		end
+	end)
+
+	local rem = PlayerDataService.GetProfile(player).Flashbangs or 0
+	return true, string.format("Flashbang deployed! Stuns nearby rival squads for 4s (%d left).", rem)
+end
+
+function BlackMarketService.BuyC4Charges(player: Player): (boolean, string)
+	local prof = PlayerDataService.GetProfile(player)
+	if (prof.C4Charges or 0) >= 8 then
+		return false, "C4 Breach Charges full (8/8)! Press [7] to plant & detonate."
+	end
+	if not PlayerDataService.SpendCoins(player, 380) then
+		return false, "Need 380 Gold to buy 2x C4 Breach Charges!"
+	end
+	local newCount = PlayerDataService.AddC4Charges(player, 2)
+	return true, string.format("Bought 2x C4 Breach Charges (%d/8). Press [7] to breach vaults & blast squads!", newCount)
+end
+
+function BlackMarketService.DeployC4Charge(player: Player): (boolean, string)
+	local char = player.Character
+	local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
+	if not char or not root or not root:IsA("BasePart") then
+		return false, "Character unavailable!"
+	end
+	if not PlayerDataService.ConsumeC4Charge(player) then
+		return false, "Out of C4 Breach Charges! Buy 2x (380G) in Black Market [M] -> Gear."
+	end
+
+	local plantPos = root.Position + root.CFrame.LookVector * 6.5 + Vector3.new(0, -1.6, 0)
+	local c4Model = Instance.new("Model")
+	c4Model.Name = "PlantedC4Charge"
+
+	local brick = Instance.new("Part")
+	brick.Name = "C4Brick"
+	brick.Size = Vector3.new(1.15, 0.36, 0.72)
+	brick.CFrame = CFrame.new(plantPos) * CFrame.Angles(0, math.atan2(-root.CFrame.LookVector.X, -root.CFrame.LookVector.Z), 0)
+	brick.Color = Color3.fromRGB(58, 66, 54)
+	brick.Material = Enum.Material.SmoothPlastic
+	brick.Anchored = true
+	brick.CanCollide = false
+	brick.Parent = c4Model
+
+	local led = Instance.new("Part")
+	led.Name = "DetonatorLED"
+	led.Size = Vector3.new(0.20, 0.14, 0.20)
+	led.CFrame = brick.CFrame * CFrame.new(0.28, 0.22, 0)
+	led.Color = Color3.fromRGB(238, 42, 48)
+	led.Material = Enum.Material.Neon
+	led.Anchored = true
+	led.CanCollide = false
+	led.Parent = c4Model
+	c4Model.Parent = Workspace
+
+	-- 3 rapid blinking armed chirps over 1.15 seconds, then massive breach detonation!
+	task.spawn(function()
+		for i = 1, 3 do
+			if led.Parent then
+				led.Color = if i % 2 == 1 then Color3.fromRGB(255, 48, 54) else Color3.fromRGB(255, 204, 62)
+			end
+			emitCombatSFX("C4Beep", plantPos, nil)
+			task.wait(0.36)
+		end
+		if c4Model.Parent then c4Model:Destroy() end
+
+		-- Fiery Explosion Fireball + Shockwave Ring + Debris Particles!
+		local blast = Instance.new("Part")
+		blast.Name = "C4Fireball"
+		blast.Shape = Enum.PartType.Ball
+		blast.Size = Vector3.new(5, 5, 5)
+		blast.CFrame = CFrame.new(plantPos + Vector3.new(0, 1.5, 0))
+		blast.Color = Color3.fromRGB(255, 138, 42)
+		blast.Material = Enum.Material.Neon
+		blast.Transparency = 0.1
+		blast.Anchored = true
+		blast.CanCollide = false
+		blast.Parent = Workspace
+
+		local fireEmit = Instance.new("ParticleEmitter")
+		fireEmit.Color = ColorSequence.new(Color3.fromRGB(255, 186, 68), Color3.fromRGB(48, 44, 42))
+		fireEmit.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.8), NumberSequenceKeypoint.new(0.5, 5.2), NumberSequenceKeypoint.new(1, 0.4) })
+		fireEmit.Lifetime = NumberRange.new(0.55, 1.05)
+		fireEmit.Speed = NumberRange.new(18, 42)
+		fireEmit.SpreadAngle = Vector2.new(180, 180)
+		fireEmit.Drag = 3.5
+		fireEmit.Parent = blast
+		fireEmit:Emit(44)
+
+		local ring = Instance.new("Part")
+		ring.Name = "C4ShockRing"
+		ring.Shape = Enum.PartType.Cylinder
+		ring.Size = Vector3.new(0.28, 4, 4)
+		ring.CFrame = CFrame.new(plantPos + Vector3.new(0, 0.5, 0)) * CFrame.Angles(0, 0, math.rad(90))
+		ring.Color = Color3.fromRGB(248, 168, 72)
+		ring.Material = Enum.Material.Neon
+		ring.Transparency = 0.2
+		ring.Anchored = true
+		ring.CanCollide = false
+		ring.Parent = Workspace
+
+		emitCombatSFX("C4Explosion", plantPos, nil)
+
+		task.spawn(function()
+			for step = 1, 12 do
+				task.wait(0.03)
+				local u = step / 12
+				if blast.Parent then
+					local s = 5 + u * 22
+					blast.Size = Vector3.new(s, s, s)
+					blast.Transparency = 0.1 + u * 0.9
+				end
+				if ring.Parent then
+					local rs = 4 + u * 46
+					ring.Size = Vector3.new(0.22, rs, rs)
+					ring.Transparency = 0.2 + u * 0.8
+				end
+			end
+			if ring.Parent then ring:Destroy() end
+			task.delay(1.1, function()
+				if blast.Parent then blast:Destroy() end
+			end)
+		end)
+
+		-- Heavy Explosive Damage (125 DMG) + Knockback to all hostile units within 26 studs!
+		local myFaction = "Player_" .. tostring(player.UserId)
+		local seen: { [Model]: boolean } = {}
+		local blastedCount = 0
+		for _, tagName in ipairs(HOSTILE_UNIT_TAGS) do
+			for _, unit in ipairs(CollectionService:GetTagged(tagName)) do
+				if unit:IsA("Model") and not seen[unit] then
+					if tagName == "TurfGuardUnit" and unit:GetAttribute("Faction") == myFaction then
+						continue
+					end
+					seen[unit] = true
+					local uRoot = unit:FindFirstChild("HumanoidRootPart")
+					local uHum = unit:FindFirstChildOfClass("Humanoid")
+					if uRoot and uRoot:IsA("BasePart") and uHum and uHum.Health > 0 then
+						local delta = uRoot.Position - plantPos
+						if delta.Magnitude <= 26 then
+							blastedCount += 1
+							local dir = if delta.Magnitude > 0.1 then delta.Unit else Vector3.new(1, 0, 0)
+							unit:SetAttribute("LastHitDir", dir)
+							uHum:TakeDamage(125)
+							if uHum.Health > 0 then
+								uRoot.AssemblyLinearVelocity = dir * 36 + Vector3.new(0, 16, 0)
+							else
+								PlayerDataService.AddRewards(player, 85, 32, 18)
+								SyndicateContractService.RecordProgress(player, "EliminateHostiles", 1)
+								for _, cb in ipairs(hostileKilledListeners) do
+									task.spawn(cb, player, unit, "C4 Breach Charge")
+								end
+							end
+						end
+					end
+				end
+			end
+		end
+		if blastedCount > 0 then
+			emitCombatSFX("EnemyDeathScream", plantPos, nil)
+		end
+
+		-- Breach Bonus against nearby Armored Bullion Trucks, Territory Vaults, or Rival Mafia Restaurants!
+		local now = os.clock()
+		local breachTargetKey: string? = nil
+		local breachBonusGold = 0
+		local breachLabel = ""
+
+		local truck = Workspace:FindFirstChild("BlackoutBullionTruck", true)
+		if truck and truck:IsA("Model") and truck.PrimaryPart and (truck.PrimaryPart.Position - plantPos).Magnitude <= 32 then
+			breachTargetKey = "BullionTruck"
+			breachBonusGold = 450
+			breachLabel = "Armored Bullion Truck"
+		end
+
+		if not breachTargetKey then
+			local mRestFolder = Workspace:FindFirstChild("MafiaControlledRestaurants")
+			if mRestFolder then
+				for _, rModel in ipairs(mRestFolder:GetChildren()) do
+					if rModel:IsA("Model") and rModel.PrimaryPart and (rModel.PrimaryPart.Position - plantPos).Magnitude <= 36 then
+						breachTargetKey = "MafiaRest_" .. rModel.Name
+						breachBonusGold = 280
+						breachLabel = "Reinforced Mafia Restaurant Vault"
+						break
+					end
+				end
+			end
+		end
+
+		if not breachTargetKey then
+			for _, desc in ipairs(Workspace:GetChildren()) do
+				if string.find(desc.Name, "Vault") and desc:IsA("Model") and desc.PrimaryPart and (desc.PrimaryPart.Position - plantPos).Magnitude <= 30 then
+					breachTargetKey = "Vault_" .. desc.Name
+					breachBonusGold = 260
+					breachLabel = "Reinforced Syndicate Vault"
+					break
+				end
+			end
+		end
+
+		if breachTargetKey and (now - (lastBreachBonusAt[breachTargetKey] or 0)) >= 25 then
+			lastBreachBonusAt[breachTargetKey] = now
+			PlayerDataService.AddRewards(player, breachBonusGold, 65, 32)
+			local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+			local toastEv = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
+			if toastEv and toastEv:IsA("RemoteEvent") then
+				toastEv:FireClient(player, string.format("C4 BREACH SUCCESS: Blew open %s (+%dG, +32 Rep)!", breachLabel, breachBonusGold))
+			end
+		end
+	end)
+
+	local rem = PlayerDataService.GetProfile(player).C4Charges or 0
+	return true, string.format("C4 Breach Charge armed — stand clear! (%d left)", rem)
+end
+
+function BlackMarketService.BuyShadowDash(player: Player): (boolean, string)
+	if PlayerDataService.HasShadowDash(player) then
+		return false, "Shadow Smoke Dash already unlocked! Press [8] to dash & gain 1.5x backstab crits."
+	end
+	if not PlayerDataService.SpendCoins(player, 1400) then
+		return false, "Need 1,400 Gold to unlock permanent Shadow Smoke Dash!"
+	end
+	PlayerDataService.UnlockShadowDash(player)
+	return true, "Unlocked SHADOW SMOKE DASH! Press [8] to blink through smoke & score 1.5x backstab crits!"
+end
+
+function BlackMarketService.TriggerShadowDash(player: Player): (boolean, string)
+	if not PlayerDataService.HasShadowDash(player) then
+		return false, "Unlock Shadow Smoke Dash (1,400G) in Black Market [M] -> Gear first!"
+	end
+	local now = os.clock()
+	local lastAt = lastShadowDashAt[player] or 0
+	if (now - lastAt) < SHADOW_DASH_COOLDOWN then
+		return false, string.format("Shadow Dash recharging (%.1fs)...", SHADOW_DASH_COOLDOWN - (now - lastAt))
+	end
+
+	local char = player.Character
+	local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
+	local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
+	if not char or not root or not root:IsA("BasePart") or not hum or hum.Health <= 0 then
+		return false, "Character unavailable!"
+	end
+
+	lastShadowDashAt[player] = now
+	local startPos = root.Position
+	local dashDir = Vector3.new(root.CFrame.LookVector.X, 0, root.CFrame.LookVector.Z)
+	if dashDir.Magnitude < 0.05 then
+		dashDir = Vector3.new(0, 0, -1)
+	else
+		dashDir = dashDir.Unit
+	end
+
+	-- Wall-safe raycast so Shadow Dash never clips inside buildings
+	local rayParams = RaycastParams.new()
+	rayParams.FilterType = Enum.RaycastFilterType.Exclude
+	rayParams.FilterDescendantsInstances = { char }
+	local maxDist = 26
+	local wallHit = Workspace:Raycast(startPos + Vector3.new(0, 1.2, 0), dashDir * maxDist, rayParams)
+	local actualDist = if wallHit then math.max(3, wallHit.Distance - 2.6) else maxDist
+	local endPos = startPos + dashDir * actualDist
+
+	-- Spawn dark Ninja Smoke Burst at origin + 3 shadowy translucent afterimages along dash trail!
+	local smokeOrigin = Instance.new("Part")
+	smokeOrigin.Name = "ShadowDashSmoke"
+	smokeOrigin.Size = Vector3.new(1, 1, 1)
+	smokeOrigin.CFrame = CFrame.new(startPos)
+	smokeOrigin.Transparency = 1
+	smokeOrigin.Anchored = true
+	smokeOrigin.CanCollide = false
+	smokeOrigin.Parent = Workspace
+	local pe = Instance.new("ParticleEmitter")
+	pe.Color = ColorSequence.new(Color3.fromRGB(22, 24, 32), Color3.fromRGB(84, 88, 102))
+	pe.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.15), NumberSequenceKeypoint.new(1, 1) })
+	pe.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 2.6), NumberSequenceKeypoint.new(1, 6.2) })
+	pe.Lifetime = NumberRange.new(0.45, 0.85)
+	pe.Speed = NumberRange.new(4, 11)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Parent = smokeOrigin
+	pe:Emit(26)
+	task.delay(1.2, function()
+		if smokeOrigin.Parent then smokeOrigin:Destroy() end
+	end)
+
+	for i = 1, 3 do
+		local ghostPos = startPos:Lerp(endPos, i / 4)
+		local ghost = Instance.new("Part")
+		ghost.Name = "ShadowAfterimage_" .. tostring(i)
+		ghost.Size = Vector3.new(2.0, 4.8, 1.1)
+		ghost.CFrame = CFrame.lookAt(ghostPos, ghostPos + dashDir)
+		ghost.Color = Color3.fromRGB(24, 26, 34)
+		ghost.Material = Enum.Material.SmoothPlastic
+		ghost.Transparency = 0.35 + i * 0.12
+		ghost.Anchored = true
+		ghost.CanCollide = false
+		ghost.CastShadow = false
+		ghost.Parent = Workspace
+		task.delay(0.32 + i * 0.06, function()
+			if ghost.Parent then ghost:Destroy() end
+		end)
+	end
+
+	-- Move player cleanly into shadow flank position + grant dodge grace & 1.5x Shadow Backstab Crit!
+	local targetYaw = math.atan2(-dashDir.X, -dashDir.Z)
+	char:PivotTo(CFrame.new(endPos.X, math.max(startPos.Y, 4.5), endPos.Z) * CFrame.Angles(0, targetYaw, 0))
+	player:SetAttribute("InSmokeUntil", math.max(tonumber(player:GetAttribute("InSmokeUntil")) or 0, now + 1.2))
+	player:SetAttribute("ShadowDodgeUntil", now + 0.75)
+	player:SetAttribute("ShadowBackstabUntil", now + 3.0)
+	emitCombatSFX("ShadowDash", endPos, nil)
+
+	return true, "SHADOW SMOKE DASH! Dodged incoming fire — next hit deals 1.5x Backstab Crit!"
+end
+
+function BlackMarketService.EquipWeaponMasterySkin(player: Player, weaponId: string, skinId: string): (boolean, string)
+	if not playerOwnsWeapon(player, weaponId) then
+		return false, "Buy this weapon first to equip Mastery finishes!"
+	end
+	local ok, msg = PlayerDataService.SetWeaponSkin(player, weaponId, skinId)
+	if not ok then
+		return false, msg
+	end
+	syncToolAmmoAttributes(player, weaponId)
+	local spec = BlackMarketService.ITEMS[weaponId]
+	local mTier = WeaponConfig.MASTERY_TIERS[skinId]
+	local wName = if spec then spec.DisplayName else weaponId
+	local sName = if mTier then mTier.DisplayName else skinId
+	return true, string.format("Equipped %s finish on %s!", sName, wName)
+end
+
 function BlackMarketService.GetCatalogPayload(player: Player): { [string]: any }
 	local profile = PlayerDataService.GetProfile(player)
 	local armor = math.clamp(math.floor(profile.Armor or 0), 0, 100)
@@ -1634,9 +2243,14 @@ function BlackMarketService.GetCatalogPayload(player: Player): { [string]: any }
 		OwnedWeapons = ownedMap,
 		AmmoInventory = ammoCopy,
 		WeaponMods = profile.WeaponMods or {},
+		WeaponKills = profile.WeaponKills or {},
+		WeaponSkins = profile.WeaponSkins or {},
 		HasKevlarVest = armor > 0,
 		Armor = armor,
 		SmokeGrenades = profile.SmokeGrenades or 0,
+		Flashbangs = profile.Flashbangs or 0,
+		C4Charges = profile.C4Charges or 0,
+		HasShadowDash = profile.HasShadowDash == true,
 		HasAmmoDiscount = PlayerDataService.HasBusiness(player, "BackAlleyArms"),
 	}
 end

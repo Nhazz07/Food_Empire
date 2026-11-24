@@ -245,10 +245,19 @@ local function stepAgent(ag: RivalBladeAgent, now: number): ()
 	end
 
 	if bestH and bestR and bestM then
+		local stunUntil = ag.Model:GetAttribute("StunnedUntil")
+		if typeof(stunUntil) == "number" and stunUntil > now then
+			return
+		end
 		if bestD > 10 then
 			ag.Humanoid:MoveTo(bestR.Position)
 		end
 		if bestD <= 14 and (now - ag.LastAttackAt) >= ag.Cooldown then
+			local targetP = Players:GetPlayerFromCharacter(bestM)
+			local dodgeUntil = if targetP then targetP:GetAttribute("ShadowDodgeUntil") else nil
+			if typeof(dodgeUntil) == "number" and dodgeUntil > now then
+				return
+			end
 			ag.LastAttackAt = now
 			bestH:TakeDamage(ag.Damage)
 			local clashPoint = (myPos + bestR.Position) * 0.5 + Vector3.new(0, 1.5, 0)

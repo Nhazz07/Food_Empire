@@ -1490,9 +1490,12 @@ local function tryShoot(): ()
 	local st = ensureLocalAmmo(wid, tool)
 	local now = os.clock()
 
+	local mMultAttr = tool:GetAttribute("MasteryReloadMult")
+	local mMult = if typeof(mMultAttr) == "number" then math.clamp(mMultAttr, 0.72, 1.0) else 1.0
+
 	-- Melee Blade Swing Path (Knife & Samurai Katana: zero ammo cost, instant cleave + lunge!)
 	if profile.IsMelee then
-		if (now - lastClientFire) < profile.Cooldown then
+		if (now - lastClientFire) < (profile.Cooldown * mMult) then
 			return
 		end
 		lastClientFire = now
@@ -1526,7 +1529,7 @@ local function tryShoot(): ()
 		return
 	end
 
-	if (now - lastClientFire) < profile.Cooldown then
+	if (now - lastClientFire) < (profile.Cooldown * mMult) then
 		return
 	end
 	lastClientFire = now

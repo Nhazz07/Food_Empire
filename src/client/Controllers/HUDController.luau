@@ -230,7 +230,10 @@ function HUDController.Init(
 	onToggleScooter: ToggleScooterCallback?,
 	onAcceptExpress: AcceptExpressCallback?,
 	onSquadAttack: (() -> ())?,
-	onSquadRecall: (() -> ())?
+	onSquadRecall: (() -> ())?,
+	onThrowFlashbang: (() -> ())?,
+	onDeployC4: (() -> ())?,
+	onTriggerShadowDash: (() -> ())?
 ): ScreenGui
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
@@ -809,12 +812,12 @@ function HUDController.Init(
 		end
 	end)
 
-	-- Tactical Squad & Mercenary Mafia Command Strip (One-Click ATTACK [Y] / CALL BACK [Z] for Bodyguards & Hired Samurai/Ninja Mafia!)
+	-- Tactical Squad & Black Market Tier 2 Gadget Command Strip
 	local cmdStrip = Instance.new("Frame")
 	cmdStrip.Name = "SquadTacticalCommandBar"
 	cmdStrip.AnchorPoint = Vector2.new(0.5, 1)
 	cmdStrip.Position = UDim2.new(0.5, 0, 1, -166)
-	cmdStrip.Size = UDim2.fromOffset(310, 28)
+	cmdStrip.Size = UDim2.fromOffset(664, 28)
 	cmdStrip.BackgroundTransparency = 1
 	cmdStrip.Parent = gui
 
@@ -822,13 +825,13 @@ function HUDController.Init(
 	cmdLayout.FillDirection = Enum.FillDirection.Horizontal
 	cmdLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
 	cmdLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-	cmdLayout.Padding = UDim.new(0, 8)
+	cmdLayout.Padding = UDim.new(0, 6)
 	cmdLayout.Parent = cmdStrip
 
-	local function makeCmdBtn(name: string, text: string, bg: Color3, border: Color3, cb: (() -> ())?): TextButton
+	local function makeCmdBtn(name: string, text: string, width: number, bg: Color3, border: Color3, cb: (() -> ())?): TextButton
 		local b = Instance.new("TextButton")
 		b.Name = name
-		b.Size = UDim2.fromOffset(146, 26)
+		b.Size = UDim2.fromOffset(width, 26)
 		b.BackgroundColor3 = bg
 		b.AutoButtonColor = false
 		b.Font = FONT_TITLE
@@ -850,8 +853,21 @@ function HUDController.Init(
 		return b
 	end
 
-	makeCmdBtn("SquadAttackBtn", "ATTACK ALL  [Y]", Color3.fromRGB(122, 26, 34), Color3.fromRGB(184, 52, 62), onSquadAttack)
-	makeCmdBtn("SquadRecallBtn", "CALL BACK  [Z]", Color3.fromRGB(36, 46, 62), Color3.fromRGB(108, 124, 148), onSquadRecall)
+	local attackBtn = makeCmdBtn("SquadAttackBtn", "ATTACK ALL  [Y]", 130, Color3.fromRGB(122, 26, 34), Color3.fromRGB(184, 52, 62), onSquadAttack)
+	local recallBtn = makeCmdBtn("SquadRecallBtn", "CALL BACK  [Z]", 122, Color3.fromRGB(36, 46, 62), Color3.fromRGB(108, 124, 148), onSquadRecall)
+	local flashBtn = makeCmdBtn("GadgetFlashBtn", "FLASH (2) [6]", 114, Color3.fromRGB(54, 52, 40), C_BRASS, onThrowFlashbang)
+	local c4Btn = makeCmdBtn("GadgetC4Btn", "C4 (1) [7]", 96, Color3.fromRGB(64, 30, 32), Color3.fromRGB(178, 56, 62), onDeployC4)
+	local dashBtn = makeCmdBtn("GadgetDashBtn", "SHADOW DASH [8]", 122, Color3.fromRGB(30, 34, 44), Color3.fromRGB(98, 114, 142), onTriggerShadowDash)
+	-- Hide squad command & locked gadget buttons until the player actually hires Bodyguards/Mafia or owns the gadget!
+	attackBtn.Visible = false
+	recallBtn.Visible = false
+	flashBtn.Visible = false
+	c4Btn.Visible = false
+	dashBtn.Visible = false
+	gui:SetAttribute("HasGadgetStrip", true)
+	flashBtn:SetAttribute("IsGadgetBtn", "Flash")
+	c4Btn:SetAttribute("IsGadgetBtn", "C4")
+	dashBtn:SetAttribute("IsGadgetBtn", "Dash")
 
 	return gui
 end
@@ -1140,6 +1156,50 @@ function HUDController.Update(state: { [string]: any }): ()
 				turfAlertLabel.Text = "Hold all 7 in a quadrant for +50%"
 				turfAlertLabel.TextColor3 = Color3.fromRGB(154, 198, 166)
 			end
+		end
+	end
+
+	-- Update Squad Command buttons (only shown when Bodyguards or Hired Samurai/Ninja Mafia are active!)
+	-- and Tier 2 Tactical Gadget Pills (only shown when owned / ammo > 0!)
+	if screenGui then
+		local strip = screenGui:FindFirstChild("SquadTacticalCommandBar")
+		if strip and strip:IsA("Frame") then
+			local hasGuards = (tonumber(state.BodyguardCount) or 0) > 0
+			local merc = state.MercenaryMafia
+			local hasMerc = typeof(merc) == "table" and merc.Active == true
+			local showSquadCmds = hasGuards or hasMerc
+
+			local atkBtn = strip:FindFirstChild("SquadAttackBtn")
+			if atkBtn and atkBtn:IsA("TextButton") then
+				atkBtn.Visible = showSquadCmds
+			end
+			local recBtn = strip:FindFirstChild("SquadRecallBtn")
+			if recBtn and recBtn:IsA("TextButton") then
+				recBtn.Visible = showSquadCmds
+			end
+
+			local bm = state.BlackMarket
+			local flashCount = if typeof(bm) == "table" then (tonumber(bm.Flashbangs) or 0) else 0
+			local c4Count = if typeof(bm) == "table" then (tonumber(bm.C4Charges) or 0) else 0
+			local hasDash = typeof(bm) == "table" and bm.HasShadowDash == true
+
+			local fBtn = strip:FindFirstChild("GadgetFlashBtn")
+			if fBtn and fBtn:IsA("TextButton") then
+				fBtn.Visible = flashCount > 0
+				fBtn.Text = string.format("FLASH (%d) [6]", flashCount)
+			end
+			local cBtn = strip:FindFirstChild("GadgetC4Btn")
+			if cBtn and cBtn:IsA("TextButton") then
+				cBtn.Visible = c4Count > 0
+				cBtn.Text = string.format("C4 (%d) [7]", c4Count)
+			end
+			local dBtn = strip:FindFirstChild("GadgetDashBtn")
+			if dBtn and dBtn:IsA("TextButton") then
+				dBtn.Visible = hasDash
+				dBtn.Text = "SHADOW DASH [8]"
+			end
+
+			strip.Visible = showSquadCmds or flashCount > 0 or c4Count > 0 or hasDash
 		end
 	end
 end

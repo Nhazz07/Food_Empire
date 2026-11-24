@@ -384,6 +384,11 @@ local function tryRivalCombat(agent: RivalAgent): boolean
 	end
 
 	if nearestHum and nearestPos then
+		local stunUntil = agent.Model:GetAttribute("StunnedUntil")
+		if typeof(stunUntil) == "number" and stunUntil > now then
+			agent.TaskLabel.Text = "FLASHBANGED / STUNNED!"
+			return
+		end
 		local isBossLeader = (faction.Difficulty == "Boss" and not agent.IsBossEscort)
 		agent.TaskLabel.Text = if agent.IsBossEscort
 			then "Defending The Crimson Don"

@@ -1422,6 +1422,8 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 	local ownedWeapons = bm.OwnedWeapons or {}
 	local weaponMods = bm.WeaponMods or {}
 	local ammoInv = bm.AmmoInventory or {}
+	local weaponKills = if typeof(bm.WeaponKills) == "table" then bm.WeaponKills else {}
+	local weaponSkins = if typeof(bm.WeaponSkins) == "table" then bm.WeaponSkins else {}
 	local currentArmor = if typeof(bm.Armor) == "number" then bm.Armor else 0
 
 	-- Restrained Weapon Category Filter Bar
@@ -1442,7 +1444,7 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 		{ Id = "SMG", Label = "SMG" },
 		{ Id = "AssaultRifle", Label = "RIFLES" },
 		{ Id = "Sniper", Label = "SNIPER" },
-		{ Id = "Gear", Label = "ARMOR/SMOKE" },
+		{ Id = "Gear", Label = "GADGETS" },
 	}
 	for _, f in ipairs(filters) do
 		local active = (currentWeaponFilter == f.Id)
@@ -1474,7 +1476,8 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 				local quickPack = if ammoSpec then ammoSpec.Packs[1] else nil
 				local rarityCol = RARITY_MUTED_COLORS[w.Rarity] or C_STEEL
 
-				local card = makeCard(scrollFrame, 146, if isOwned then C_OWNED else rarityCol)
+				local cardHeight = if w.IsMelee then 148 else 180
+				local card = makeCard(scrollFrame, cardHeight, if isOwned then C_OWNED else rarityCol)
 				ModelPreviewHelper.CreatePreview(card, "Weapon", wid, UDim2.fromOffset(82, 82), UDim2.new(0, 14, 0, 16), Color3.fromRGB(24, 26, 33))
 
 				local nameLbl = Instance.new("TextLabel")
@@ -1615,15 +1618,149 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 						end
 					end
 				end
+				-- Weapon Mastery Finishes Row (Damascus Steel 3K, Crimson Lacquer 8K, 24K Gold Engraved 15K!)
+				local wKills = tonumber(weaponKills[wid]) or 0
+				local activeSkin = tostring(weaponSkins[wid] or "Standard")
+				local masteryY = if w.IsMelee then 108 else 142
+				local masteryRow = Instance.new("Frame")
+				masteryRow.Position = UDim2.new(0, 108, 0, masteryY)
+				masteryRow.Size = UDim2.new(1, -120, 0, 28)
+				masteryRow.BackgroundTransparency = 1
+				masteryRow.Parent = card
+				local mLayout = Instance.new("UIListLayout")
+				mLayout.FillDirection = Enum.FillDirection.Horizontal
+				mLayout.Padding = UDim.new(0, 5)
+				mLayout.Parent = masteryRow
+
+				local kTag = Instance.new("TextLabel")
+				kTag.Size = UDim2.fromOffset(78, 26)
+				kTag.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+				kTag.Font = Enum.Font.GothamBold
+				kTag.Text = string.format("KILLS: %d", wKills)
+				kTag.TextSize = 9
+				kTag.TextColor3 = C_BRASS
+				kTag.Parent = masteryRow
+				makeCorner(kTag, 4)
+				makeStroke(kTag, C_BORDER, 1)
+
+				for _, skinId in ipairs({ "Standard", "Damascus", "Crimson", "Gold" }) do
+					local mTier = WeaponConfig.MASTERY_TIERS[skinId]
+					if mTier then
+						local unlocked = (wKills >= mTier.KillsRequired)
+						local equipped = (activeSkin == skinId)
+						local sTxt = if equipped
+							then mTier.ShortLabel .. " [ON]"
+							elseif unlocked then mTier.ShortLabel
+							else string.format("%s (%dK)", mTier.ShortLabel, mTier.KillsRequired)
+						local sCol = if equipped
+							then C_OWNED
+							elseif isOwned and unlocked then mTier.SwatchColor:Lerp(C_BG_SUBTLE, 0.55)
+							else C_DISABLED
+						local sb = makeBtn(masteryRow, sTxt, sCol, UDim2.new(), UDim2.new(0.25, -24, 0, 26), function()
+							if isOwned and unlocked and not equipped and dispatchAction then
+								dispatchAction("EquipWeaponMasterySkin", { WeaponId = wid, SkinId = skinId })
+							end
+						end)
+						sb.TextSize = 9
+					end
+				end
 			end
 		end
 	end
 
-	-- Tactical Player Armor, Field Medkit & Smoke Grenades
+	-- Black Market Tier 2 Tactical Gadgets, Player Armor & Field Medkit
 	if currentWeaponFilter == "All" or currentWeaponFilter == "Gear" then
 		local smokeCount = tonumber(bm.SmokeGrenades) or 0
+		local flashCount = tonumber(bm.Flashbangs) or 0
+		local c4Count = tonumber(bm.C4Charges) or 0
+		local hasDash = bm.HasShadowDash == true
+
+		-- 1. Flashbang Stun Grenades [6]
+		local flashCard = makeCard(scrollFrame, 84, C_BRASS)
+		ModelPreviewHelper.CreatePreview(flashCard, "Equipment", "Flashbang", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31))
+		local fName = Instance.new("TextLabel")
+		fName.Position = UDim2.new(0, 78, 0, 10)
+		fName.Size = UDim2.new(1, -246, 0, 20)
+		fName.BackgroundTransparency = 1
+		fName.Font = Enum.Font.GothamBlack
+		fName.TextXAlignment = Enum.TextXAlignment.Left
+		fName.TextSize = 13
+		fName.TextColor3 = C_TEXT_PRIMARY
+		fName.Text = string.format("FLASHBANG STUN GRENADES  (%d / 12)  |  KEY [6]", flashCount)
+		fName.Parent = flashCard
+		local fDesc = Instance.new("TextLabel")
+		fDesc.Position = UDim2.new(0, 78, 0, 34)
+		fDesc.Size = UDim2.new(1, -246, 0, 40)
+		fDesc.BackgroundTransparency = 1
+		fDesc.Font = Enum.Font.Gotham
+		fDesc.TextWrapped = true
+		fDesc.TextXAlignment = Enum.TextXAlignment.Left
+		fDesc.TextSize = 11
+		fDesc.TextColor3 = C_TEXT_MUTED
+		fDesc.Text = "Concussion flash canister that blinds, freezes, and disorients Rival Samurai, Ninja & Mafia squads for 4 full seconds."
+		fDesc.Parent = flashCard
+		makeBtn(flashCard, if flashCount >= 12 then "FULL (12)" else "BUY 3X  240G", if flashCount >= 12 then C_DISABLED else C_OXBLOOD, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
+			if flashCount < 12 and dispatchAction then dispatchAction("BuyFlashbangs", nil) end
+		end)
+
+		-- 2. C4 Breach Charges [7]
+		local c4Card = makeCard(scrollFrame, 84, C_OXBLOOD)
+		ModelPreviewHelper.CreatePreview(c4Card, "Equipment", "C4Charge", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31))
+		local c4Name = Instance.new("TextLabel")
+		c4Name.Position = UDim2.new(0, 78, 0, 10)
+		c4Name.Size = UDim2.new(1, -246, 0, 20)
+		c4Name.BackgroundTransparency = 1
+		c4Name.Font = Enum.Font.GothamBlack
+		c4Name.TextXAlignment = Enum.TextXAlignment.Left
+		c4Name.TextSize = 13
+		c4Name.TextColor3 = C_TEXT_PRIMARY
+		c4Name.Text = string.format("C4 BREACH CHARGES  (%d / 8)  |  KEY [7]", c4Count)
+		c4Name.Parent = c4Card
+		local c4Desc = Instance.new("TextLabel")
+		c4Desc.Position = UDim2.new(0, 78, 0, 34)
+		c4Desc.Size = UDim2.new(1, -246, 0, 40)
+		c4Desc.BackgroundTransparency = 1
+		c4Desc.Font = Enum.Font.Gotham
+		c4Desc.TextWrapped = true
+		c4Desc.TextXAlignment = Enum.TextXAlignment.Left
+		c4Desc.TextSize = 11
+		c4Desc.TextColor3 = C_TEXT_MUTED
+		c4Desc.Text = "Remote breach explosive that blows open Armored Mafia Cash Vans & reinforced restaurant vaults (+280-450G) and blasts squads for 125 DMG."
+		c4Desc.Parent = c4Card
+		makeBtn(c4Card, if c4Count >= 8 then "FULL (8)" else "BUY 2X  380G", if c4Count >= 8 then C_DISABLED else C_OXBLOOD, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
+			if c4Count < 8 and dispatchAction then dispatchAction("BuyC4Charges", nil) end
+		end)
+
+		-- 3. Shadow Smoke Dash (Permanent Ninja Mobility Gadget) [8]
+		local dashCard = makeCard(scrollFrame, 84, if hasDash then C_OWNED else Color3.fromRGB(98, 114, 142))
+		ModelPreviewHelper.CreatePreview(dashCard, "Equipment", "ShadowDash", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31))
+		local dName = Instance.new("TextLabel")
+		dName.Position = UDim2.new(0, 78, 0, 10)
+		dName.Size = UDim2.new(1, -246, 0, 20)
+		dName.BackgroundTransparency = 1
+		dName.Font = Enum.Font.GothamBlack
+		dName.TextXAlignment = Enum.TextXAlignment.Left
+		dName.TextSize = 13
+		dName.TextColor3 = C_TEXT_PRIMARY
+		dName.Text = if hasDash then "SHADOW SMOKE DASH  [UNLOCKED]  |  KEY [8]" else "SHADOW SMOKE DASH  (PERMANENT)  |  KEY [8]"
+		dName.Parent = dashCard
+		local dDesc = Instance.new("TextLabel")
+		dDesc.Position = UDim2.new(0, 78, 0, 34)
+		dDesc.Size = UDim2.new(1, -246, 0, 40)
+		dDesc.BackgroundTransparency = 1
+		dDesc.Font = Enum.Font.Gotham
+		dDesc.TextWrapped = true
+		dDesc.TextXAlignment = Enum.TextXAlignment.Left
+		dDesc.TextSize = 11
+		dDesc.TextColor3 = C_TEXT_MUTED
+		dDesc.Text = "Quick 26-stud ninja smoke dash with afterimage trail (5s recharge). Dodges incoming fire and grants 1.5x Backstab Crit on your next strike!"
+		dDesc.Parent = dashCard
+		makeBtn(dashCard, if hasDash then "ACTIVE  [8]" else "UNLOCK  1400G", if hasDash then C_OWNED elseif playerCoins >= 1400 then C_OXBLOOD else C_DISABLED, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
+			if not hasDash and dispatchAction then dispatchAction("BuyShadowDash", nil) end
+		end)
+
 		local smokeCard = makeCard(scrollFrame, 84, C_STEEL)
-		ModelPreviewHelper.CreatePreview(smokeCard, "Equipment", "SmokeGrenade", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31), C_STEEL)
+		ModelPreviewHelper.CreatePreview(smokeCard, "Equipment", "SmokeGrenade", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31))
 		local sName = Instance.new("TextLabel")
 		sName.Position = UDim2.new(0, 78, 0, 10)
 		sName.Size = UDim2.new(1, -246, 0, 20)

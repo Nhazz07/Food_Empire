@@ -798,6 +798,31 @@ function BaseService.ClaimBaseSlot(player: Player, slot: BaseSlot): (boolean, st
 	return true, string.format("Welcome to %s Castle Base! Starter Fish Warehouse unlocked!", slot)
 end
 
+function BaseService.AssignRandomAvailableBase(player: Player): (boolean, string)
+	if playerSlots[player] then
+		return true, "Already assigned to " .. playerSlots[player] .. " Castle Base"
+	end
+	local open: { BaseSlot } = {}
+	for _, slot in ipairs(SLOT_ORDER) do
+		if slotOwners[slot] == nil then
+			table.insert(open, slot)
+		end
+	end
+	if #open == 0 then
+		return false, "All 4 Castle Bases are currently occupied!"
+	end
+	local chosen = open[math.random(1, #open)]
+	return BaseService.ClaimBaseSlot(player, chosen)
+end
+
+function BaseService.AssignPendingPlayers(): ()
+	for _, player in ipairs(Players:GetPlayers()) do
+		if not playerSlots[player] then
+			BaseService.AssignRandomAvailableBase(player)
+		end
+	end
+end
+
 local function releaseSlot(player: Player): ()
 	local slot = playerSlots[player]
 	if slot then
@@ -874,9 +899,12 @@ function BaseService.Start(): ()
 				teleportToCentralLobby(character)
 			end
 		end)
-		if player.Character then
-			teleportToCentralLobby(player.Character)
-		end
+		-- Automatically pick a random available Castle Base for the player (no manual base picker needed!)
+		task.defer(function()
+			if player.Parent and not playerSlots[player] then
+				BaseService.AssignRandomAvailableBase(player)
+			end
+		end)
 	end
 
 	playerAddedConn = Players.PlayerAdded:Connect(hookPendingPlayer)
