@@ -33,6 +33,7 @@ local lastGourmetSupplyAt: { [Player]: number } = {}
 
 local autoCookHandler: AutoCookHandler? = nil
 local purchaseChangedHandler: PurchaseChangedHandler? = nil
+local mercenaryGrantHandler: ((player: Player, mercType: string) -> ())? = nil
 
 local isRunning = false
 local autoCookThread: thread? = nil
@@ -55,6 +56,10 @@ end
 
 function MonetizationService.SetPurchaseChangedHandler(handler: PurchaseChangedHandler): ()
 	purchaseChangedHandler = handler
+end
+
+function MonetizationService.SetMercenaryGrantHandler(handler: (player: Player, mercType: string) -> ()): ()
+	mercenaryGrantHandler = handler
 end
 
 function MonetizationService.HasPass(player: Player, passId: string): boolean
@@ -378,6 +383,16 @@ local function grantItemReward(player: Player, itemId: string, studioPreview: bo
 			PlayerDataService.AddAmmo(player, "Rifle556", 60, WeaponConfig.AMMO_TYPES.Rifle556.MaxReserve)
 			PlayerDataService.AddAmmo(player, "Sniper308", 15, WeaponConfig.AMMO_TYPES.Sniper308.MaxReserve)
 			msg = prefix .. "Syndicate War Chest: 100 Armor, Full HP, +750 Gold & Ammo Pack!"
+		elseif itemId == "SamuraiMafiaContract" then
+			if mercenaryGrantHandler then
+				mercenaryGrantHandler(player, "Samurai")
+			end
+			msg = prefix .. "Kurogane Samurai Mafia Strike Squad hired for 5 MINUTES! Click ATTACK to unleash them!"
+		elseif itemId == "NinjaMafiaContract" then
+			if mercenaryGrantHandler then
+				mercenaryGrantHandler(player, "Ninja")
+			end
+			msg = prefix .. "Kage Ninja Assassin Mafia Squad hired for 5 MINUTES! Click ATTACK to unleash them!"
 		else
 			-- Instant Empire Supply & Coin Crate (repeatable DevProduct)
 			PlayerDataService.AddRewards(player, 600, 30, 15)

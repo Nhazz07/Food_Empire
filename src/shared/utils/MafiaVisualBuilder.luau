@@ -1,8 +1,11 @@
 --!strict
 
--- Shared realistic dark-mafia 3D character & equipment visual builder.
--- Used by RivalAIService, BodyguardService, and client ModelPreviewHelper (ViewportFrames)
--- so every in-world character and UI thumbnail shares identical silhouettes, proportions, and restrained tones.
+-- Authentic Roblox R15 Character Builder for Food Empires.
+-- Clones a genuine native Roblox R15 MeshPart character rig (via Players:CreateHumanoidModelFromDescription)
+-- with smooth beveled anatomy, official Roblox Dynamic Head face, full 15-joint R15 Motor6D skeleton,
+-- and uniquely designed layered outfits/accessories for Chefs, Waiters, Citizens, Bodyguards,
+-- Rival Factions, Mafia, Samurai Mafia, Ninja Assassin Mafia, Apex Warlords & Motorbike Couriers.
+-- Zero neon parts, zero emojis, shared seamlessly by server NPCs and client ViewportFrame portraits.
 
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
@@ -10,44 +13,158 @@ local CollectionService = game:GetService("CollectionService")
 
 local MafiaVisualBuilder = {}
 
--- Restrained Dark Mafia Material Palette (Zero Neon!)
+-- Restrained Dark Mafia & Urban Character Palette (Zero Neon!)
 MafiaVisualBuilder.PALETTE = {
-	Obsidian = Color3.fromRGB(16, 17, 20),
-	Charcoal = Color3.fromRGB(30, 33, 38),
-	Slate = Color3.fromRGB(48, 52, 60),
-	MutedGrey = Color3.fromRGB(92, 96, 104),
-	DarkBrown = Color3.fromRGB(58, 41, 32),
-	WornLeather = Color3.fromRGB(46, 34, 28),
-	OliveCharcoal = Color3.fromRGB(42, 47, 40),
-	OffWhite = Color3.fromRGB(212, 209, 202),
-	DeepRed = Color3.fromRGB(116, 24, 30),
-	DarkWine = Color3.fromRGB(74, 20, 26),
-	Gunmetal = Color3.fromRGB(36, 40, 46),
-	BrushedSteel = Color3.fromRGB(112, 118, 128),
-	Walnut = Color3.fromRGB(84, 52, 34),
-	TarnishedBrass = Color3.fromRGB(152, 126, 74),
-	SkinWarm = Color3.fromRGB(214, 178, 148),
-	SkinPale = Color3.fromRGB(204, 172, 148),
-	SkinWeathered = Color3.fromRGB(186, 148, 120),
-	HairDark = Color3.fromRGB(24, 22, 22),
-	HairSilver = Color3.fromRGB(132, 134, 138),
+	Obsidian = Color3.fromRGB(18, 20, 24),
+	Charcoal = Color3.fromRGB(34, 38, 44),
+	Slate = Color3.fromRGB(54, 58, 68),
+	MutedGrey = Color3.fromRGB(102, 106, 116),
+	DarkBrown = Color3.fromRGB(64, 44, 34),
+	WornLeather = Color3.fromRGB(52, 36, 28),
+	OliveCharcoal = Color3.fromRGB(48, 54, 44),
+	OffWhite = Color3.fromRGB(224, 222, 216),
+	DeepRed = Color3.fromRGB(128, 28, 34),
+	DarkWine = Color3.fromRGB(82, 22, 28),
+	Gunmetal = Color3.fromRGB(42, 46, 54),
+	BrushedSteel = Color3.fromRGB(128, 134, 146),
+	Walnut = Color3.fromRGB(92, 58, 36),
+	TarnishedBrass = Color3.fromRGB(168, 138, 76),
+	SkinWarm = Color3.fromRGB(228, 188, 154),
+	SkinPale = Color3.fromRGB(220, 184, 158),
+	SkinWeathered = Color3.fromRGB(196, 154, 122),
+	HairDark = Color3.fromRGB(28, 24, 24),
+	HairSilver = Color3.fromRGB(148, 150, 156),
 }
 
 local P = MafiaVisualBuilder.PALETTE
 
 export type RigHandle = {
 	Model: Model,
-	Root: Part,
-	Torso: Part,
-	Head: Part,
-	LeftArm: Part,
-	RightArm: Part,
-	LeftLeg: Part,
-	RightLeg: Part,
+	Root: BasePart,
+	Torso: BasePart,
+	LowerTorso: BasePart,
+	Head: BasePart,
+	LeftArm: BasePart,
+	RightArm: BasePart,
+	LeftLowerArm: BasePart,
+	RightLowerArm: BasePart,
+	LeftHand: BasePart,
+	RightHand: BasePart,
+	LeftLeg: BasePart,
+	RightLeg: BasePart,
+	LeftLowerLeg: BasePart,
+	RightLowerLeg: BasePart,
+	LeftFoot: BasePart,
+	RightFoot: BasePart,
 	AddPart: (parentPart: BasePart, name: string, size: Vector3, relCF: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?) -> Part,
 }
 
--- Builds a properly proportioned realistic human figure (NO giant cartoon ball head, NO neon!)
+-- Standard Roblox R15 Joint Chain (ordered parent -> child so world CFrames compute cleanly!)
+local R15_JOINT_CHAIN: { { Name: string, Part0: string, Part1: string, Att: string } } = {
+	{ Name = "Root", Part0 = "HumanoidRootPart", Part1 = "LowerTorso", Att = "RootRigAttachment" },
+	{ Name = "Waist", Part0 = "LowerTorso", Part1 = "UpperTorso", Att = "WaistRigAttachment" },
+	{ Name = "Neck", Part0 = "UpperTorso", Part1 = "Head", Att = "NeckRigAttachment" },
+	{ Name = "LeftShoulder", Part0 = "UpperTorso", Part1 = "LeftUpperArm", Att = "LeftShoulderRigAttachment" },
+	{ Name = "LeftElbow", Part0 = "LeftUpperArm", Part1 = "LeftLowerArm", Att = "LeftElbowRigAttachment" },
+	{ Name = "LeftWrist", Part0 = "LeftLowerArm", Part1 = "LeftHand", Att = "LeftWristRigAttachment" },
+	{ Name = "RightShoulder", Part0 = "UpperTorso", Part1 = "RightUpperArm", Att = "RightShoulderRigAttachment" },
+	{ Name = "RightElbow", Part0 = "RightUpperArm", Part1 = "RightLowerArm", Att = "RightElbowRigAttachment" },
+	{ Name = "RightWrist", Part0 = "RightLowerArm", Part1 = "RightHand", Att = "RightWristRigAttachment" },
+	{ Name = "LeftHip", Part0 = "LowerTorso", Part1 = "LeftUpperLeg", Att = "LeftHipRigAttachment" },
+	{ Name = "LeftKnee", Part0 = "LeftUpperLeg", Part1 = "LeftLowerLeg", Att = "LeftKneeRigAttachment" },
+	{ Name = "LeftAnkle", Part0 = "LeftLowerLeg", Part1 = "LeftFoot", Att = "LeftAnkleRigAttachment" },
+	{ Name = "RightHip", Part0 = "LowerTorso", Part1 = "RightUpperLeg", Att = "RightHipRigAttachment" },
+	{ Name = "RightKnee", Part0 = "RightUpperLeg", Part1 = "RightLowerLeg", Att = "RightKneeRigAttachment" },
+	{ Name = "RightAnkle", Part0 = "RightLowerLeg", Part1 = "RightFoot", Att = "RightAnkleRigAttachment" },
+}
+
+-- Cached native Roblox R15 MeshPart character template (built once, cloned in ~0.2ms per NPC!)
+local cachedR15Template: Model? = nil
+
+local function getOrBuildR15Template(): Model?
+	if cachedR15Template then
+		return cachedR15Template
+	end
+	local ok, raw = pcall(function()
+		local desc = Instance.new("HumanoidDescription")
+		return Players:CreateHumanoidModelFromDescription(desc, Enum.HumanoidRigType.R15)
+	end)
+	if not ok or not raw or not raw:IsA("Model") then
+		return nil
+	end
+
+	-- Strip runtime scripts/physics constraints/humanoid (each service adds its own configured Humanoid!)
+	for _, d in ipairs(raw:GetDescendants()) do
+		if d:IsA("Humanoid")
+			or d:IsA("LocalScript")
+			or d:IsA("Script")
+			or d:IsA("BodyColors")
+			or d:IsA("AnimationConstraint")
+			or d:IsA("BallSocketConstraint")
+			or d:IsA("NoCollisionConstraint")
+			or d:IsA("WrapTarget")
+			or d:IsA("FaceControls")
+			or d:IsA("Motor6D")
+		then
+			d:Destroy()
+		end
+	end
+
+	local hrp = raw:FindFirstChild("HumanoidRootPart")
+	if not hrp or not hrp:IsA("BasePart") then
+		raw:Destroy()
+		return nil
+	end
+
+	-- Normalize HumanoidRootPart at origin with standard R15 collision volume
+	hrp.Size = Vector3.new(2.0, 2.0, 1.0)
+	hrp.Transparency = 1
+	hrp.CFrame = CFrame.new(0, 0, 0)
+	hrp.Anchored = true
+	hrp.CanCollide = true
+	hrp.CanTouch = true
+	hrp.CanQuery = true
+	hrp.TopSurface = Enum.SurfaceType.Smooth
+	hrp.BottomSurface = Enum.SurfaceType.Smooth
+
+	-- Rebuild exact R15 Motor6D skeleton from native RigAttachments and pose every MeshPart cleanly
+	for _, spec in ipairs(R15_JOINT_CHAIN) do
+		local p0 = raw:FindFirstChild(spec.Part0)
+		local p1 = raw:FindFirstChild(spec.Part1)
+		if p0 and p0:IsA("BasePart") and p1 and p1:IsA("BasePart") then
+			local a0 = p0:FindFirstChild(spec.Att)
+			local a1 = p1:FindFirstChild(spec.Att)
+			if a0 and a0:IsA("Attachment") and a1 and a1:IsA("Attachment") then
+				p1.CFrame = p0.CFrame * a0.CFrame * a1.CFrame:Inverse()
+				p1.Anchored = false
+				p1.CanCollide = false
+				p1.CanTouch = false
+				p1.CanQuery = true
+				p1.Massless = true
+				local m = Instance.new("Motor6D")
+				m.Name = spec.Name
+				m.Part0 = p0
+				m.Part1 = p1
+				m.C0 = a0.CFrame
+				m.C1 = a1.CFrame
+				m.Parent = p1
+			end
+		end
+	end
+
+	-- Clean up leftover attachments now that Motor6D joints are built
+	for _, d in ipairs(raw:GetDescendants()) do
+		if d:IsA("Attachment") or d:IsA("Vector3Value") then
+			d:Destroy()
+		end
+	end
+
+	raw.PrimaryPart = hrp
+	cachedR15Template = raw
+	return raw
+end
+
+-- Builds a genuine Roblox R15 Character Rig with beveled MeshParts, authentic Roblox face, and 15-joint skeleton!
 function MafiaVisualBuilder.CreateBaseRig(
 	modelName: string,
 	scale: number,
@@ -61,12 +178,128 @@ function MafiaVisualBuilder.CreateBaseRig(
 	forPreview: boolean?
 ): RigHandle
 	local s = scale
-	local shW = shoulderWidthScale or 1.0
 	local isPreview = forPreview == true
-	local model = Instance.new("Model")
-	model.Name = modelName
+	local handCol = gloveCol or skinCol
+	local handMat = if gloveCol then Enum.Material.Leather else Enum.Material.SmoothPlastic
+	local template = getOrBuildR15Template()
 
-	local function rawPart(name: string, size: Vector3, col: Color3, mat: Enum.Material, shape: Enum.PartType?, collide: boolean): Part
+	local model: Model
+	local root: BasePart
+	local upperTorso: BasePart
+	local lowerTorso: BasePart
+	local head: BasePart
+	local leftUpperArm: BasePart
+	local rightUpperArm: BasePart
+	local leftLowerArm: BasePart
+	local rightLowerArm: BasePart
+	local leftHand: BasePart
+	local rightHand: BasePart
+	local leftUpperLeg: BasePart
+	local rightUpperLeg: BasePart
+	local leftLowerLeg: BasePart
+	local rightLowerLeg: BasePart
+	local leftFoot: BasePart
+	local rightFoot: BasePart
+
+	if template then
+		model = template:Clone()
+		model.Name = modelName
+		root = model:FindFirstChild("HumanoidRootPart") :: BasePart
+		upperTorso = model:FindFirstChild("UpperTorso") :: BasePart
+		lowerTorso = model:FindFirstChild("LowerTorso") :: BasePart
+		head = model:FindFirstChild("Head") :: BasePart
+		leftUpperArm = model:FindFirstChild("LeftUpperArm") :: BasePart
+		rightUpperArm = model:FindFirstChild("RightUpperArm") :: BasePart
+		leftLowerArm = model:FindFirstChild("LeftLowerArm") :: BasePart
+		rightLowerArm = model:FindFirstChild("RightLowerArm") :: BasePart
+		leftHand = model:FindFirstChild("LeftHand") :: BasePart
+		rightHand = model:FindFirstChild("RightHand") :: BasePart
+		leftUpperLeg = model:FindFirstChild("LeftUpperLeg") :: BasePart
+		rightUpperLeg = model:FindFirstChild("RightUpperLeg") :: BasePart
+		leftLowerLeg = model:FindFirstChild("LeftLowerLeg") :: BasePart
+		rightLowerLeg = model:FindFirstChild("RightLowerLeg") :: BasePart
+		leftFoot = model:FindFirstChild("LeftFoot") :: BasePart
+		rightFoot = model:FindFirstChild("RightFoot") :: BasePart
+
+		-- Scale entire authentic R15 MeshPart rig cleanly
+		if math.abs(s - 1.0) > 0.005 then
+			model:ScaleTo(s)
+		end
+
+		-- Apply crisp realistic materials & colors to every R15 body segment
+		head.Color = skinCol
+		head.Material = Enum.Material.SmoothPlastic
+		upperTorso.Color = torsoCol
+		upperTorso.Material = Enum.Material.Fabric
+		lowerTorso.Color = pantsCol
+		lowerTorso.Material = Enum.Material.Fabric
+
+		leftUpperArm.Color = armCol; leftUpperArm.Material = Enum.Material.Fabric
+		rightUpperArm.Color = armCol; rightUpperArm.Material = Enum.Material.Fabric
+		leftLowerArm.Color = armCol; leftLowerArm.Material = Enum.Material.Fabric
+		rightLowerArm.Color = armCol; rightLowerArm.Material = Enum.Material.Fabric
+		leftHand.Color = handCol; leftHand.Material = handMat
+		rightHand.Color = handCol; rightHand.Material = handMat
+
+		leftUpperLeg.Color = pantsCol; leftUpperLeg.Material = Enum.Material.Fabric
+		rightUpperLeg.Color = pantsCol; rightUpperLeg.Material = Enum.Material.Fabric
+		leftLowerLeg.Color = pantsCol; leftLowerLeg.Material = Enum.Material.Fabric
+		rightLowerLeg.Color = pantsCol; rightLowerLeg.Material = Enum.Material.Fabric
+		leftFoot.Color = P.Obsidian; leftFoot.Material = Enum.Material.Leather
+		rightFoot.Color = P.Obsidian; rightFoot.Material = Enum.Material.Leather
+
+		-- Position character at spawnCF cleanly
+		model:PivotTo(spawnCF)
+
+		-- Configure anchoring/collision for live NPC vs ViewportFrame preview
+		for _, desc in ipairs(model:GetDescendants()) do
+			if desc:IsA("BasePart") then
+				local isRoot = (desc == root)
+				desc.Anchored = isPreview
+				desc.CanCollide = (not isPreview) and isRoot
+				desc.CanTouch = (not isPreview) and isRoot
+				desc.CanQuery = not isPreview
+				desc.Massless = not isRoot
+				desc.CastShadow = (not isPreview) and (not isRoot)
+			elseif isPreview and desc:IsA("Motor6D") then
+				desc:Destroy()
+			end
+		end
+	else
+		-- Safety fallback if CreateHumanoidModelFromDescription is unavailable
+		model = Instance.new("Model")
+		model.Name = modelName
+		local function mk(n: string, sz: Vector3, col: Color3, mat: Enum.Material, collide: boolean): Part
+			local p = Instance.new("Part")
+			p.Name = n; p.Size = sz * s; p.Color = col; p.Material = mat
+			p.Anchored = isPreview; p.CanCollide = (not isPreview) and collide
+			p.Massless = not collide; p.Parent = model
+			return p
+		end
+		root = mk("HumanoidRootPart", Vector3.new(2, 2, 1), torsoCol, Enum.Material.Fabric, true)
+		root.Transparency = 1; root.CFrame = spawnCF
+		upperTorso = mk("UpperTorso", Vector3.new(1.94, 1.69, 1), torsoCol, Enum.Material.Fabric, false)
+		upperTorso.CFrame = root.CFrame * CFrame.new(0, 0.25 * s, 0)
+		lowerTorso = mk("LowerTorso", Vector3.new(1.94, 0.45, 1), pantsCol, Enum.Material.Fabric, false)
+		lowerTorso.CFrame = root.CFrame * CFrame.new(0, -0.75 * s, 0)
+		head = mk("Head", Vector3.new(1.18, 1.18, 1.18), skinCol, Enum.Material.SmoothPlastic, false)
+		head.CFrame = root.CFrame * CFrame.new(0, 1.68 * s, 0)
+		local hm = Instance.new("SpecialMesh"); hm.MeshType = Enum.MeshType.Head; hm.Scale = Vector3.new(1.22, 1.22, 1.22); hm.Parent = head
+		local face = Instance.new("Decal"); face.Name = "face"; face.Face = Enum.NormalId.Front; face.Texture = "rbxasset://textures/face.png"; face.Parent = head
+		leftUpperArm = mk("LeftUpperArm", Vector3.new(0.95, 1.2, 0.95), armCol, Enum.Material.Fabric, false)
+		leftUpperArm.CFrame = root.CFrame * CFrame.new(-1.46 * s, 0.45 * s, 0)
+		rightUpperArm = mk("RightUpperArm", Vector3.new(0.95, 1.2, 0.95), armCol, Enum.Material.Fabric, false)
+		rightUpperArm.CFrame = root.CFrame * CFrame.new(1.46 * s, 0.45 * s, 0)
+		leftLowerArm = leftUpperArm; rightLowerArm = rightUpperArm; leftHand = leftUpperArm; rightHand = rightUpperArm
+		leftUpperLeg = mk("LeftUpperLeg", Vector3.new(0.95, 1.35, 0.95), pantsCol, Enum.Material.Fabric, false)
+		leftUpperLeg.CFrame = root.CFrame * CFrame.new(-0.50 * s, -1.65 * s, 0)
+		rightUpperLeg = mk("RightUpperLeg", Vector3.new(0.95, 1.35, 0.95), pantsCol, Enum.Material.Fabric, false)
+		rightUpperLeg.CFrame = root.CFrame * CFrame.new(0.50 * s, -1.65 * s, 0)
+		leftLowerLeg = leftUpperLeg; rightLowerLeg = rightUpperLeg; leftFoot = leftUpperLeg; rightFoot = rightUpperLeg
+		model.PrimaryPart = root
+	end
+
+	local function addPart(parentPart: BasePart, name: string, size: Vector3, relCF: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
 		local p = Instance.new("Part")
 		p.Name = name
 		p.Size = size * s
@@ -76,172 +309,154 @@ function MafiaVisualBuilder.CreateBaseRig(
 			p.Shape = shape
 		end
 		p.Anchored = isPreview
-		p.CanCollide = (not isPreview) and collide
-		p.CanTouch = (not isPreview) and collide
-		p.CanQuery = not isPreview
-		p.Massless = not collide
+		p.CanCollide = false
+		p.CanTouch = false
+		p.CanQuery = false
+		p.Massless = true
 		p.CastShadow = not isPreview
 		p.TopSurface = Enum.SurfaceType.Smooth
 		p.BottomSurface = Enum.SurfaceType.Smooth
-		p.Parent = model
-		return p
-	end
-
-	local function weldTo(parentPart: BasePart, childPart: BasePart, relCF: CFrame): ()
 		local pos = relCF.Position * s
 		local rot = relCF - relCF.Position
-		childPart.CFrame = parentPart.CFrame * CFrame.new(pos) * rot
+		p.CFrame = parentPart.CFrame * CFrame.new(pos) * rot
+		p.Parent = model
 		if not isPreview then
 			local w = Instance.new("WeldConstraint")
 			w.Part0 = parentPart
-			w.Part1 = childPart
-			w.Parent = childPart
+			w.Part1 = p
+			w.Parent = p
 		end
-	end
-
-	local function makeJoint(name: string, part0: BasePart, part1: BasePart, c0: CFrame, c1: CFrame): ()
-		local sc0 = CFrame.new(c0.Position * s) * (c0 - c0.Position)
-		local sc1 = CFrame.new(c1.Position * s) * (c1 - c1.Position)
-		part1.CFrame = part0.CFrame * sc0 * sc1:Inverse()
-		if not isPreview then
-			local m = Instance.new("Motor6D")
-			m.Name = name
-			m.Part0 = part0
-			m.Part1 = part1
-			m.C0 = sc0
-			m.C1 = sc1
-			m.Parent = part0
-		end
-	end
-
-	local function addPart(parentPart: BasePart, name: string, size: Vector3, relCF: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
-		local p = rawPart(name, size, col, mat, shape, false)
-		weldTo(parentPart, p, relCF)
 		return p
 	end
 
-	-- Core Invisible/Structural HumanoidRootPart + Tailored Upper/Lower Torso Silhouette
-	local root = rawPart("HumanoidRootPart", Vector3.new(2.05 * shW, 2.35, 1.12), torsoCol, Enum.Material.Fabric, nil, true)
-	root.CFrame = spawnCF
+	-- Crisp tailored waist belt & metal buckle on LowerTorso for polished R15 silhouette
+	addPart(lowerTorso, "WaistBelt", Vector3.new(2.04, 0.22, 1.08), CFrame.new(0, 0.08, 0), P.Obsidian, Enum.Material.Leather, nil)
+	addPart(lowerTorso, "BeltBuckle", Vector3.new(0.28, 0.18, 0.08), CFrame.new(0, 0.08, -0.56), P.BrushedSteel, Enum.Material.Metal, nil)
 
-	-- Subtle broad shoulders & tapered waist belt for strong athletic posture
-	addPart(root, "UpperChest", Vector3.new(2.16 * shW, 1.15, 1.18), CFrame.new(0, 0.52, 0), torsoCol, Enum.Material.Fabric, nil)
-	addPart(root, "WaistBelt", Vector3.new(2.08 * shW, 0.24, 1.18), CFrame.new(0, -1.04, 0), P.Obsidian, Enum.Material.Leather, nil)
-	addPart(root, "BeltBuckle", Vector3.new(0.32, 0.20, 0.08), CFrame.new(0, -1.04, -0.60), P.BrushedSteel, Enum.Material.Metal, nil)
-
-	-- Realistic Roblox Head (proper human ratio 1.24x1.28x1.24 with SpecialMesh Head, NOT giant 2.0 ball!)
-	local neck = addPart(root, "Neck", Vector3.new(0.56, 0.42, 0.56), CFrame.new(0, 1.32, 0), skinCol, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
-	neck.CFrame = root.CFrame * CFrame.new(0, 1.32 * s, 0) * CFrame.Angles(0, 0, math.rad(90))
-	if not isPreview then
-		local nw = neck:FindFirstChildOfClass("WeldConstraint")
-		if nw then nw:Destroy() end
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = root
-		w.Part1 = neck
-		w.Parent = neck
-	end
-
-	local head = rawPart("Head", Vector3.new(1.26, 1.28, 1.26), skinCol, Enum.Material.SmoothPlastic, nil, false)
-	local headMesh = Instance.new("SpecialMesh")
-	headMesh.MeshType = Enum.MeshType.Head
-	headMesh.Scale = Vector3.new(1.18, 1.16, 1.18)
-	headMesh.Parent = head
-	makeJoint("NeckJoint", root, head, CFrame.new(0, 1.32, 0), CFrame.new(0, -0.66, 0))
-
-	-- Intimidating facial structure: deep-set eyes, angled dark furrowed brows, stern mouth line
-	for _, side in ipairs({ -1, 1 }) do
-		addPart(head, "Eye", Vector3.new(0.16, 0.12, 0.08), CFrame.new(side * 0.24, 0.08, -0.60), P.Obsidian, Enum.Material.SmoothPlastic, nil)
-		addPart(head, "Brow", Vector3.new(0.30, 0.08, 0.09), CFrame.new(side * 0.25, 0.22, -0.61) * CFrame.Angles(0, 0, math.rad(-14 * side)), P.HairDark, Enum.Material.SmoothPlastic, nil)
-	end
-	addPart(head, "SternMouth", Vector3.new(0.30, 0.05, 0.06), CFrame.new(0, -0.26, -0.60), Color3.fromRGB(122, 86, 74), Enum.Material.SmoothPlastic, nil)
-
-	-- Articulated Arms + Leather Gloves / Hands
-	local armX = 1.44 * shW
-	local handCol = gloveCol or skinCol
-	local handMat = if gloveCol then Enum.Material.Leather else Enum.Material.SmoothPlastic
-
-	local leftArm = rawPart("LeftArm", Vector3.new(0.78, 2.15, 0.78), armCol, Enum.Material.Fabric, nil, false)
-	makeJoint("LeftArmJoint", root, leftArm, CFrame.new(-armX, 0.96, 0), CFrame.new(0, 0.92, 0))
-	addPart(leftArm, "LeftHand", Vector3.new(0.72, 0.42, 0.72), CFrame.new(0, -1.16, 0), handCol, handMat, nil)
-
-	local rightArm = rawPart("RightArm", Vector3.new(0.78, 2.15, 0.78), armCol, Enum.Material.Fabric, nil, false)
-	makeJoint("RightArmJoint", root, rightArm, CFrame.new(armX, 0.96, 0), CFrame.new(0, 0.92, 0))
-	addPart(rightArm, "RightHand", Vector3.new(0.72, 0.42, 0.72), CFrame.new(0, -1.16, 0), handCol, handMat, nil)
-
-	-- Articulated Legs + Dark Dress Shoes / Tactical Boots
-	local leftLeg = rawPart("LeftLeg", Vector3.new(0.86, 2.28, 0.88), pantsCol, Enum.Material.Fabric, nil, false)
-	makeJoint("LeftLegJoint", root, leftLeg, CFrame.new(-0.52 * shW, -1.18, 0), CFrame.new(0, 1.12, 0))
-	addPart(leftLeg, "LeftBoot", Vector3.new(0.90, 0.46, 1.18), CFrame.new(0, -1.10, -0.14), P.Obsidian, Enum.Material.Leather, nil)
-
-	local rightLeg = rawPart("RightLeg", Vector3.new(0.86, 2.28, 0.88), pantsCol, Enum.Material.Fabric, nil, false)
-	makeJoint("RightLegJoint", root, rightLeg, CFrame.new(0.52 * shW, -1.18, 0), CFrame.new(0, 1.12, 0))
-	addPart(rightLeg, "RightBoot", Vector3.new(0.90, 0.46, 1.18), CFrame.new(0, -1.10, -0.14), P.Obsidian, Enum.Material.Leather, nil)
-
+	model:SetAttribute("IsR15Rig", true)
+	model:SetAttribute("BaseScale", s)
 	model.PrimaryPart = root
+
 	return {
 		Model = model,
 		Root = root,
-		Torso = root,
+		Torso = upperTorso,
+		LowerTorso = lowerTorso,
 		Head = head,
-		LeftArm = leftArm,
-		RightArm = rightArm,
-		LeftLeg = leftLeg,
-		RightLeg = rightLeg,
+		LeftArm = leftUpperArm,
+		RightArm = rightUpperArm,
+		LeftLowerArm = leftLowerArm,
+		RightLowerArm = rightLowerArm,
+		LeftHand = leftHand,
+		RightHand = rightHand,
+		LeftLeg = leftUpperLeg,
+		RightLeg = rightUpperLeg,
+		LeftLowerLeg = leftLowerLeg,
+		RightLowerLeg = rightLowerLeg,
+		LeftFoot = leftFoot,
+		RightFoot = rightFoot,
 		AddPart = addPart,
 	}
 end
 
--- Helper: Realistic matte firearm prop welded cleanly to an NPC's right hand (tags parts for weapon drop on death!)
-local function attachNPCWeapon(rig: RigHandle, kind: "Crowbar" | "Pistol" | "Shotgun" | "SMG" | "Carbine" | "Sniper" | "BossRifle", overrideCol: Color3?): ()
+-- Helper: Sculpted layered Roblox hair styles for distinct character silhouettes
+local function addHairStyle(rig: RigHandle, style: "Slick" | "Swept" | "Bun" | "Bob" | "Spiky" | "Parted", hairCol: Color3): ()
+	local add = rig.AddPart
+	local h = rig.Head
+	if style == "Slick" then
+		add(h, "HairCrown", Vector3.new(1.24, 0.34, 1.28), CFrame.new(0, 0.50, 0.06), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairBack", Vector3.new(1.22, 0.62, 0.38), CFrame.new(0, 0.16, 0.48), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairSideL", Vector3.new(0.16, 0.44, 0.72), CFrame.new(-0.58, 0.26, 0.14), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairSideR", Vector3.new(0.16, 0.44, 0.72), CFrame.new(0.58, 0.26, 0.14), hairCol, Enum.Material.SmoothPlastic, nil)
+	elseif style == "Bun" then
+		add(h, "HairCrown", Vector3.new(1.26, 0.38, 1.28), CFrame.new(0, 0.48, 0.06), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairBun", Vector3.new(0.62, 0.58, 0.62), CFrame.new(0, 0.42, 0.68), hairCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		add(h, "HairLockL", Vector3.new(0.20, 0.68, 0.78), CFrame.new(-0.58, 0.08, 0.14), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairLockR", Vector3.new(0.20, 0.68, 0.78), CFrame.new(0.58, 0.08, 0.14), hairCol, Enum.Material.SmoothPlastic, nil)
+	elseif style == "Bob" then
+		add(h, "HairTop", Vector3.new(1.28, 0.38, 1.32), CFrame.new(0, 0.48, 0.04), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairBangs", Vector3.new(1.12, 0.22, 0.20), CFrame.new(0, 0.36, -0.56), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "BobL", Vector3.new(0.24, 0.94, 0.96), CFrame.new(-0.60, -0.02, 0.12), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "BobR", Vector3.new(0.24, 0.94, 0.96), CFrame.new(0.60, -0.02, 0.12), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "BobBack", Vector3.new(1.26, 0.96, 0.34), CFrame.new(0, -0.02, 0.50), hairCol, Enum.Material.SmoothPlastic, nil)
+	elseif style == "Spiky" then
+		add(h, "HairBase", Vector3.new(1.24, 0.36, 1.24), CFrame.new(0, 0.48, 0.04), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "Spike1", Vector3.new(0.42, 0.38, 0.66), CFrame.new(-0.24, 0.66, -0.10) * CFrame.Angles(math.rad(16), 0, math.rad(14)), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "Spike2", Vector3.new(0.42, 0.42, 0.68), CFrame.new(0.18, 0.70, -0.14) * CFrame.Angles(math.rad(20), 0, math.rad(-12)), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairBack", Vector3.new(1.20, 0.54, 0.36), CFrame.new(0, 0.18, 0.46), hairCol, Enum.Material.SmoothPlastic, nil)
+	elseif style == "Parted" then
+		add(h, "HairL", Vector3.new(0.76, 0.36, 1.28), CFrame.new(-0.28, 0.50, 0.04) * CFrame.Angles(0, 0, math.rad(8)), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairR", Vector3.new(0.64, 0.30, 1.24), CFrame.new(0.34, 0.46, 0.04) * CFrame.Angles(0, 0, math.rad(-10)), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairBack", Vector3.new(1.22, 0.56, 0.36), CFrame.new(0, 0.18, 0.48), hairCol, Enum.Material.SmoothPlastic, nil)
+	else
+		-- Swept
+		add(h, "HairTop", Vector3.new(1.26, 0.38, 1.32), CFrame.new(0, 0.50, 0.02), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairSweep", Vector3.new(1.06, 0.24, 0.42), CFrame.new(0.08, 0.56, -0.44) * CFrame.Angles(math.rad(-14), math.rad(8), 0), hairCol, Enum.Material.SmoothPlastic, nil)
+		add(h, "HairBack", Vector3.new(1.22, 0.58, 0.36), CFrame.new(0, 0.18, 0.48), hairCol, Enum.Material.SmoothPlastic, nil)
+	end
+end
+
+-- Helper: Realistic matte firearm / melee prop gripped directly in R15 RightHand (tags parts for weapon drop on death!)
+local function attachNPCWeapon(rig: RigHandle, kind: "Crowbar" | "Pistol" | "Shotgun" | "SMG" | "Carbine" | "Sniper" | "BossRifle" | "TommyDrum" | "AssassinRifle", overrideCol: Color3?): ()
 	local rawAdd = rig.AddPart
 	local function add(parentPart: BasePart, name: string, size: Vector3, relCF: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
 		local p = rawAdd(parentPart, name, size, relCF, col, mat, shape)
 		p:SetAttribute("IsNPCWeapon", true)
 		return p
 	end
-	local hand = rig.RightArm
+	local hand = rig.RightHand
 	local metalCol = overrideCol or P.Gunmetal
 	local steel = P.BrushedSteel
 
 	if kind == "Crowbar" then
-		-- Street weapon: dark rusted steel pry-bar / cleaver (no glow)
-		add(hand, "WeaponShaft", Vector3.new(0.16, 0.16, 1.85), CFrame.new(0, -1.18, -0.92), P.Gunmetal, Enum.Material.Metal, nil)
-		add(hand, "CleaverHead", Vector3.new(0.10, 0.56, 0.95), CFrame.new(0, -1.10, -1.78), steel, Enum.Material.Metal, nil)
+		add(hand, "WeaponShaft", Vector3.new(0.14, 0.14, 1.85), CFrame.new(0, -0.06, -0.82), P.Gunmetal, Enum.Material.Metal, nil)
+		add(hand, "CleaverHead", Vector3.new(0.08, 0.52, 0.90), CFrame.new(0, 0.02, -1.66), steel, Enum.Material.Metal, nil)
 	elseif kind == "Pistol" then
-		add(hand, "Grip", Vector3.new(0.22, 0.52, 0.28), CFrame.new(0, -1.20, -0.32), P.Obsidian, Enum.Material.SmoothPlastic, nil)
-		add(hand, "Slide", Vector3.new(0.24, 0.28, 1.12), CFrame.new(0, -0.98, -0.74), metalCol, Enum.Material.Metal, nil)
-		add(hand, "Barrel", Vector3.new(0.24, 0.14, 0.14), CFrame.new(0, -0.98, -1.36) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "Grip", Vector3.new(0.20, 0.48, 0.26), CFrame.new(0, -0.10, -0.20), P.Obsidian, Enum.Material.SmoothPlastic, nil)
+		add(hand, "Slide", Vector3.new(0.22, 0.26, 1.08), CFrame.new(0, 0.10, -0.62), metalCol, Enum.Material.Metal, nil)
+		add(hand, "Barrel", Vector3.new(0.24, 0.13, 0.13), CFrame.new(0, 0.10, -1.24) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
 	elseif kind == "Shotgun" then
-		add(hand, "Stock", Vector3.new(0.26, 0.42, 0.95), CFrame.new(0, -1.04, 0.18), P.Walnut, Enum.Material.Wood, nil)
-		add(hand, "Receiver", Vector3.new(0.30, 0.38, 1.05), CFrame.new(0, -0.98, -0.74), metalCol, Enum.Material.Metal, nil)
-		add(hand, "UpperBarrel", Vector3.new(1.75, 0.20, 0.20), CFrame.new(0, -0.90, -2.04) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
-		add(hand, "PumpGrip", Vector3.new(0.34, 0.28, 0.72), CFrame.new(0, -1.08, -1.74), P.Walnut, Enum.Material.Wood, nil)
+		add(hand, "Stock", Vector3.new(0.24, 0.40, 0.92), CFrame.new(0, 0.04, 0.30), P.Walnut, Enum.Material.Wood, nil)
+		add(hand, "Receiver", Vector3.new(0.28, 0.36, 1.04), CFrame.new(0, 0.10, -0.62), metalCol, Enum.Material.Metal, nil)
+		add(hand, "UpperBarrel", Vector3.new(1.72, 0.19, 0.19), CFrame.new(0, 0.18, -1.90) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "PumpGrip", Vector3.new(0.32, 0.26, 0.70), CFrame.new(0, 0.00, -1.60), P.Walnut, Enum.Material.Wood, nil)
 	elseif kind == "SMG" then
-		add(hand, "Receiver", Vector3.new(0.28, 0.36, 1.18), CFrame.new(0, -1.00, -0.78), metalCol, Enum.Material.Metal, nil)
-		add(hand, "CurvedMag", Vector3.new(0.18, 0.76, 0.24), CFrame.new(0, -1.46, -0.98) * CFrame.Angles(math.rad(-14), 0, 0), P.Obsidian, Enum.Material.Metal, nil)
-		add(hand, "Suppressor", Vector3.new(0.75, 0.20, 0.20), CFrame.new(0, -0.98, -1.70) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "Receiver", Vector3.new(0.26, 0.34, 1.15), CFrame.new(0, 0.08, -0.64), metalCol, Enum.Material.Metal, nil)
+		add(hand, "CurvedMag", Vector3.new(0.18, 0.74, 0.24), CFrame.new(0, -0.36, -0.86) * CFrame.Angles(math.rad(-14), 0, 0), P.Obsidian, Enum.Material.Metal, nil)
+		add(hand, "Suppressor", Vector3.new(0.75, 0.19, 0.19), CFrame.new(0, 0.10, -1.56) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+	elseif kind == "TommyDrum" then
+		add(hand, "TommyStock", Vector3.new(0.24, 0.44, 0.96), CFrame.new(0, 0.04, 0.34), P.Walnut, Enum.Material.Wood, nil)
+		add(hand, "TommyReceiver", Vector3.new(0.30, 0.38, 1.48), CFrame.new(0, 0.12, -0.74), P.Gunmetal, Enum.Material.Metal, nil)
+		add(hand, "TommyDrum", Vector3.new(0.36, 0.88, 0.88), CFrame.new(0, -0.28, -1.00), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "TommyBrass", Vector3.new(0.40, 0.30, 0.30), CFrame.new(0, -0.28, -1.00), P.TarnishedBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "TommyBarrel", Vector3.new(1.45, 0.18, 0.18), CFrame.new(0, 0.14, -2.14) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
+	elseif kind == "AssassinRifle" then
+		add(hand, "RifleStock", Vector3.new(0.24, 0.44, 0.98), CFrame.new(0, 0.04, 0.32), P.Obsidian, Enum.Material.SmoothPlastic, nil)
+		add(hand, "RifleChassis", Vector3.new(0.28, 0.36, 1.95), CFrame.new(0, 0.10, -1.02), P.Gunmetal, Enum.Material.Metal, nil)
+		add(hand, "CrimsonRail", Vector3.new(0.30, 0.08, 1.35), CFrame.new(0, 0.24, -0.96), P.DeepRed, Enum.Material.Metal, nil)
+		add(hand, "Optic", Vector3.new(1.12, 0.20, 0.20), CFrame.new(0, 0.44, -0.88) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "Suppressor", Vector3.new(1.38, 0.22, 0.22), CFrame.new(0, 0.12, -2.62) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
 	elseif kind == "Sniper" then
-		add(hand, "Stock", Vector3.new(0.26, 0.46, 1.02), CFrame.new(0, -1.02, 0.18), P.Obsidian, Enum.Material.SmoothPlastic, nil)
-		add(hand, "Chassis", Vector3.new(0.30, 0.36, 1.65), CFrame.new(0, -0.98, -1.05), metalCol, Enum.Material.Metal, nil)
-		add(hand, "Scope", Vector3.new(1.05, 0.20, 0.20), CFrame.new(0, -0.68, -0.96) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
-		add(hand, "LongBarrel", Vector3.new(1.95, 0.16, 0.16), CFrame.new(0, -0.96, -2.72) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "Stock", Vector3.new(0.24, 0.44, 0.98), CFrame.new(0, 0.04, 0.30), P.Obsidian, Enum.Material.SmoothPlastic, nil)
+		add(hand, "Chassis", Vector3.new(0.28, 0.34, 1.62), CFrame.new(0, 0.08, -0.92), metalCol, Enum.Material.Metal, nil)
+		add(hand, "Scope", Vector3.new(1.02, 0.19, 0.19), CFrame.new(0, 0.38, -0.84) * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "LongBarrel", Vector3.new(1.88, 0.15, 0.15), CFrame.new(0, 0.10, -2.56) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
 	elseif kind == "BossRifle" then
-		add(hand, "WalnutStock", Vector3.new(0.28, 0.48, 1.05), CFrame.new(0, -1.02, 0.18), P.Walnut, Enum.Material.Wood, nil)
-		add(hand, "Receiver", Vector3.new(0.34, 0.42, 1.48), CFrame.new(0, -0.98, -0.96), P.Obsidian, Enum.Material.Metal, nil)
-		add(hand, "BrassTrim", Vector3.new(0.36, 0.09, 1.02), CFrame.new(0, -0.96, -0.96), P.TarnishedBrass, Enum.Material.Metal, nil)
-		add(hand, "Mag", Vector3.new(0.20, 0.78, 0.30), CFrame.new(0, -1.48, -1.16) * CFrame.Angles(math.rad(-14), 0, 0), P.Gunmetal, Enum.Material.Metal, nil)
-		add(hand, "Barrel", Vector3.new(1.25, 0.20, 0.20), CFrame.new(0, -0.96, -2.26) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "WalnutStock", Vector3.new(0.26, 0.46, 1.02), CFrame.new(0, 0.04, 0.30), P.Walnut, Enum.Material.Wood, nil)
+		add(hand, "Receiver", Vector3.new(0.32, 0.40, 1.44), CFrame.new(0, 0.10, -0.84), P.Obsidian, Enum.Material.Metal, nil)
+		add(hand, "BrassTrim", Vector3.new(0.34, 0.09, 1.00), CFrame.new(0, 0.12, -0.84), P.TarnishedBrass, Enum.Material.Metal, nil)
+		add(hand, "Mag", Vector3.new(0.19, 0.74, 0.28), CFrame.new(0, -0.38, -1.04) * CFrame.Angles(math.rad(-14), 0, 0), P.Gunmetal, Enum.Material.Metal, nil)
+		add(hand, "Barrel", Vector3.new(1.22, 0.19, 0.19), CFrame.new(0, 0.12, -2.12) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
 	else
-		-- Carbine
-		add(hand, "Stock", Vector3.new(0.26, 0.46, 0.85), CFrame.new(0, -1.02, 0.15), P.Obsidian, Enum.Material.SmoothPlastic, nil)
-		add(hand, "Receiver", Vector3.new(0.30, 0.38, 1.32), CFrame.new(0, -0.98, -0.88), metalCol, Enum.Material.Metal, nil)
-		add(hand, "Mag", Vector3.new(0.20, 0.72, 0.28), CFrame.new(0, -1.44, -1.08) * CFrame.Angles(math.rad(-14), 0, 0), P.Obsidian, Enum.Material.Metal, nil)
-		add(hand, "Barrel", Vector3.new(1.10, 0.18, 0.18), CFrame.new(0, -0.96, -2.02) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(hand, "Stock", Vector3.new(0.24, 0.44, 0.82), CFrame.new(0, 0.04, 0.26), P.Obsidian, Enum.Material.SmoothPlastic, nil)
+		add(hand, "Receiver", Vector3.new(0.28, 0.36, 1.28), CFrame.new(0, 0.08, -0.76), metalCol, Enum.Material.Metal, nil)
+		add(hand, "Mag", Vector3.new(0.19, 0.68, 0.26), CFrame.new(0, -0.36, -0.96) * CFrame.Angles(math.rad(-14), 0, 0), P.Obsidian, Enum.Material.Metal, nil)
+		add(hand, "Barrel", Vector3.new(1.06, 0.17, 0.17), CFrame.new(0, 0.10, -1.88) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
 	end
 end
 
 -- ============================================================================
--- 1. RIVAL FACTION CHARACTER MODELS (5 Distinct Criminal-to-Don Silhouettes)
+-- 1. RIVAL FACTION CHARACTER MODELS (5 Unique R15 Criminal-to-Don Designs)
 -- ============================================================================
 function MafiaVisualBuilder.BuildRivalRig(
 	modelName: string,
@@ -252,138 +467,123 @@ function MafiaVisualBuilder.BuildRivalRig(
 	forPreview: boolean?
 ): RigHandle
 	if factionId == "StreetSkilletGang" then
-		-- EASY: Ordinary street thugs — worn charcoal hoodie, tilted knit beanie, rolled sleeves, crowbar/cleaver
+		-- EASY: Street Hoodlum — charcoal hoodie, tilted knit beanie, kangaroo pocket, scar, heavy cleaver
 		local rig = MafiaVisualBuilder.CreateBaseRig(
 			modelName, scale, spawnCF, P.SkinWarm,
-			Color3.fromRGB(48, 50, 54), Color3.fromRGB(34, 36, 40),
-			Color3.fromRGB(48, 50, 54), nil, 0.98, forPreview
+			Color3.fromRGB(52, 54, 60), Color3.fromRGB(34, 38, 46),
+			Color3.fromRGB(52, 54, 60), nil, 1.0, forPreview
 		)
 		local add = rig.AddPart
-		-- Hood collar bunched behind neck + hoodie pocket & strings
-		add(rig.Root, "HoodCollar", Vector3.new(1.55, 0.42, 0.82), CFrame.new(0, 1.15, 0.36), Color3.fromRGB(40, 42, 46), Enum.Material.Fabric, nil)
-		add(rig.Root, "HoodiePocket", Vector3.new(1.48, 0.62, 0.16), CFrame.new(0, -0.52, -0.60), Color3.fromRGB(40, 42, 46), Enum.Material.Fabric, nil)
-		add(rig.Root, "DrawstringL", Vector3.new(0.06, 0.52, 0.06), CFrame.new(-0.24, 0.68, -0.61), P.MutedGrey, Enum.Material.Fabric, nil)
-		add(rig.Root, "DrawstringR", Vector3.new(0.06, 0.52, 0.06), CFrame.new(0.24, 0.68, -0.61), P.MutedGrey, Enum.Material.Fabric, nil)
-		-- Tilted dark knit street beanie + stubble + cheek scar
-		add(rig.Head, "KnitBeanie", Vector3.new(1.36, 0.62, 1.38), CFrame.new(0, 0.52, 0.08) * CFrame.Angles(math.rad(-10), 0, math.rad(4)), Color3.fromRGB(32, 30, 30), Enum.Material.Fabric, nil)
-		add(rig.Head, "BeanieCuff", Vector3.new(1.42, 0.24, 1.42), CFrame.new(0, 0.32, 0.04) * CFrame.Angles(math.rad(-10), 0, math.rad(4)), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Head, "CheekScar", Vector3.new(0.05, 0.28, 0.05), CFrame.new(-0.32, -0.06, -0.62) * CFrame.Angles(0, 0, math.rad(18)), Color3.fromRGB(134, 62, 58), Enum.Material.SmoothPlastic, nil)
+		add(rig.Torso, "HoodCollar", Vector3.new(1.48, 0.38, 0.72), CFrame.new(0, 0.80, 0.34), Color3.fromRGB(42, 44, 50), Enum.Material.Fabric, nil)
+		add(rig.Torso, "HoodiePocket", Vector3.new(1.42, 0.56, 0.16), CFrame.new(0, -0.46, -0.52), Color3.fromRGB(42, 44, 50), Enum.Material.Fabric, nil)
+		add(rig.Torso, "DrawstringL", Vector3.new(0.06, 0.48, 0.06), CFrame.new(-0.22, 0.46, -0.53), P.OffWhite, Enum.Material.Fabric, nil)
+		add(rig.Torso, "DrawstringR", Vector3.new(0.06, 0.48, 0.06), CFrame.new(0.22, 0.46, -0.53), P.OffWhite, Enum.Material.Fabric, nil)
+		add(rig.Head, "KnitBeanie", Vector3.new(1.28, 0.58, 1.30), CFrame.new(0, 0.48, 0.06) * CFrame.Angles(math.rad(-10), 0, math.rad(4)), Color3.fromRGB(36, 32, 32), Enum.Material.Fabric, nil)
+		add(rig.Head, "BeanieCuff", Vector3.new(1.34, 0.22, 1.34), CFrame.new(0, 0.28, 0.02) * CFrame.Angles(math.rad(-10), 0, math.rad(4)), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Head, "CheekScar", Vector3.new(0.05, 0.26, 0.05), CFrame.new(-0.30, -0.06, -0.57) * CFrame.Angles(0, 0, math.rad(18)), Color3.fromRGB(134, 62, 58), Enum.Material.SmoothPlastic, nil)
 		attachNPCWeapon(rig, "Crowbar", nil)
 		return rig
 
 	elseif factionId == "HarborHookCartel" then
-		-- MEDIUM: Dockside gang — weathered dark brown leather jacket over black shirt, flat dock cap, shades, pistol
+		-- MEDIUM: Dockside Gangster — worn brown leather jacket over dark henley, flat dock cap, shades, pistol
 		local rig = MafiaVisualBuilder.CreateBaseRig(
 			modelName, scale, spawnCF, P.SkinWeathered,
-			P.DarkBrown, Color3.fromRGB(28, 30, 34),
-			P.DarkBrown, P.Obsidian, 1.02, forPreview
+			P.DarkBrown, Color3.fromRGB(30, 34, 40),
+			P.DarkBrown, P.Obsidian, 1.0, forPreview
 		)
 		local add = rig.AddPart
-		-- Open leather jacket front exposing dark charcoal henley + upright leather collar + waist holster
-		add(rig.Root, "InnerShirt", Vector3.new(0.76, 1.85, 0.14), CFrame.new(0, 0.05, -0.58), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Root, "JacketCollarL", Vector3.new(0.42, 0.62, 0.22), CFrame.new(-0.56, 0.92, -0.56) * CFrame.Angles(0, 0, math.rad(-18)), P.WornLeather, Enum.Material.Leather, nil)
-		add(rig.Root, "JacketCollarR", Vector3.new(0.42, 0.62, 0.22), CFrame.new(0.56, 0.92, -0.56) * CFrame.Angles(0, 0, math.rad(18)), P.WornLeather, Enum.Material.Leather, nil)
-		add(rig.Root, "SidePouch", Vector3.new(0.28, 0.56, 0.44), CFrame.new(-1.12, -0.82, 0.05), P.WornLeather, Enum.Material.Leather, nil)
-		-- Flat dark dock cap + dark shades + goatee stubble
-		add(rig.Head, "DockCapTop", Vector3.new(1.38, 0.42, 1.48), CFrame.new(0, 0.54, 0.04), P.Charcoal, Enum.Material.Fabric, nil)
-		add(rig.Head, "DockCapBrim", Vector3.new(1.24, 0.10, 0.58), CFrame.new(0, 0.36, -0.78) * CFrame.Angles(math.rad(8), 0, 0), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Head, "Shades", Vector3.new(1.16, 0.26, 0.16), CFrame.new(0, 0.08, -0.62), P.Obsidian, Enum.Material.SmoothPlastic, nil)
-		add(rig.Head, "JawStubble", Vector3.new(0.84, 0.32, 0.34), CFrame.new(0, -0.34, -0.48), Color3.fromRGB(48, 38, 34), Enum.Material.Fabric, nil)
+		add(rig.Torso, "InnerShirt", Vector3.new(0.72, 1.54, 0.14), CFrame.new(0, 0.04, -0.49), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Torso, "JacketCollarL", Vector3.new(0.38, 0.56, 0.20), CFrame.new(-0.52, 0.62, -0.48) * CFrame.Angles(0, 0, math.rad(-18)), P.WornLeather, Enum.Material.Leather, nil)
+		add(rig.Torso, "JacketCollarR", Vector3.new(0.38, 0.56, 0.20), CFrame.new(0.52, 0.62, -0.48) * CFrame.Angles(0, 0, math.rad(18)), P.WornLeather, Enum.Material.Leather, nil)
+		add(rig.LowerTorso, "SideHolster", Vector3.new(0.28, 0.52, 0.42), CFrame.new(-1.08, -0.04, 0.05), P.WornLeather, Enum.Material.Leather, nil)
+		add(rig.Head, "DockCapTop", Vector3.new(1.30, 0.38, 1.40), CFrame.new(0, 0.50, 0.04), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.Head, "DockCapBrim", Vector3.new(1.14, 0.09, 0.54), CFrame.new(0, 0.32, -0.72) * CFrame.Angles(math.rad(8), 0, 0), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Head, "Shades", Vector3.new(1.12, 0.24, 0.14), CFrame.new(0, 0.08, -0.56), P.Obsidian, Enum.Material.Glass, nil)
+		add(rig.Head, "JawStubble", Vector3.new(0.76, 0.28, 0.30), CFrame.new(0, -0.32, -0.44), Color3.fromRGB(48, 38, 34), Enum.Material.Fabric, nil)
 		attachNPCWeapon(rig, "Pistol", P.Gunmetal)
 		return rig
 
 	elseif factionId == "IronCleaverSyndicate" then
-		-- HARD: Experienced syndicate enforcers — dark charcoal chest rig, half-face gaiter mask, tactical cap, SMG
+		-- HARD: Syndicate Enforcer — tactical chest rig, 3 mag pouches, crimson armband, half-face gaiter, patrol cap, SMG
 		local rig = MafiaVisualBuilder.CreateBaseRig(
 			modelName, scale, spawnCF, P.SkinWarm,
 			P.Slate, P.Charcoal,
-			P.Slate, P.Obsidian, 1.06, forPreview
+			P.Slate, P.Obsidian, 1.0, forPreview
 		)
 		local add = rig.AddPart
-		-- Matte-black tactical chest rig + 3 mag pouches + dark red shoulder patch (restrained!)
-		add(rig.Root, "ChestRig", Vector3.new(1.96, 1.38, 1.30), CFrame.new(0, 0.14, 0), P.Obsidian, Enum.Material.Fabric, nil)
-		for _, mx in ipairs({ -0.52, 0, 0.52 }) do
-			add(rig.Root, "MagPouch", Vector3.new(0.36, 0.58, 0.24), CFrame.new(mx, -0.18, -0.72), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.Torso, "ChestRig", Vector3.new(2.02, 1.32, 1.18), CFrame.new(0, 0.04, 0), P.Obsidian, Enum.Material.Fabric, nil)
+		for _, mx in ipairs({ -0.50, 0, 0.50 }) do
+			add(rig.Torso, "MagPouch", Vector3.new(0.34, 0.54, 0.22), CFrame.new(mx, -0.22, -0.64), P.Charcoal, Enum.Material.Fabric, nil)
 		end
-		add(rig.LeftArm, "SyndicateBand", Vector3.new(0.84, 0.22, 0.84), CFrame.new(0, 0.42, 0), P.DeepRed, Enum.Material.Fabric, nil)
-		-- Half-face dark cloth gaiter mask + dark patrol cap + comms earpiece
-		add(rig.Head, "FaceGaiter", Vector3.new(1.30, 0.58, 1.28), CFrame.new(0, -0.26, -0.04), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Head, "TacCap", Vector3.new(1.36, 0.44, 1.38), CFrame.new(0, 0.54, 0.02), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Head, "TacBrim", Vector3.new(1.18, 0.09, 0.58), CFrame.new(0, 0.34, -0.76) * CFrame.Angles(math.rad(6), 0, 0), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Head, "CommsCup", Vector3.new(0.18, 0.34, 0.30), CFrame.new(-0.70, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.LeftArm, "SyndicateBand", Vector3.new(1.06, 0.24, 1.06), CFrame.new(0, 0.04, 0), P.DeepRed, Enum.Material.Fabric, nil)
+		add(rig.Head, "FaceGaiter", Vector3.new(1.22, 0.52, 1.22), CFrame.new(0, -0.24, -0.02), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Head, "TacCap", Vector3.new(1.28, 0.40, 1.30), CFrame.new(0, 0.50, 0.02), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Head, "TacBrim", Vector3.new(1.10, 0.08, 0.54), CFrame.new(0, 0.32, -0.70) * CFrame.Angles(math.rad(6), 0, 0), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Head, "CommsCup", Vector3.new(0.18, 0.32, 0.28), CFrame.new(-0.64, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil)
 		attachNPCWeapon(rig, "SMG", P.Gunmetal)
 		return rig
 
 	elseif factionId == "ObsidianKnifeOrder" then
-		-- ELITE: Cold professional hitmen — long tailored obsidian overcoat with draped coat tails, high collar, aviators, carbine
+		-- ELITE: Cold Hitman — tailored obsidian trenchcoat, high collar, oxblood tie, slicked hair, aviators, carbine
 		local rig = MafiaVisualBuilder.CreateBaseRig(
 			modelName, scale, spawnCF, P.SkinPale,
 			P.Obsidian, P.Obsidian,
-			P.Obsidian, P.Obsidian, 1.05, forPreview
+			P.Obsidian, P.Obsidian, 1.0, forPreview
 		)
 		local add = rig.AddPart
-		-- Draped long tailored overcoat skirt + upturned collar + deep oxblood dress shirt/tie peek
-		add(rig.Root, "ShirtPeek", Vector3.new(0.62, 1.38, 0.14), CFrame.new(0, 0.42, -0.58), P.Charcoal, Enum.Material.Fabric, nil)
-		add(rig.Root, "OxbloodTie", Vector3.new(0.22, 1.15, 0.16), CFrame.new(0, 0.36, -0.62), P.DeepRed, Enum.Material.Fabric, nil)
-		add(rig.Root, "HighCollarBack", Vector3.new(1.48, 0.54, 0.36), CFrame.new(0, 1.22, 0.44), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Root, "LapelL", Vector3.new(0.36, 1.15, 0.14), CFrame.new(-0.46, 0.48, -0.60) * CFrame.Angles(0, 0, math.rad(-14)), P.Charcoal, Enum.Material.Fabric, nil)
-		add(rig.Root, "LapelR", Vector3.new(0.36, 1.15, 0.14), CFrame.new(0.46, 0.48, -0.60) * CFrame.Angles(0, 0, math.rad(14)), P.Charcoal, Enum.Material.Fabric, nil)
-		add(rig.Root, "CoatTailBack", Vector3.new(2.14, 1.62, 0.24), CFrame.new(0, -1.78, 0.48), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Root, "CoatTailL", Vector3.new(0.22, 1.56, 1.04), CFrame.new(-1.02, -1.75, 0.04), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Root, "CoatTailR", Vector3.new(0.22, 1.56, 1.04), CFrame.new(1.02, -1.75, 0.04), P.Obsidian, Enum.Material.Fabric, nil)
-		-- Slicked-back dark hair + narrow dark aviators
-		add(rig.Head, "SlickHairTop", Vector3.new(1.32, 0.36, 1.38), CFrame.new(0, 0.56, 0.06), P.HairDark, Enum.Material.SmoothPlastic, nil)
-		add(rig.Head, "SlickHairBack", Vector3.new(1.30, 0.72, 0.42), CFrame.new(0, 0.22, 0.52), P.HairDark, Enum.Material.SmoothPlastic, nil)
-		add(rig.Head, "Aviators", Vector3.new(1.18, 0.28, 0.14), CFrame.new(0, 0.08, -0.63), P.Obsidian, Enum.Material.Glass, nil)
+		add(rig.Torso, "ShirtPeek", Vector3.new(0.60, 1.32, 0.14), CFrame.new(0, 0.16, -0.49), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.Torso, "OxbloodTie", Vector3.new(0.20, 1.08, 0.16), CFrame.new(0, 0.12, -0.53), P.DeepRed, Enum.Material.Fabric, nil)
+		add(rig.Torso, "HighCollarBack", Vector3.new(1.42, 0.48, 0.32), CFrame.new(0, 0.88, 0.40), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Torso, "LapelL", Vector3.new(0.32, 1.08, 0.14), CFrame.new(-0.44, 0.22, -0.52) * CFrame.Angles(0, 0, math.rad(-14)), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.Torso, "LapelR", Vector3.new(0.32, 1.08, 0.14), CFrame.new(0.44, 0.22, -0.52) * CFrame.Angles(0, 0, math.rad(14)), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "CoatTailBack", Vector3.new(2.04, 1.56, 0.22), CFrame.new(0, -0.78, 0.46), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "CoatTailL", Vector3.new(0.20, 1.48, 0.98), CFrame.new(-0.98, -0.74, 0.04), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "CoatTailR", Vector3.new(0.20, 1.48, 0.98), CFrame.new(0.98, -0.74, 0.04), P.Obsidian, Enum.Material.Fabric, nil)
+		addHairStyle(rig, "Slick", P.HairDark)
+		add(rig.Head, "Aviators", Vector3.new(1.12, 0.26, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil)
 		attachNPCWeapon(rig, "Carbine", P.Obsidian)
 		return rig
 
 	else
-		-- BOSS FACTION: Crimson Don Empire (The Crimson Don Boss OR his 2 Dedicated Enforcers)
+		-- BOSS FACTION: Crimson Don Empire (The Crimson Don Boss OR his Dedicated Mafia Enforcers)
 		if isEscort then
-			-- Don's Heavy Enforcer: structured dark charcoal greatcoat, dark fedora, black gloves, SMG
 			local rig = MafiaVisualBuilder.CreateBaseRig(
 				modelName, scale, spawnCF, P.SkinWeathered,
 				P.Charcoal, P.Obsidian,
-				P.Charcoal, P.Obsidian, 1.08, forPreview
+				P.Charcoal, P.Obsidian, 1.0, forPreview
 			)
 			local add = rig.AddPart
-			add(rig.Root, "Shirt", Vector3.new(0.68, 1.55, 0.14), CFrame.new(0, 0.30, -0.58), P.OffWhite, Enum.Material.Fabric, nil)
-			add(rig.Root, "Tie", Vector3.new(0.22, 1.25, 0.16), CFrame.new(0, 0.25, -0.62), P.DarkWine, Enum.Material.Fabric, nil)
-			add(rig.Root, "CoatSkirt", Vector3.new(2.24, 1.28, 0.24), CFrame.new(0, -1.62, 0.48), P.Charcoal, Enum.Material.Fabric, nil)
-			add(rig.Head, "Shades", Vector3.new(1.18, 0.26, 0.14), CFrame.new(0, 0.08, -0.63), P.Obsidian, Enum.Material.Glass, nil)
-			add(rig.Head, "FedoraBrim", Vector3.new(0.14, 2.05, 2.05), CFrame.new(0, 0.56, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
-			add(rig.Head, "FedoraCrown", Vector3.new(0.62, 1.38, 1.38), CFrame.new(0, 0.88, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
-			add(rig.Head, "FedoraBand", Vector3.new(0.14, 1.44, 1.44), CFrame.new(0, 0.66, 0) * CFrame.Angles(0, 0, math.rad(90)), P.DeepRed, Enum.Material.Fabric, Enum.PartType.Cylinder)
+			add(rig.Torso, "Shirt", Vector3.new(0.64, 1.46, 0.14), CFrame.new(0, 0.08, -0.49), P.OffWhite, Enum.Material.Fabric, nil)
+			add(rig.Torso, "Tie", Vector3.new(0.20, 1.18, 0.16), CFrame.new(0, 0.04, -0.53), P.DeepRed, Enum.Material.Fabric, nil)
+			add(rig.LowerTorso, "CoatSkirt", Vector3.new(2.08, 1.24, 0.22), CFrame.new(0, -0.62, 0.46), P.Charcoal, Enum.Material.Fabric, nil)
+			add(rig.Head, "Shades", Vector3.new(1.12, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil)
+			add(rig.Head, "FedoraBrim", Vector3.new(0.14, 1.98, 1.98), CFrame.new(0, 0.52, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
+			add(rig.Head, "FedoraCrown", Vector3.new(0.58, 1.32, 1.32), CFrame.new(0, 0.82, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
+			add(rig.Head, "FedoraBand", Vector3.new(0.14, 1.38, 1.38), CFrame.new(0, 0.62, 0) * CFrame.Angles(0, 0, math.rad(90)), P.DeepRed, Enum.Material.Fabric, Enum.PartType.Cylinder)
 			attachNPCWeapon(rig, "SMG", P.Gunmetal)
 			return rig
 		else
-			-- THE CRIMSON DON: Commanding presence without fantasy glow!
-			-- Broad double-breasted charcoal suit + heavy obsidian mafia greatcoat draped over shoulders + deep fur collar + classic fedora + silver beard!
+			-- THE CRIMSON DON: Obsidian Mafia Greatcoat, Fur Collar, Oxblood Silk Tie, Brass Clip, Silver Beard, Classic Fedora
 			local rig = MafiaVisualBuilder.CreateBaseRig(
 				modelName, scale, spawnCF, P.SkinWeathered,
 				P.Charcoal, P.Obsidian,
-				P.Obsidian, P.Obsidian, 1.14, forPreview
+				P.Obsidian, P.Obsidian, 1.0, forPreview
 			)
 			local add = rig.AddPart
-			-- Tailored suit vest, crisp dress shirt, deep oxblood silk tie & gold tie clip
-			add(rig.Root, "DressShirt", Vector3.new(0.76, 1.68, 0.14), CFrame.new(0, 0.34, -0.58), P.OffWhite, Enum.Material.Fabric, nil)
-			add(rig.Root, "SilkTie", Vector3.new(0.26, 1.38, 0.16), CFrame.new(0, 0.28, -0.62), P.DeepRed, Enum.Material.Fabric, nil)
-			add(rig.Root, "TieClip", Vector3.new(0.30, 0.07, 0.08), CFrame.new(0, 0.18, -0.67), P.TarnishedBrass, Enum.Material.Metal, nil)
-			-- Heavy draped Mafia Trench Coat shoulders, dark fur collar & long sweeping coat tails
-			add(rig.Root, "FurCollar", Vector3.new(2.42, 0.48, 1.24), CFrame.new(0, 1.14, 0.10), Color3.fromRGB(24, 20, 22), Enum.Material.Fabric, nil)
-			add(rig.Root, "CoatShoulderL", Vector3.new(0.78, 0.42, 1.26), CFrame.new(-1.38, 1.02, 0), P.Obsidian, Enum.Material.Fabric, nil)
-			add(rig.Root, "CoatShoulderR", Vector3.new(0.78, 0.42, 1.26), CFrame.new(1.38, 1.02, 0), P.Obsidian, Enum.Material.Fabric, nil)
-			add(rig.Root, "CoatTailBack", Vector3.new(2.48, 1.92, 0.28), CFrame.new(0, -1.88, 0.52), P.Obsidian, Enum.Material.Fabric, nil)
-			add(rig.Root, "CoatTailL", Vector3.new(0.24, 1.84, 1.12), CFrame.new(-1.18, -1.84, 0.04), P.Obsidian, Enum.Material.Fabric, nil)
-			add(rig.Root, "CoatTailR", Vector3.new(0.24, 1.84, 1.12), CFrame.new(1.18, -1.84, 0.04), P.Obsidian, Enum.Material.Fabric, nil)
-			add(rig.Root, "RedPocketSq", Vector3.new(0.24, 0.14, 0.08), CFrame.new(0.68, 0.64, -0.62), P.DeepRed, Enum.Material.Fabric, nil)
-			-- Weathered silver beard, intimidating dark brows & classic Mafia Fedora with deep red silk band
-			add(rig.Head, "SilverBeard", Vector3.new(1.06, 0.42, 0.44), CFrame.new(0, -0.40, -0.44), P.HairSilver, Enum.Material.Fabric, nil)
-			add(rig.Head, "Mustache", Vector3.new(0.68, 0.14, 0.14), CFrame.new(0, -0.18, -0.62), P.HairSilver, Enum.Material.Fabric, nil)
-			add(rig.Head, "DonFedoraBrim", Vector3.new(0.14, 2.28, 2.28), CFrame.new(0, 0.58, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
-			add(rig.Head, "DonFedoraCrown", Vector3.new(0.70, 1.46, 1.46), CFrame.new(0, 0.94, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
-			add(rig.Head, "DonFedoraRibbon", Vector3.new(0.16, 1.52, 1.52), CFrame.new(0, 0.68, 0) * CFrame.Angles(0, 0, math.rad(90)), P.DeepRed, Enum.Material.Fabric, Enum.PartType.Cylinder)
+			add(rig.Torso, "DressShirt", Vector3.new(0.70, 1.54, 0.14), CFrame.new(0, 0.10, -0.49), P.OffWhite, Enum.Material.Fabric, nil)
+			add(rig.Torso, "SilkTie", Vector3.new(0.24, 1.26, 0.16), CFrame.new(0, 0.04, -0.53), P.DeepRed, Enum.Material.Fabric, nil)
+			add(rig.Torso, "TieClip", Vector3.new(0.28, 0.07, 0.08), CFrame.new(0, -0.04, -0.58), P.TarnishedBrass, Enum.Material.Metal, nil)
+			add(rig.Torso, "FurCollar", Vector3.new(2.24, 0.44, 1.18), CFrame.new(0, 0.82, 0.08), Color3.fromRGB(28, 22, 24), Enum.Material.Fabric, nil)
+			add(rig.Torso, "RedPocketSq", Vector3.new(0.24, 0.14, 0.08), CFrame.new(0.62, 0.36, -0.53), P.DeepRed, Enum.Material.Fabric, nil)
+			add(rig.LowerTorso, "CoatTailBack", Vector3.new(2.22, 1.78, 0.24), CFrame.new(0, -0.88, 0.48), P.Obsidian, Enum.Material.Fabric, nil)
+			add(rig.LowerTorso, "CoatTailL", Vector3.new(0.22, 1.72, 1.04), CFrame.new(-1.04, -0.84, 0.04), P.Obsidian, Enum.Material.Fabric, nil)
+			add(rig.LowerTorso, "CoatTailR", Vector3.new(0.22, 1.72, 1.04), CFrame.new(1.04, -0.84, 0.04), P.Obsidian, Enum.Material.Fabric, nil)
+			add(rig.Head, "SilverBeard", Vector3.new(0.96, 0.38, 0.40), CFrame.new(0, -0.38, -0.40), P.HairSilver, Enum.Material.Fabric, nil)
+			add(rig.Head, "Mustache", Vector3.new(0.62, 0.13, 0.14), CFrame.new(0, -0.16, -0.57), P.HairSilver, Enum.Material.Fabric, nil)
+			add(rig.Head, "Shades", Vector3.new(1.12, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil)
+			add(rig.Head, "DonFedoraBrim", Vector3.new(0.14, 2.18, 2.18), CFrame.new(0, 0.54, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
+			add(rig.Head, "DonFedoraCrown", Vector3.new(0.66, 1.40, 1.40), CFrame.new(0, 0.88, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
+			add(rig.Head, "DonFedoraRibbon", Vector3.new(0.16, 1.46, 1.46), CFrame.new(0, 0.64, 0) * CFrame.Angles(0, 0, math.rad(90)), P.DeepRed, Enum.Material.Fabric, Enum.PartType.Cylinder)
 			attachNPCWeapon(rig, "BossRifle", P.Obsidian)
 			return rig
 		end
@@ -391,7 +591,7 @@ function MafiaVisualBuilder.BuildRivalRig(
 end
 
 -- ============================================================================
--- 2. PLAYER BODYGUARD MODELS (7 Distinct Professional Enforcer Silhouettes)
+-- 2. PLAYER BODYGUARD MODELS (7 Distinct R15 Professional Enforcer Designs)
 -- ============================================================================
 export type BodyguardVisualOverrides = {
 	OutfitColor: Color3?,
@@ -413,154 +613,142 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 	local ov = overrides or {}
 
 	if classId == "HeavyGuard" then
-		-- HEAVY GUARD: Broad armored breacher silhouette — matte plate carrier, layered shoulder pauldrons, riot helmet w/ tinted shield visor, pump shotgun + steel riot shield
 		local suit = ov.OutfitColor or P.Charcoal
-		local armor = ov.ArmorColor or Color3.fromRGB(36, 40, 46)
+		local armor = ov.ArmorColor or Color3.fromRGB(42, 46, 54)
 		local helm = ov.HelmetColor or P.Obsidian
-		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, suit, P.Obsidian, suit, P.Obsidian, 1.18, forPreview)
+		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, suit, P.Obsidian, suit, P.Obsidian, 1.0, forPreview)
 		local add = rig.AddPart
-		-- Layered matte ceramic plate carrier & collar + shoulder pads
-		add(rig.Root, "HeavyCarrier", Vector3.new(2.54, 1.72, 1.52), CFrame.new(0, 0.14, 0), armor, Enum.Material.Metal, nil)
-		add(rig.Root, "ThroatGuard", Vector3.new(1.38, 0.36, 1.12), CFrame.new(0, 1.14, 0), armor, Enum.Material.Metal, nil)
-		add(rig.Root, "GroinPlate", Vector3.new(1.24, 0.68, 0.24), CFrame.new(0, -1.24, -0.68), armor, Enum.Material.Metal, nil)
-		add(rig.LeftArm, "PauldronL", Vector3.new(0.96, 0.78, 0.96), CFrame.new(-0.08, 0.68, 0), armor, Enum.Material.Metal, nil)
-		add(rig.RightArm, "PauldronR", Vector3.new(0.96, 0.78, 0.96), CFrame.new(0.08, 0.68, 0), armor, Enum.Material.Metal, nil)
-		-- Ballistic Riot Helmet + smoked polycarbonate visor
-		add(rig.Head, "RiotHelm", Vector3.new(1.48, 0.84, 1.52), CFrame.new(0, 0.44, 0.04), helm, Enum.Material.Metal, nil)
-		add(rig.Head, "RiotVisor", Vector3.new(1.38, 0.48, 0.14), CFrame.new(0, 0.06, -0.74), Color3.fromRGB(22, 26, 32), Enum.Material.Glass, nil)
-		-- Matte steel ballistic shield on left forearm
-		add(rig.LeftArm, "BallisticShield", Vector3.new(0.24, 2.38, 1.54), CFrame.new(-0.56, -0.24, -0.20), P.Gunmetal, Enum.Material.Metal, nil)
-		add(rig.LeftArm, "ShieldViewport", Vector3.new(0.28, 0.32, 0.82), CFrame.new(-0.56, 0.44, -0.20), Color3.fromRGB(36, 44, 52), Enum.Material.Glass, nil)
+		add(rig.Torso, "HeavyCarrier", Vector3.new(2.24, 1.56, 1.36), CFrame.new(0, 0.04, 0), armor, Enum.Material.Metal, nil)
+		add(rig.Torso, "ThroatGuard", Vector3.new(1.30, 0.34, 1.06), CFrame.new(0, 0.88, 0), armor, Enum.Material.Metal, nil)
+		add(rig.LowerTorso, "GroinPlate", Vector3.new(1.18, 0.60, 0.22), CFrame.new(0, -0.26, -0.58), armor, Enum.Material.Metal, nil)
+		add(rig.LeftArm, "PauldronL", Vector3.new(1.14, 0.72, 1.14), CFrame.new(-0.08, 0.22, 0), armor, Enum.Material.Metal, nil)
+		add(rig.RightArm, "PauldronR", Vector3.new(1.14, 0.72, 1.14), CFrame.new(0.08, 0.22, 0), armor, Enum.Material.Metal, nil)
+		add(rig.Head, "RiotHelm", Vector3.new(1.38, 0.78, 1.42), CFrame.new(0, 0.42, 0.04), helm, Enum.Material.Metal, nil)
+		add(rig.Head, "RiotVisor", Vector3.new(1.28, 0.44, 0.14), CFrame.new(0, 0.06, -0.68), Color3.fromRGB(22, 26, 32), Enum.Material.Glass, nil)
+		add(rig.LeftLowerArm, "BallisticShield", Vector3.new(0.22, 2.24, 1.44), CFrame.new(-0.62, -0.05, -0.18), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.LeftLowerArm, "ShieldViewport", Vector3.new(0.26, 0.30, 0.78), CFrame.new(-0.62, 0.58, -0.18), Color3.fromRGB(36, 44, 52), Enum.Material.Glass, nil)
 		attachNPCWeapon(rig, "Shotgun", ov.WeaponColor or P.Gunmetal)
 		return rig
 
 	elseif classId == "AssaultGuard" then
-		-- ASSAULT GUARD: Sleek tactical operator — fitted slate combat shirt, chest rig w/ mags, shoulder radio antenna, patrol cap & comms headset, carbine
-		local suit = ov.OutfitColor or Color3.fromRGB(38, 42, 48)
-		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, suit, P.Obsidian, suit, P.Obsidian, 1.04, forPreview)
+		local suit = ov.OutfitColor or Color3.fromRGB(40, 44, 52)
+		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, suit, P.Obsidian, suit, P.Obsidian, 1.0, forPreview)
 		local add = rig.AddPart
 		local vestCol = ov.ArmorColor or P.Obsidian
-		add(rig.Root, "TacVest", Vector3.new(2.14, 1.52, 1.32), CFrame.new(0, 0.12, 0), vestCol, Enum.Material.Fabric, nil)
-		for _, mx in ipairs({ -0.56, 0, 0.56 }) do
-			add(rig.Root, "RiflePouch", Vector3.new(0.36, 0.62, 0.26), CFrame.new(mx, -0.22, -0.74), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.Torso, "TacVest", Vector3.new(2.06, 1.42, 1.22), CFrame.new(0, 0.02, 0), vestCol, Enum.Material.Fabric, nil)
+		for _, mx in ipairs({ -0.52, 0, 0.52 }) do
+			add(rig.Torso, "RiflePouch", Vector3.new(0.34, 0.56, 0.24), CFrame.new(mx, -0.26, -0.66), P.Charcoal, Enum.Material.Fabric, nil)
 		end
-		add(rig.Root, "RadioUnit", Vector3.new(0.26, 0.52, 0.24), CFrame.new(-0.84, 0.56, 0.68), P.Obsidian, Enum.Material.Metal, nil)
-		add(rig.Root, "RadioAntenna", Vector3.new(0.05, 1.15, 0.05), CFrame.new(-0.84, 1.32, 0.68), P.Obsidian, Enum.Material.Metal, nil)
+		add(rig.Torso, "RadioUnit", Vector3.new(0.24, 0.48, 0.22), CFrame.new(-0.78, 0.44, 0.62), P.Obsidian, Enum.Material.Metal, nil)
+		add(rig.Torso, "RadioAntenna", Vector3.new(0.05, 1.08, 0.05), CFrame.new(-0.78, 1.14, 0.62), P.Obsidian, Enum.Material.Metal, nil)
 		local helmCol = ov.HelmetColor or P.Obsidian
-		add(rig.Head, "OperatorCap", Vector3.new(1.36, 0.46, 1.38), CFrame.new(0, 0.52, 0.02), helmCol, Enum.Material.Fabric, nil)
-		add(rig.Head, "CapBrim", Vector3.new(1.18, 0.08, 0.56), CFrame.new(0, 0.34, -0.76) * CFrame.Angles(math.rad(6), 0, 0), helmCol, Enum.Material.Fabric, nil)
-		add(rig.Head, "TacGoggles", Vector3.new(1.22, 0.28, 0.18), CFrame.new(0, 0.10, -0.63), Color3.fromRGB(22, 24, 28), Enum.Material.Glass, nil)
-		add(rig.Head, "HeadsetL", Vector3.new(0.18, 0.36, 0.30), CFrame.new(-0.70, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil)
-		add(rig.Head, "HeadsetR", Vector3.new(0.18, 0.36, 0.30), CFrame.new(0.70, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.Head, "OperatorCap", Vector3.new(1.28, 0.42, 1.30), CFrame.new(0, 0.48, 0.02), helmCol, Enum.Material.Fabric, nil)
+		add(rig.Head, "CapBrim", Vector3.new(1.10, 0.08, 0.52), CFrame.new(0, 0.30, -0.70) * CFrame.Angles(math.rad(6), 0, 0), helmCol, Enum.Material.Fabric, nil)
+		add(rig.Head, "TacGoggles", Vector3.new(1.16, 0.26, 0.16), CFrame.new(0, 0.08, -0.57), Color3.fromRGB(22, 24, 28), Enum.Material.Glass, nil)
+		add(rig.Head, "HeadsetL", Vector3.new(0.18, 0.34, 0.28), CFrame.new(-0.64, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.Head, "HeadsetR", Vector3.new(0.18, 0.34, 0.28), CFrame.new(0.64, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil)
 		attachNPCWeapon(rig, "Carbine", ov.WeaponColor or P.Gunmetal)
 		return rig
 
 	elseif classId == "SniperGuard" then
-		-- SNIPER GUARD: Distinct recon marksman silhouette — hooded charcoal-olive cloak/capelet, asymmetric chest bandolier, recon visor eyepiece, long scoped sniper
 		local suit = ov.OutfitColor or P.OliveCharcoal
-		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinPale, suit, P.Charcoal, suit, P.Obsidian, 0.96, forPreview)
+		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinPale, suit, P.Charcoal, suit, P.Obsidian, 1.0, forPreview)
 		local add = rig.AddPart
-		-- Draped hooded recon mantle & diagonal .308 cartridge bandolier
-		add(rig.Root, "ReconCapeBack", Vector3.new(2.08, 1.72, 0.18), CFrame.new(0, 0.04, 0.64) * CFrame.Angles(math.rad(6), 0, 0), P.Charcoal, Enum.Material.Fabric, nil)
-		add(rig.Root, "ShoulderMantle", Vector3.new(2.38, 0.44, 1.32), CFrame.new(0, 0.96, 0.08), P.Charcoal, Enum.Material.Fabric, nil)
-		add(rig.Root, "AmmoStrap", Vector3.new(0.24, 2.18, 1.24), CFrame.new(0, 0.10, 0) * CFrame.Angles(0, 0, math.rad(36)), P.WornLeather, Enum.Material.Leather, nil)
+		add(rig.Torso, "ReconCapeBack", Vector3.new(2.02, 1.68, 0.18), CFrame.new(0, -0.10, 0.60) * CFrame.Angles(math.rad(6), 0, 0), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.Torso, "ShoulderMantle", Vector3.new(2.26, 0.40, 1.24), CFrame.new(0, 0.72, 0.06), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.Torso, "AmmoStrap", Vector3.new(0.22, 2.02, 1.14), CFrame.new(0, 0.02, 0) * CFrame.Angles(0, 0, math.rad(36)), P.WornLeather, Enum.Material.Leather, nil)
 		if ov.ArmorColor then
-			add(rig.Root, "LightPlate", Vector3.new(1.88, 1.22, 1.24), CFrame.new(0, 0.12, 0), ov.ArmorColor, Enum.Material.Metal, nil)
+			add(rig.Torso, "LightPlate", Vector3.new(1.86, 1.16, 1.18), CFrame.new(0, 0.04, 0), ov.ArmorColor, Enum.Material.Metal, nil)
 		end
-		-- Low-profile Recon Hood + single right-eye rangefinder optic
 		local helmCol = ov.HelmetColor or P.Charcoal
-		add(rig.Head, "ReconHoodTop", Vector3.new(1.48, 0.56, 1.56), CFrame.new(0, 0.46, 0.08), helmCol, Enum.Material.Fabric, nil)
-		add(rig.Head, "ReconHoodSideL", Vector3.new(0.20, 1.12, 1.38), CFrame.new(-0.68, 0.02, 0.08), helmCol, Enum.Material.Fabric, nil)
-		add(rig.Head, "ReconHoodSideR", Vector3.new(0.20, 1.12, 1.38), CFrame.new(0.68, 0.02, 0.08), helmCol, Enum.Material.Fabric, nil)
-		add(rig.Head, "FaceWrap", Vector3.new(1.26, 0.48, 1.24), CFrame.new(0, -0.28, -0.02), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Head, "RangefinderLens", Vector3.new(0.24, 0.24, 0.34), CFrame.new(0.26, 0.10, -0.68), P.Gunmetal, Enum.Material.Metal, nil)
+		add(rig.Head, "ReconHoodTop", Vector3.new(1.40, 0.52, 1.46), CFrame.new(0, 0.44, 0.08), helmCol, Enum.Material.Fabric, nil)
+		add(rig.Head, "ReconHoodSideL", Vector3.new(0.18, 1.06, 1.30), CFrame.new(-0.62, 0.02, 0.08), helmCol, Enum.Material.Fabric, nil)
+		add(rig.Head, "ReconHoodSideR", Vector3.new(0.18, 1.06, 1.30), CFrame.new(0.62, 0.02, 0.08), helmCol, Enum.Material.Fabric, nil)
+		add(rig.Head, "FaceWrap", Vector3.new(1.18, 0.46, 1.18), CFrame.new(0, -0.26, -0.02), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Head, "RangefinderLens", Vector3.new(0.24, 0.24, 0.32), CFrame.new(0.24, 0.08, -0.62), P.Gunmetal, Enum.Material.Metal, nil)
 		attachNPCWeapon(rig, "Sniper", ov.WeaponColor or P.Gunmetal)
 		return rig
 
 	elseif classId == "TacticalGuard" then
-		-- TACTICAL GUARD: Field Support Specialist — charcoal utility jacket, cross-body trauma kit bag, subtle oxblood medic armband, matte comms helmet, carbine
 		local suit = ov.OutfitColor or P.Charcoal
-		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, suit, P.Obsidian, suit, P.Obsidian, 1.04, forPreview)
+		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, suit, P.Obsidian, suit, P.Obsidian, 1.0, forPreview)
 		local add = rig.AddPart
 		local vestCol = ov.ArmorColor or P.Slate
-		add(rig.Root, "UtilityRig", Vector3.new(2.14, 1.56, 1.32), CFrame.new(0, 0.10, 0), vestCol, Enum.Material.Fabric, nil)
-		-- Trauma backpack & subtle dark-red field medic patch on arm
-		add(rig.Root, "TraumaPack", Vector3.new(1.36, 1.48, 0.62), CFrame.new(0, 0.10, 0.88), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Root, "MedCrossH", Vector3.new(0.42, 0.12, 0.06), CFrame.new(0, 0.24, 1.20), P.DeepRed, Enum.Material.SmoothPlastic, nil)
-		add(rig.Root, "MedCrossV", Vector3.new(0.12, 0.42, 0.06), CFrame.new(0, 0.24, 1.20), P.DeepRed, Enum.Material.SmoothPlastic, nil)
-		add(rig.LeftArm, "MedicArmband", Vector3.new(0.84, 0.32, 0.84), CFrame.new(0, 0.40, 0), P.DeepRed, Enum.Material.Fabric, nil)
+		add(rig.Torso, "UtilityRig", Vector3.new(2.06, 1.44, 1.22), CFrame.new(0, 0.02, 0), vestCol, Enum.Material.Fabric, nil)
+		add(rig.Torso, "TraumaPack", Vector3.new(1.28, 1.38, 0.58), CFrame.new(0, 0.02, 0.80), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Torso, "MedCrossH", Vector3.new(0.40, 0.12, 0.06), CFrame.new(0, 0.16, 1.10), P.DeepRed, Enum.Material.SmoothPlastic, nil)
+		add(rig.Torso, "MedCrossV", Vector3.new(0.12, 0.40, 0.06), CFrame.new(0, 0.16, 1.10), P.DeepRed, Enum.Material.SmoothPlastic, nil)
+		add(rig.LeftArm, "MedicArmband", Vector3.new(1.06, 0.30, 1.06), CFrame.new(0, 0.04, 0), P.DeepRed, Enum.Material.Fabric, nil)
 		local helmCol = ov.HelmetColor or P.Charcoal
-		add(rig.Head, "TacHelmet", Vector3.new(1.44, 0.72, 1.46), CFrame.new(0, 0.48, 0.04), helmCol, Enum.Material.Metal, nil)
-		add(rig.Head, "CommsMic", Vector3.new(0.08, 0.08, 0.56), CFrame.new(-0.56, -0.18, -0.44) * CFrame.Angles(0, math.rad(28), 0), P.Obsidian, Enum.Material.Metal, nil)
+		add(rig.Head, "TacHelmet", Vector3.new(1.36, 0.68, 1.38), CFrame.new(0, 0.44, 0.04), helmCol, Enum.Material.Metal, nil)
+		add(rig.Head, "CommsMic", Vector3.new(0.08, 0.08, 0.52), CFrame.new(-0.52, -0.18, -0.40) * CFrame.Angles(0, math.rad(28), 0), P.Obsidian, Enum.Material.Metal, nil)
 		attachNPCWeapon(rig, "Carbine", ov.WeaponColor or P.Gunmetal)
 		return rig
 
 	elseif classId == "EliteGuard" then
-		-- ELITE GUARD: Executive Hitman — razor-tailored long matte-black trench coat, structured lapels, slicked hair, dark glasses, suppressed precision rifle
 		local suit = ov.OutfitColor or P.Obsidian
-		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinPale, suit, P.Obsidian, suit, P.Obsidian, 1.07, forPreview)
+		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinPale, suit, P.Obsidian, suit, P.Obsidian, 1.0, forPreview)
 		local add = rig.AddPart
-		add(rig.Root, "DressShirt", Vector3.new(0.68, 1.56, 0.14), CFrame.new(0, 0.36, -0.58), P.OffWhite, Enum.Material.Fabric, nil)
-		add(rig.Root, "SlimTie", Vector3.new(0.20, 1.26, 0.16), CFrame.new(0, 0.32, -0.62), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Torso, "DressShirt", Vector3.new(0.64, 1.48, 0.14), CFrame.new(0, 0.10, -0.49), P.OffWhite, Enum.Material.Fabric, nil)
+		add(rig.Torso, "SlimTie", Vector3.new(0.18, 1.18, 0.16), CFrame.new(0, 0.08, -0.53), P.Obsidian, Enum.Material.Fabric, nil)
 		if ov.ArmorColor then
-			add(rig.Root, "UnderVest", Vector3.new(1.96, 1.28, 1.24), CFrame.new(0, 0.08, 0), ov.ArmorColor, Enum.Material.Metal, nil)
+			add(rig.Torso, "UnderVest", Vector3.new(1.94, 1.24, 1.16), CFrame.new(0, 0.02, 0), ov.ArmorColor, Enum.Material.Metal, nil)
 		end
-		add(rig.Root, "HighCollar", Vector3.new(1.52, 0.46, 0.42), CFrame.new(0, 1.20, 0.40), suit, Enum.Material.Fabric, nil)
-		add(rig.Root, "CoatTailBack", Vector3.new(2.20, 1.72, 0.24), CFrame.new(0, -1.80, 0.48), suit, Enum.Material.Fabric, nil)
-		add(rig.Root, "CoatTailL", Vector3.new(0.22, 1.66, 1.06), CFrame.new(-1.05, -1.78, 0.04), suit, Enum.Material.Fabric, nil)
-		add(rig.Root, "CoatTailR", Vector3.new(0.22, 1.66, 1.06), CFrame.new(1.05, -1.78, 0.04), suit, Enum.Material.Fabric, nil)
-		add(rig.Head, "SlickHair", Vector3.new(1.32, 0.34, 1.38), CFrame.new(0, 0.56, 0.06), P.HairDark, Enum.Material.SmoothPlastic, nil)
-		add(rig.Head, "DarkGlasses", Vector3.new(1.18, 0.25, 0.14), CFrame.new(0, 0.08, -0.63), P.Obsidian, Enum.Material.Glass, nil)
+		add(rig.Torso, "HighCollar", Vector3.new(1.44, 0.42, 0.38), CFrame.new(0, 0.86, 0.36), suit, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "CoatTailBack", Vector3.new(2.08, 1.64, 0.22), CFrame.new(0, -0.80, 0.46), suit, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "CoatTailL", Vector3.new(0.20, 1.56, 1.00), CFrame.new(-0.98, -0.78, 0.04), suit, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "CoatTailR", Vector3.new(0.20, 1.56, 1.00), CFrame.new(0.98, -0.78, 0.04), suit, Enum.Material.Fabric, nil)
+		addHairStyle(rig, "Slick", P.HairDark)
+		add(rig.Head, "DarkGlasses", Vector3.new(1.12, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil)
 		if ov.HelmetColor then
-			add(rig.Head, "EliteHelm", Vector3.new(1.44, 0.64, 1.46), CFrame.new(0, 0.52, 0.04), ov.HelmetColor, Enum.Material.Metal, nil)
+			add(rig.Head, "EliteHelm", Vector3.new(1.36, 0.60, 1.38), CFrame.new(0, 0.48, 0.04), ov.HelmetColor, Enum.Material.Metal, nil)
 		end
 		attachNPCWeapon(rig, "Carbine", ov.WeaponColor or P.Obsidian)
 		return rig
 
 	elseif classId == "BossBodyguard" then
-		-- BOSS BODYGUARD: Underboss Commander — commanding tall build, obsidian 3-piece suit, draped dark overcoat, deep red silk tie, classic black fedora, tarnished brass clip, heavy battle rifle
 		local suit = ov.OutfitColor or P.Obsidian
-		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWeathered, suit, P.Obsidian, suit, P.Obsidian, 1.15, forPreview)
+		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWeathered, suit, P.Obsidian, suit, P.Obsidian, 1.0, forPreview)
 		local add = rig.AddPart
-		add(rig.Root, "DressShirt", Vector3.new(0.76, 1.66, 0.14), CFrame.new(0, 0.34, -0.58), P.OffWhite, Enum.Material.Fabric, nil)
-		add(rig.Root, "UnderbossTie", Vector3.new(0.24, 1.34, 0.16), CFrame.new(0, 0.28, -0.62), P.DeepRed, Enum.Material.Fabric, nil)
-		add(rig.Root, "BrassPin", Vector3.new(0.28, 0.08, 0.08), CFrame.new(0, 0.20, -0.67), P.TarnishedBrass, Enum.Material.Metal, nil)
-		add(rig.Root, "CoatCollar", Vector3.new(2.38, 0.44, 1.24), CFrame.new(0, 1.12, 0.08), P.Charcoal, Enum.Material.Fabric, nil)
-		add(rig.Root, "OvercoatBack", Vector3.new(2.44, 1.88, 0.28), CFrame.new(0, -1.86, 0.50), P.Charcoal, Enum.Material.Fabric, nil)
-		add(rig.Root, "OvercoatL", Vector3.new(0.24, 1.80, 1.12), CFrame.new(-1.16, -1.82, 0.04), P.Charcoal, Enum.Material.Fabric, nil)
-		add(rig.Root, "OvercoatR", Vector3.new(0.24, 1.80, 1.12), CFrame.new(1.16, -1.82, 0.04), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.Torso, "DressShirt", Vector3.new(0.70, 1.54, 0.14), CFrame.new(0, 0.10, -0.49), P.OffWhite, Enum.Material.Fabric, nil)
+		add(rig.Torso, "UnderbossTie", Vector3.new(0.22, 1.24, 0.16), CFrame.new(0, 0.04, -0.53), P.DeepRed, Enum.Material.Fabric, nil)
+		add(rig.Torso, "BrassPin", Vector3.new(0.26, 0.08, 0.08), CFrame.new(0, -0.02, -0.58), P.TarnishedBrass, Enum.Material.Metal, nil)
+		add(rig.Torso, "CoatCollar", Vector3.new(2.20, 0.42, 1.16), CFrame.new(0, 0.80, 0.08), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "OvercoatBack", Vector3.new(2.16, 1.72, 0.24), CFrame.new(0, -0.84, 0.46), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "OvercoatL", Vector3.new(0.22, 1.64, 1.02), CFrame.new(-1.02, -0.80, 0.04), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "OvercoatR", Vector3.new(0.22, 1.64, 1.02), CFrame.new(1.02, -0.80, 0.04), P.Charcoal, Enum.Material.Fabric, nil)
 		if ov.ArmorColor then
-			add(rig.Root, "ConcealedPlate", Vector3.new(2.12, 1.32, 1.24), CFrame.new(0, 0.06, 0), ov.ArmorColor, Enum.Material.Metal, nil)
+			add(rig.Torso, "ConcealedPlate", Vector3.new(2.04, 1.26, 1.18), CFrame.new(0, 0.02, 0), ov.ArmorColor, Enum.Material.Metal, nil)
 		end
-		add(rig.Head, "Shades", Vector3.new(1.20, 0.26, 0.14), CFrame.new(0, 0.08, -0.63), P.Obsidian, Enum.Material.Glass, nil)
-		add(rig.Head, "Goatee", Vector3.new(0.56, 0.34, 0.24), CFrame.new(0, -0.36, -0.52), P.HairSilver, Enum.Material.Fabric, nil)
+		add(rig.Head, "Shades", Vector3.new(1.12, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil)
+		add(rig.Head, "Goatee", Vector3.new(0.52, 0.30, 0.22), CFrame.new(0, -0.34, -0.46), P.HairSilver, Enum.Material.Fabric, nil)
 		local hatCol = ov.HelmetColor or P.Obsidian
-		add(rig.Head, "BorsalinoBrim", Vector3.new(0.14, 2.24, 2.24), CFrame.new(0, 0.58, 0) * CFrame.Angles(0, 0, math.rad(90)), hatCol, Enum.Material.Fabric, Enum.PartType.Cylinder)
-		add(rig.Head, "BorsalinoCrown", Vector3.new(0.68, 1.44, 1.44), CFrame.new(0, 0.92, 0) * CFrame.Angles(0, 0, math.rad(90)), hatCol, Enum.Material.Fabric, Enum.PartType.Cylinder)
-		add(rig.Head, "BorsalinoBand", Vector3.new(0.14, 1.50, 1.50), CFrame.new(0, 0.68, 0) * CFrame.Angles(0, 0, math.rad(90)), P.TarnishedBrass, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		add(rig.Head, "BorsalinoBrim", Vector3.new(0.14, 2.12, 2.12), CFrame.new(0, 0.54, 0) * CFrame.Angles(0, 0, math.rad(90)), hatCol, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		add(rig.Head, "BorsalinoCrown", Vector3.new(0.64, 1.38, 1.38), CFrame.new(0, 0.86, 0) * CFrame.Angles(0, 0, math.rad(90)), hatCol, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		add(rig.Head, "BorsalinoBand", Vector3.new(0.14, 1.44, 1.44), CFrame.new(0, 0.64, 0) * CFrame.Angles(0, 0, math.rad(90)), P.TarnishedBrass, Enum.Material.Fabric, Enum.PartType.Cylinder)
 		attachNPCWeapon(rig, "BossRifle", ov.WeaponColor or P.Obsidian)
 		return rig
 
 	else
-		-- BASIC GUARD: Clean private security / suit detail — tailored charcoal 2-piece suit, white dress shirt, narrow black tie, sunglasses, coiled earpiece!
+		-- BASIC GUARD: Tailored charcoal 2-piece suit, white dress shirt, narrow black tie, sunglasses, coiled earpiece
 		local suit = ov.OutfitColor or P.Charcoal
-		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, suit, suit, suit, P.Obsidian, 1.02, forPreview)
+		local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, suit, suit, suit, P.Obsidian, 1.0, forPreview)
 		local add = rig.AddPart
-		add(rig.Root, "DressShirt", Vector3.new(0.72, 1.62, 0.14), CFrame.new(0, 0.32, -0.58), P.OffWhite, Enum.Material.Fabric, nil)
-		add(rig.Root, "BlackTie", Vector3.new(0.20, 1.32, 0.16), CFrame.new(0, 0.26, -0.62), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Root, "SuitLapelL", Vector3.new(0.32, 1.15, 0.12), CFrame.new(-0.46, 0.44, -0.60) * CFrame.Angles(0, 0, math.rad(-14)), P.Obsidian, Enum.Material.Fabric, nil)
-		add(rig.Root, "SuitLapelR", Vector3.new(0.32, 1.15, 0.12), CFrame.new(0.46, 0.44, -0.60) * CFrame.Angles(0, 0, math.rad(14)), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Torso, "DressShirt", Vector3.new(0.68, 1.50, 0.14), CFrame.new(0, 0.08, -0.49), P.OffWhite, Enum.Material.Fabric, nil)
+		add(rig.Torso, "BlackTie", Vector3.new(0.18, 1.22, 0.16), CFrame.new(0, 0.04, -0.53), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Torso, "SuitLapelL", Vector3.new(0.30, 1.06, 0.12), CFrame.new(-0.44, 0.18, -0.51) * CFrame.Angles(0, 0, math.rad(-14)), P.Obsidian, Enum.Material.Fabric, nil)
+		add(rig.Torso, "SuitLapelR", Vector3.new(0.30, 1.06, 0.12), CFrame.new(0.44, 0.18, -0.51) * CFrame.Angles(0, 0, math.rad(14)), P.Obsidian, Enum.Material.Fabric, nil)
 		if ov.ArmorColor then
-			add(rig.Root, "KevlarVest", Vector3.new(2.08, 1.38, 1.26), CFrame.new(0, 0.10, 0), ov.ArmorColor, Enum.Material.Metal, nil)
+			add(rig.Torso, "KevlarVest", Vector3.new(2.04, 1.32, 1.20), CFrame.new(0, 0.04, 0), ov.ArmorColor, Enum.Material.Metal, nil)
 		end
-		add(rig.Head, "ShortHair", Vector3.new(1.30, 0.34, 1.34), CFrame.new(0, 0.56, 0.04), P.HairDark, Enum.Material.SmoothPlastic, nil)
-		add(rig.Head, "Shades", Vector3.new(1.16, 0.25, 0.14), CFrame.new(0, 0.08, -0.63), P.Obsidian, Enum.Material.Glass, nil)
-		add(rig.Head, "Earpiece", Vector3.new(0.10, 0.28, 0.10), CFrame.new(0.66, -0.14, 0.04), P.OffWhite, Enum.Material.SmoothPlastic, nil)
+		addHairStyle(rig, "Parted", P.HairDark)
+		add(rig.Head, "Shades", Vector3.new(1.10, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil)
+		add(rig.Head, "Earpiece", Vector3.new(0.09, 0.26, 0.09), CFrame.new(0.60, -0.14, 0.04), P.OffWhite, Enum.Material.SmoothPlastic, nil)
 		if ov.HelmetColor then
-			add(rig.Head, "GuardHelm", Vector3.new(1.42, 0.64, 1.44), CFrame.new(0, 0.50, 0.04), ov.HelmetColor, Enum.Material.Metal, nil)
+			add(rig.Head, "GuardHelm", Vector3.new(1.34, 0.60, 1.36), CFrame.new(0, 0.46, 0.04), ov.HelmetColor, Enum.Material.Metal, nil)
 		end
 		if ov.HasRiotPlate then
-			add(rig.LeftArm, "CompactShield", Vector3.new(0.22, 2.05, 1.36), CFrame.new(-0.54, -0.22, -0.18), P.Gunmetal, Enum.Material.Metal, nil)
+			add(rig.LeftLowerArm, "CompactShield", Vector3.new(0.20, 1.95, 1.28), CFrame.new(-0.56, -0.05, -0.16), P.Gunmetal, Enum.Material.Metal, nil)
 		end
 		attachNPCWeapon(rig, if ov.IsRanged then "SMG" else "Pistol", ov.WeaponColor or P.Gunmetal)
 		return rig
@@ -568,7 +756,7 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 end
 
 -- ============================================================================
--- 3. REALISTIC STAFF, CUSTOMER, MARKET BROKER & MOTORBIKE COURIER RIGS
+-- 3. AUTHENTIC R15 STAFF, CITIZENS, NEIGHBORS, MARKET BROKER & COURIERS
 -- ============================================================================
 function MafiaVisualBuilder.BuildChefRig(
 	modelName: string,
@@ -577,33 +765,36 @@ function MafiaVisualBuilder.BuildChefRig(
 	spawnCF: CFrame,
 	isProChef: boolean?
 ): RigHandle
-	local coatCol = Color3.fromRGB(232, 230, 224)
+	local coatCol = Color3.fromRGB(238, 236, 230)
 	local scarfCol = if isProChef then P.TarnishedBrass else P.DeepRed
-	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, coatCol, P.Charcoal, coatCol, nil, 1.02, false)
+	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, coatCol, P.Charcoal, coatCol, nil, 1.0, false)
 	local add = rig.AddPart
 
-	-- Double-breasted tailored chef jacket buttons, collar, neckerchief & waist apron
-	add(rig.Root, "MandarinCollar", Vector3.new(1.22, 0.34, 1.16), CFrame.new(0, 1.12, 0), coatCol, Enum.Material.Fabric, nil)
-	add(rig.Root, "Neckerchief", Vector3.new(0.68, 0.42, 0.24), CFrame.new(0, 0.96, -0.56), scarfCol, Enum.Material.Fabric, nil)
+	-- Double-breasted tailored R15 Chef Jacket with collar, neckerchief, buttons & waist apron
+	add(rig.Torso, "MandarinCollar", Vector3.new(1.16, 0.30, 1.08), CFrame.new(0, 0.82, 0), coatCol, Enum.Material.Fabric, nil)
+	add(rig.Torso, "Neckerchief", Vector3.new(0.64, 0.38, 0.22), CFrame.new(0, 0.68, -0.49), scarfCol, Enum.Material.Fabric, nil)
 	for row = 0, 2 do
-		local y = 0.52 - row * 0.36
-		add(rig.Root, "BtnL_" .. row, Vector3.new(0.11, 0.11, 0.08), CFrame.new(-0.28, y, -0.60), P.Obsidian, Enum.Material.SmoothPlastic, nil)
-		add(rig.Root, "BtnR_" .. row, Vector3.new(0.11, 0.11, 0.08), CFrame.new(0.28, y, -0.60), P.Obsidian, Enum.Material.SmoothPlastic, nil)
+		local y = 0.28 - row * 0.34
+		add(rig.Torso, "BtnL_" .. row, Vector3.new(0.10, 0.10, 0.08), CFrame.new(-0.26, y, -0.52), P.Obsidian, Enum.Material.SmoothPlastic, nil)
+		add(rig.Torso, "BtnR_" .. row, Vector3.new(0.10, 0.10, 0.08), CFrame.new(0.26, y, -0.52), P.Obsidian, Enum.Material.SmoothPlastic, nil)
 	end
-	add(rig.Root, "ChefApron", Vector3.new(2.14, 1.25, 1.24), CFrame.new(0, -0.78, -0.02), accentCol, Enum.Material.Fabric, nil)
-	add(rig.Root, "ApronTowel", Vector3.new(0.36, 0.68, 0.18), CFrame.new(0.76, -0.88, -0.58), P.OffWhite, Enum.Material.Fabric, nil)
+	add(rig.LowerTorso, "ChefApron", Vector3.new(2.08, 1.24, 1.14), CFrame.new(0, -0.42, -0.02), accentCol, Enum.Material.Fabric, nil)
+	add(rig.LowerTorso, "ApronTowel", Vector3.new(0.34, 0.64, 0.16), CFrame.new(0.72, -0.34, -0.56), P.OffWhite, Enum.Material.Fabric, nil)
 
-	-- Realistic proportioned hair & pleated chef toque (NO giant sphere!)
-	add(rig.Head, "SideHair", Vector3.new(1.30, 0.38, 1.32), CFrame.new(0, 0.28, 0.08), P.HairDark, Enum.Material.SmoothPlastic, nil)
-	add(rig.Head, "ToqueBand", Vector3.new(0.46, 1.34, 1.34), CFrame.new(0, 0.72, 0) * CFrame.Angles(0, 0, math.rad(90)), coatCol, Enum.Material.Fabric, Enum.PartType.Cylinder)
-	add(rig.Head, "ToqueCrown", Vector3.new(0.58, 1.54, 1.54), CFrame.new(0, 1.12, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(242, 240, 236), Enum.Material.Fabric, Enum.PartType.Cylinder)
+	-- Sculpted pleated multi-puff Chef Toque + Hair + Chef Mustache
+	add(rig.Head, "SideHair", Vector3.new(1.22, 0.32, 1.24), CFrame.new(0, 0.28, 0.08), P.HairDark, Enum.Material.SmoothPlastic, nil)
+	add(rig.Head, "ToqueBand", Vector3.new(0.46, 1.24, 1.24), CFrame.new(0, 0.66, 0) * CFrame.Angles(0, 0, math.rad(90)), coatCol, Enum.Material.Fabric, Enum.PartType.Cylinder)
+	add(rig.Head, "ToqueCrown", Vector3.new(0.56, 1.48, 1.48), CFrame.new(0, 1.06, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(246, 244, 240), Enum.Material.Fabric, Enum.PartType.Cylinder)
+	add(rig.Head, "ToquePuffL", Vector3.new(0.72, 0.64, 0.72), CFrame.new(-0.34, 1.24, 0), Color3.fromRGB(246, 244, 240), Enum.Material.Fabric, Enum.PartType.Ball)
+	add(rig.Head, "ToquePuffR", Vector3.new(0.72, 0.64, 0.72), CFrame.new(0.34, 1.24, 0), Color3.fromRGB(246, 244, 240), Enum.Material.Fabric, Enum.PartType.Ball)
 	if isProChef then
-		add(rig.Head, "ProTrim", Vector3.new(0.12, 1.38, 1.38), CFrame.new(0, 0.56, 0) * CFrame.Angles(0, 0, math.rad(90)), P.TarnishedBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(rig.Head, "ProTrim", Vector3.new(0.12, 1.30, 1.30), CFrame.new(0, 0.52, 0) * CFrame.Angles(0, 0, math.rad(90)), P.TarnishedBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		add(rig.Head, "ChefMustache", Vector3.new(0.54, 0.12, 0.12), CFrame.new(0, -0.14, -0.57), P.HairDark, Enum.Material.Fabric, nil)
 	end
 
-	-- Steel sauté spatula / kitchen tool in right hand
-	add(rig.RightArm, "PanHandle", Vector3.new(0.12, 0.12, 0.95), CFrame.new(0, -1.16, -0.56), P.Obsidian, Enum.Material.SmoothPlastic, nil)
-	add(rig.RightArm, "SteelPan", Vector3.new(0.22, 0.96, 0.96), CFrame.new(0, -1.16, -1.25) * CFrame.Angles(0, 0, math.rad(90)), P.BrushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+	-- Stainless steel sauté pan (or Golden Pro Spatula!) held in RightHand
+	add(rig.RightHand, "PanHandle", Vector3.new(0.12, 0.12, 0.92), CFrame.new(0, -0.02, -0.52), P.Obsidian, Enum.Material.SmoothPlastic, nil)
+	add(rig.RightHand, "SteelPan", Vector3.new(0.20, 0.92, 0.92), CFrame.new(0, -0.02, -1.18) * CFrame.Angles(0, 0, math.rad(90)), if isProChef then P.TarnishedBrass else P.BrushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
 	return rig
 end
 
@@ -614,40 +805,37 @@ function MafiaVisualBuilder.BuildWaiterRig(
 	spawnCF: CFrame
 ): RigHandle
 	local vestCol = P.Obsidian
-	local shirtCol = Color3.fromRGB(236, 234, 228)
+	local shirtCol = Color3.fromRGB(240, 238, 232)
 	local skinCol = if isFemale then P.SkinPale else P.SkinWarm
 	local hairCol = if isFemale then P.DarkBrown else P.HairDark
-	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, skinCol, vestCol, P.Charcoal, shirtCol, P.OffWhite, if isFemale then 0.94 else 1.0, false)
+	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, skinCol, vestCol, P.Charcoal, shirtCol, P.OffWhite, 1.0, false)
 	local add = rig.AddPart
 
-	-- Crisp dress shirt V-front, deep-oxblood bowtie, waistcoat buttons & half-bistro apron
-	add(rig.Root, "ShirtFront", Vector3.new(0.76, 1.36, 0.16), CFrame.new(0, 0.42, -0.56), shirtCol, Enum.Material.Fabric, nil)
-	add(rig.Root, "BowTie", Vector3.new(0.46, 0.18, 0.12), CFrame.new(0, 1.02, -0.62), P.DeepRed, Enum.Material.Fabric, nil)
-	add(rig.Root, "VestLapelL", Vector3.new(0.26, 0.96, 0.12), CFrame.new(-0.42, 0.44, -0.59) * CFrame.Angles(0, 0, math.rad(-14)), P.Charcoal, Enum.Material.Fabric, nil)
-	add(rig.Root, "VestLapelR", Vector3.new(0.26, 0.96, 0.12), CFrame.new(0.42, 0.44, -0.59) * CFrame.Angles(0, 0, math.rad(14)), P.Charcoal, Enum.Material.Fabric, nil)
-	add(rig.Root, "BistroApron", Vector3.new(2.08, 1.24, 1.20), CFrame.new(0, -0.82, -0.02), shirtCol, Enum.Material.Fabric, nil)
+	add(rig.Torso, "ShirtFront", Vector3.new(0.72, 1.28, 0.14), CFrame.new(0, 0.18, -0.49), shirtCol, Enum.Material.Fabric, nil)
+	add(rig.Torso, "BowTie", Vector3.new(0.44, 0.18, 0.12), CFrame.new(0, 0.72, -0.54), P.DeepRed, Enum.Material.Fabric, nil)
+	add(rig.Torso, "VestLapelL", Vector3.new(0.24, 0.92, 0.12), CFrame.new(-0.38, 0.20, -0.51) * CFrame.Angles(0, 0, math.rad(-14)), P.Charcoal, Enum.Material.Fabric, nil)
+	add(rig.Torso, "VestLapelR", Vector3.new(0.24, 0.92, 0.12), CFrame.new(0.38, 0.20, -0.51) * CFrame.Angles(0, 0, math.rad(14)), P.Charcoal, Enum.Material.Fabric, nil)
+	add(rig.LowerTorso, "BistroApron", Vector3.new(2.04, 1.18, 1.12), CFrame.new(0, -0.40, -0.02), shirtCol, Enum.Material.Fabric, nil)
 
-	-- Realistic hair
-	add(rig.Head, "HairCrown", Vector3.new(1.34, 0.42, 1.38), CFrame.new(0, 0.54, 0.06), hairCol, Enum.Material.SmoothPlastic, nil)
-	if isFemale then
-		add(rig.Head, "HairBun", Vector3.new(0.68, 0.64, 0.68), CFrame.new(0, 0.48, 0.72), hairCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-		add(rig.Head, "SideHairL", Vector3.new(0.22, 0.64, 0.88), CFrame.new(-0.62, 0.12, 0.12), hairCol, Enum.Material.SmoothPlastic, nil)
-		add(rig.Head, "SideHairR", Vector3.new(0.22, 0.64, 0.88), CFrame.new(0.62, 0.12, 0.12), hairCol, Enum.Material.SmoothPlastic, nil)
-	end
+	addHairStyle(rig, if isFemale then "Bun" else "Swept", hairCol)
 
-	-- Polished stainless serving tray carried naturally forward
-	add(rig.Root, "SilverTray", Vector3.new(0.12, 2.05, 2.05), CFrame.new(0, 0.28, -1.68) * CFrame.Angles(0, 0, math.rad(90)), P.BrushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
-	add(rig.Root, "TrayRim", Vector3.new(0.16, 1.72, 1.72), CFrame.new(0, 0.30, -1.68) * CFrame.Angles(0, 0, math.rad(90)), P.OffWhite, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+	-- Polished silver serving tray & cloche carried naturally in RightHand!
+	add(rig.RightHand, "SilverTray", Vector3.new(0.10, 1.72, 1.72), CFrame.new(0, 0.12, -0.68) * CFrame.Angles(0, 0, math.rad(90)), P.BrushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+	add(rig.RightHand, "TrayCloche", Vector3.new(1.06, 0.64, 1.06), CFrame.new(0, 0.44, -0.68), Color3.fromRGB(206, 212, 222), Enum.Material.Metal, Enum.PartType.Ball)
+	add(rig.RightHand, "ClocheKnob", Vector3.new(0.22, 0.22, 0.22), CFrame.new(0, 0.80, -0.68), P.TarnishedBrass, Enum.Material.Metal, Enum.PartType.Ball)
 	return rig
 end
 
-local CUSTOMER_WARDROBES = {
-	{ Coat = Color3.fromRGB(118, 92, 68), Pants = Color3.fromRGB(34, 36, 42), Accent = Color3.fromRGB(122, 34, 40), Skin = P.SkinWarm, Hair = P.HairDark, Style = "Trench" },
-	{ Coat = Color3.fromRGB(44, 52, 64), Pants = Color3.fromRGB(28, 30, 36), Accent = P.OffWhite, Skin = P.SkinPale, Hair = P.DarkBrown, Style = "Blazer" },
-	{ Coat = Color3.fromRGB(54, 60, 48), Pants = Color3.fromRGB(38, 44, 54), Accent = Color3.fromRGB(142, 118, 86), Skin = P.SkinWeathered, Hair = P.HairDark, Style = "Bomber" },
-	{ Coat = Color3.fromRGB(92, 36, 44), Pants = Color3.fromRGB(26, 28, 34), Accent = P.TarnishedBrass, Skin = P.SkinPale, Hair = Color3.fromRGB(82, 48, 30), Style = "Handbag" },
-	{ Coat = Color3.fromRGB(38, 42, 50), Pants = Color3.fromRGB(24, 26, 30), Accent = P.TarnishedBrass, Skin = P.SkinWarm, Hair = P.HairSilver, Style = "Critic" },
-	{ Coat = Color3.fromRGB(52, 40, 34), Pants = Color3.fromRGB(36, 44, 58), Accent = P.MutedGrey, Skin = P.SkinWeathered, Hair = P.HairDark, Style = "Leather" },
+-- 8 Distinct Authentic Roblox R15 Citizen & Neighbor Character Wardrobes!
+local CUSTOMER_WARDROBES: { { Coat: Color3, Pants: Color3, Accent: Color3, Skin: Color3, Hair: Color3, HairStyle: "Slick" | "Swept" | "Bun" | "Bob" | "Spiky" | "Parted", Style: string } } = {
+	{ Coat = Color3.fromRGB(132, 104, 76), Pants = Color3.fromRGB(36, 38, 46), Accent = Color3.fromRGB(128, 34, 42), Skin = P.SkinWarm, Hair = P.HairDark, HairStyle = "Swept", Style = "Trench" },
+	{ Coat = Color3.fromRGB(44, 56, 74), Pants = Color3.fromRGB(28, 32, 40), Accent = P.OffWhite, Skin = P.SkinPale, Hair = P.DarkBrown, HairStyle = "Bun", Style = "Handbag" },
+	{ Coat = Color3.fromRGB(58, 68, 52), Pants = Color3.fromRGB(40, 46, 58), Accent = Color3.fromRGB(158, 126, 84), Skin = P.SkinWeathered, Hair = P.HairDark, HairStyle = "Spiky", Style = "Bomber" },
+	{ Coat = Color3.fromRGB(98, 34, 44), Pants = Color3.fromRGB(28, 30, 36), Accent = P.TarnishedBrass, Skin = P.SkinPale, Hair = P.HairSilver, HairStyle = "Parted", Style = "Critic" },
+	{ Coat = Color3.fromRGB(54, 40, 34), Pants = Color3.fromRGB(34, 44, 62), Accent = P.BrushedSteel, Skin = P.SkinWarm, Hair = P.HairDark, HairStyle = "Spiky", Style = "Biker" },
+	{ Coat = Color3.fromRGB(192, 182, 162), Pants = Color3.fromRGB(48, 54, 68), Accent = Color3.fromRGB(72, 108, 86), Skin = P.SkinPale, Hair = Color3.fromRGB(92, 54, 34), HairStyle = "Bob", Style = "Student" },
+	{ Coat = Color3.fromRGB(38, 42, 52), Pants = Color3.fromRGB(26, 28, 34), Accent = P.TarnishedBrass, Skin = P.SkinWeathered, Hair = P.HairDark, HairStyle = "Slick", Style = "Banker" },
+	{ Coat = Color3.fromRGB(66, 74, 88), Pants = Color3.fromRGB(32, 36, 44), Accent = Color3.fromRGB(142, 42, 46), Skin = P.SkinWarm, Hair = P.DarkBrown, HairStyle = "Swept", Style = "Hoodie" },
 }
 
 function MafiaVisualBuilder.BuildCustomerRig(
@@ -657,84 +845,96 @@ function MafiaVisualBuilder.BuildCustomerRig(
 	spawnCF: CFrame
 ): RigHandle
 	local w = CUSTOMER_WARDROBES[((styleIdx - 1) % #CUSTOMER_WARDROBES) + 1]
-	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, w.Skin, w.Coat, w.Pants, w.Coat, nil, 0.98, false)
+	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, w.Skin, w.Coat, w.Pants, w.Coat, nil, 1.0, false)
 	local add = rig.AddPart
 
-	add(rig.Root, "InnerShirt", Vector3.new(0.76, 1.55, 0.14), CFrame.new(0, 0.34, -0.56), P.OffWhite, Enum.Material.Fabric, nil)
-	add(rig.Root, "JacketCollar", Vector3.new(1.88, 0.36, 1.18), CFrame.new(0, 1.10, 0.04), w.Coat, Enum.Material.Fabric, nil)
+	add(rig.Torso, "InnerShirt", Vector3.new(0.72, 1.44, 0.14), CFrame.new(0, 0.08, -0.49), P.OffWhite, Enum.Material.Fabric, nil)
+	add(rig.Torso, "JacketCollar", Vector3.new(1.78, 0.30, 1.08), CFrame.new(0, 0.78, 0.04), w.Coat, Enum.Material.Fabric, nil)
 
 	if w.Style == "Trench" then
-		add(rig.Root, "Scarf", Vector3.new(1.25, 0.34, 1.24), CFrame.new(0, 1.14, -0.04), w.Accent, Enum.Material.Fabric, nil)
-		add(rig.Root, "CoatTail", Vector3.new(2.06, 1.32, 0.22), CFrame.new(0, -1.62, 0.44), w.Coat, Enum.Material.Fabric, nil)
-	elseif w.Style == "Blazer" or w.Style == "Critic" then
-		add(rig.Root, "NeckTie", Vector3.new(0.18, 1.24, 0.14), CFrame.new(0, 0.28, -0.60), w.Accent, Enum.Material.Fabric, nil)
-		add(rig.Head, "Spectacles", Vector3.new(1.12, 0.24, 0.12), CFrame.new(0, 0.08, -0.62), P.Charcoal, Enum.Material.Glass, nil)
+		add(rig.Torso, "Scarf", Vector3.new(1.22, 0.30, 1.16), CFrame.new(0, 0.84, -0.04), w.Accent, Enum.Material.Fabric, nil)
+		add(rig.LowerTorso, "CoatTail", Vector3.new(1.98, 1.24, 0.20), CFrame.new(0, -0.62, 0.44), w.Coat, Enum.Material.Fabric, nil)
+	elseif w.Style == "Critic" or w.Style == "Banker" then
+		add(rig.Torso, "NeckTie", Vector3.new(0.18, 1.14, 0.14), CFrame.new(0, 0.06, -0.53), w.Accent, Enum.Material.Fabric, nil)
+		add(rig.Head, "Spectacles", Vector3.new(1.06, 0.22, 0.12), CFrame.new(0, 0.08, -0.56), P.Charcoal, Enum.Material.Glass, nil)
+		if w.Style == "Banker" then
+			add(rig.Head, "HatBrim", Vector3.new(0.12, 1.92, 1.92), CFrame.new(0, 0.52, 0) * CFrame.Angles(0, 0, math.rad(90)), w.Coat, Enum.Material.Fabric, Enum.PartType.Cylinder)
+			add(rig.Head, "HatCrown", Vector3.new(0.52, 1.26, 1.26), CFrame.new(0, 0.78, 0) * CFrame.Angles(0, 0, math.rad(90)), w.Coat, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		end
 	elseif w.Style == "Handbag" then
-		add(rig.Root, "PurseStrap", Vector3.new(0.12, 1.85, 1.22), CFrame.new(0.78, -0.15, 0) * CFrame.Angles(0, 0, math.rad(16)), P.WornLeather, Enum.Material.Leather, nil)
-		add(rig.Root, "Handbag", Vector3.new(0.38, 0.78, 0.92), CFrame.new(1.08, -1.02, 0.12), P.WornLeather, Enum.Material.Leather, nil)
-		add(rig.Head, "HairBun", Vector3.new(0.64, 0.60, 0.64), CFrame.new(0, 0.44, 0.72), w.Hair, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
-	elseif w.Style == "Leather" then
-		add(rig.Head, "KnitCap", Vector3.new(1.36, 0.54, 1.38), CFrame.new(0, 0.54, 0.06) * CFrame.Angles(math.rad(-8), 0, 0), P.Charcoal, Enum.Material.Fabric, nil)
+		add(rig.Torso, "PurseStrap", Vector3.new(0.12, 1.72, 1.12), CFrame.new(0.72, -0.10, 0) * CFrame.Angles(0, 0, math.rad(16)), P.WornLeather, Enum.Material.Leather, nil)
+		add(rig.LowerTorso, "Handbag", Vector3.new(0.36, 0.74, 0.86), CFrame.new(1.02, -0.34, 0.12), P.WornLeather, Enum.Material.Leather, nil)
+		add(rig.Head, "Glasses", Vector3.new(1.04, 0.22, 0.12), CFrame.new(0, 0.08, -0.56), P.DarkBrown, Enum.Material.Glass, nil)
+	elseif w.Style == "Student" then
+		add(rig.Torso, "Backpack", Vector3.new(1.26, 1.32, 0.54), CFrame.new(0, -0.02, 0.72), w.Accent, Enum.Material.Fabric, nil)
+		add(rig.Torso, "PackPocket", Vector3.new(0.92, 0.56, 0.16), CFrame.new(0, -0.26, 1.02), P.WornLeather, Enum.Material.Leather, nil)
+	elseif w.Style == "Biker" then
+		add(rig.Torso, "LeatherLapelL", Vector3.new(0.34, 0.62, 0.16), CFrame.new(-0.48, 0.42, -0.50) * CFrame.Angles(0, 0, math.rad(-18)), P.Obsidian, Enum.Material.Leather, nil)
+		add(rig.Torso, "LeatherLapelR", Vector3.new(0.34, 0.62, 0.16), CFrame.new(0.48, 0.42, -0.50) * CFrame.Angles(0, 0, math.rad(18)), P.Obsidian, Enum.Material.Leather, nil)
+		add(rig.Head, "Shades", Vector3.new(1.08, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil)
+	elseif w.Style == "Hoodie" then
+		add(rig.Torso, "HoodBack", Vector3.new(1.40, 0.36, 0.66), CFrame.new(0, 0.78, 0.32), w.Coat, Enum.Material.Fabric, nil)
+		add(rig.Head, "HeadphoneBand", Vector3.new(1.36, 0.14, 0.22), CFrame.new(0, 0.62, 0), w.Accent, Enum.Material.Metal, nil)
+		add(rig.Head, "EarCupL", Vector3.new(0.22, 0.42, 0.42), CFrame.new(-0.64, 0.06, 0), P.Obsidian, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		add(rig.Head, "EarCupR", Vector3.new(0.22, 0.42, 0.42), CFrame.new(0.64, 0.06, 0), P.Obsidian, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+	elseif w.Style == "Bomber" then
+		add(rig.Head, "KnitCap", Vector3.new(1.26, 0.50, 1.28), CFrame.new(0, 0.48, 0.06) * CFrame.Angles(math.rad(-8), 0, 0), P.Charcoal, Enum.Material.Fabric, nil)
 	end
 
-	if w.Style ~= "Leather" then
-		add(rig.Head, "HairTop", Vector3.new(1.34, 0.40, 1.38), CFrame.new(0, 0.54, 0.05), w.Hair, Enum.Material.SmoothPlastic, nil)
-		add(rig.Head, "HairBack", Vector3.new(1.28, 0.62, 0.34), CFrame.new(0, 0.22, 0.56), w.Hair, Enum.Material.SmoothPlastic, nil)
+	if w.Style ~= "Bomber" and w.Style ~= "Banker" then
+		addHairStyle(rig, w.HairStyle, w.Hair)
 	end
 	return rig
 end
 
 function MafiaVisualBuilder.BuildMarketBrokerRig(modelName: string, spawnCF: CFrame): RigHandle
-	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, 1.10, spawnCF, P.SkinWeathered, P.Obsidian, P.Charcoal, P.Obsidian, P.WornLeather, 1.08, true)
+	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, 1.08, spawnCF, P.SkinWeathered, P.Obsidian, P.Charcoal, P.Obsidian, P.WornLeather, 1.0, true)
 	local add = rig.AddPart
-	add(rig.Root, "DressShirt", Vector3.new(0.78, 1.60, 0.14), CFrame.new(0, 0.34, -0.58), P.OffWhite, Enum.Material.Fabric, nil)
-	add(rig.Root, "Cravat", Vector3.new(0.32, 0.85, 0.18), CFrame.new(0, 0.52, -0.62), P.DeepRed, Enum.Material.Fabric, nil)
-	add(rig.Root, "WatchChain", Vector3.new(0.86, 0.08, 0.10), CFrame.new(0.32, -0.42, -0.62) * CFrame.Angles(0, 0, math.rad(-14)), P.TarnishedBrass, Enum.Material.Metal, nil)
-	add(rig.Head, "Shades", Vector3.new(1.18, 0.24, 0.14), CFrame.new(0, 0.08, -0.63), P.Obsidian, Enum.Material.Glass, nil)
-	add(rig.Head, "Mustache", Vector3.new(0.56, 0.14, 0.14), CFrame.new(0, -0.18, -0.62), P.HairSilver, Enum.Material.Fabric, nil)
-	add(rig.Head, "HatBrim", Vector3.new(0.14, 2.15, 2.15), CFrame.new(0, 0.58, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Charcoal, Enum.Material.Fabric, Enum.PartType.Cylinder)
-	add(rig.Head, "HatCrown", Vector3.new(0.68, 1.42, 1.42), CFrame.new(0, 0.92, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Charcoal, Enum.Material.Fabric, Enum.PartType.Cylinder)
-	add(rig.Head, "HatRibbon", Vector3.new(0.14, 1.48, 1.48), CFrame.new(0, 0.68, 0) * CFrame.Angles(0, 0, math.rad(90)), P.TarnishedBrass, Enum.Material.Fabric, Enum.PartType.Cylinder)
+	add(rig.Torso, "DressShirt", Vector3.new(0.72, 1.50, 0.14), CFrame.new(0, 0.08, -0.49), P.OffWhite, Enum.Material.Fabric, nil)
+	add(rig.Torso, "Cravat", Vector3.new(0.30, 0.80, 0.18), CFrame.new(0, 0.28, -0.54), P.DeepRed, Enum.Material.Fabric, nil)
+	add(rig.Torso, "WatchChain", Vector3.new(0.82, 0.08, 0.10), CFrame.new(0.30, -0.52, -0.54) * CFrame.Angles(0, 0, math.rad(-14)), P.TarnishedBrass, Enum.Material.Metal, nil)
+	add(rig.Head, "Shades", Vector3.new(1.12, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil)
+	add(rig.Head, "Mustache", Vector3.new(0.54, 0.13, 0.14), CFrame.new(0, -0.16, -0.57), P.HairSilver, Enum.Material.Fabric, nil)
+	add(rig.Head, "HatBrim", Vector3.new(0.14, 2.08, 2.08), CFrame.new(0, 0.54, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Charcoal, Enum.Material.Fabric, Enum.PartType.Cylinder)
+	add(rig.Head, "HatCrown", Vector3.new(0.64, 1.36, 1.36), CFrame.new(0, 0.86, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Charcoal, Enum.Material.Fabric, Enum.PartType.Cylinder)
+	add(rig.Head, "HatRibbon", Vector3.new(0.14, 1.42, 1.42), CFrame.new(0, 0.64, 0) * CFrame.Angles(0, 0, math.rad(90)), P.TarnishedBrass, Enum.Material.Fabric, Enum.PartType.Cylinder)
 	return rig
 end
 
--- Realistic Leather-Jacket Delivery Rider seated on a sculpted 3D Street Delivery Motorbike with spinning alloy wheels & rear cargo crate rack!
+-- Realistic R15 Leather-Jacket Delivery Rider seated on a sculpted 3D Street Delivery Motorbike with spinning wheels & cargo crate!
 function MafiaVisualBuilder.BuildMotorbikeCourierRig(
 	modelName: string,
 	teamCol: Color3,
 	scale: number,
 	spawnCF: CFrame
 ): (RigHandle, BasePart)
-	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, P.Obsidian, P.Charcoal, P.Obsidian, P.WornLeather, 1.02, false)
+	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, P.SkinWarm, P.Obsidian, P.Charcoal, P.Obsidian, P.WornLeather, 1.0, false)
 	local add = rig.AddPart
 	local root = rig.Root
 
-	-- Rider gear: padded dark-leather moto jacket stripe + aerodynamic full-face helmet with dark visor
-	add(rig.Root, "MotoStripeL", Vector3.new(0.18, 1.48, 1.20), CFrame.new(-0.82, 0.28, 0), teamCol, Enum.Material.Leather, nil)
-	add(rig.Root, "MotoStripeR", Vector3.new(0.18, 1.48, 1.20), CFrame.new(0.82, 0.28, 0), teamCol, Enum.Material.Leather, nil)
-	add(rig.Head, "MotoHelmet", Vector3.new(1.56, 1.46, 1.62), CFrame.new(0, 0.14, 0.04), P.Charcoal, Enum.Material.Metal, Enum.PartType.Ball)
-	add(rig.Head, "HelmetStripe", Vector3.new(0.24, 1.48, 1.66), CFrame.new(0, 0.16, 0.04), teamCol, Enum.Material.SmoothPlastic, nil)
-	add(rig.Head, "HelmetVisor", Vector3.new(1.36, 0.46, 0.42), CFrame.new(0, 0.10, -0.66), P.Obsidian, Enum.Material.Glass, nil)
+	-- Moto jacket stripes + sleek full-face helmet with dark visor
+	add(rig.Torso, "MotoStripeL", Vector3.new(0.16, 1.40, 1.06), CFrame.new(-0.78, 0.06, 0), teamCol, Enum.Material.Leather, nil)
+	add(rig.Torso, "MotoStripeR", Vector3.new(0.16, 1.40, 1.06), CFrame.new(0.78, 0.06, 0), teamCol, Enum.Material.Leather, nil)
+	add(rig.Head, "MotoHelmet", Vector3.new(1.46, 1.38, 1.52), CFrame.new(0, 0.12, 0.04), P.Charcoal, Enum.Material.Metal, Enum.PartType.Ball)
+	add(rig.Head, "HelmetStripe", Vector3.new(0.22, 1.40, 1.56), CFrame.new(0, 0.14, 0.04), teamCol, Enum.Material.SmoothPlastic, nil)
+	add(rig.Head, "HelmetVisor", Vector3.new(1.28, 0.44, 0.40), CFrame.new(0, 0.08, -0.62), P.Obsidian, Enum.Material.Glass, nil)
 
-	-- Pose rider arms forward gripping handlebars & legs straddling bike seat
-	local laj = root:FindFirstChild("LeftArmJoint")
-	local raj = root:FindFirstChild("RightArmJoint")
-	local llj = root:FindFirstChild("LeftLegJoint")
-	local rlj = root:FindFirstChild("RightLegJoint")
-	if laj and laj:IsA("Motor6D") then
-		laj.C0 = CFrame.new(-1.38 * scale, 0.92 * scale, -0.15 * scale) * CFrame.Angles(math.rad(68), math.rad(10), 0)
+	-- Pose R15 rider shoulders, elbows, hips & knees naturally gripping handlebars & straddling seat!
+	local function setJointAngle(part: BasePart, jointName: string, rot: CFrame): ()
+		local m = part:FindFirstChild(jointName)
+		if m and m:IsA("Motor6D") then
+			m.C0 = m.C0 * rot
+		end
 	end
-	if raj and raj:IsA("Motor6D") then
-		raj.C0 = CFrame.new(1.38 * scale, 0.92 * scale, -0.15 * scale) * CFrame.Angles(math.rad(68), math.rad(-10), 0)
-	end
-	if llj and llj:IsA("Motor6D") then
-		llj.C0 = CFrame.new(-0.92 * scale, -1.05 * scale, -0.25 * scale) * CFrame.Angles(math.rad(54), 0, math.rad(-10))
-	end
-	if rlj and rlj:IsA("Motor6D") then
-		rlj.C0 = CFrame.new(0.92 * scale, -1.05 * scale, -0.25 * scale) * CFrame.Angles(math.rad(54), 0, math.rad(10))
-	end
+	setJointAngle(rig.LeftArm, "LeftShoulder", CFrame.Angles(math.rad(62), math.rad(12), 0))
+	setJointAngle(rig.LeftLowerArm, "LeftElbow", CFrame.Angles(math.rad(18), 0, 0))
+	setJointAngle(rig.RightArm, "RightShoulder", CFrame.Angles(math.rad(62), math.rad(-12), 0))
+	setJointAngle(rig.RightLowerArm, "RightElbow", CFrame.Angles(math.rad(18), 0, 0))
+	setJointAngle(rig.LeftLeg, "LeftHip", CFrame.Angles(math.rad(56), 0, math.rad(-14)))
+	setJointAngle(rig.LeftLowerLeg, "LeftKnee", CFrame.Angles(math.rad(-48), 0, 0))
+	setJointAngle(rig.RightLeg, "RightHip", CFrame.Angles(math.rad(56), 0, math.rad(14)))
+	setJointAngle(rig.RightLowerLeg, "RightKnee", CFrame.Angles(math.rad(-48), 0, 0))
 
-	-- Sculpted 3D Street Delivery Motorbike welded beneath the rider (wheel radius = 1.45 * scale)
 	local wheelY = -2.08
 	local darkSteel = P.Gunmetal
 	local chrome = P.BrushedSteel
@@ -747,37 +947,26 @@ function MafiaVisualBuilder.BuildMotorbikeCourierRig(
 		tire.CFrame = root.CFrame * CFrame.new(0, wheelY * scale, zOff * scale)
 		tire.Color = P.Obsidian
 		tire.Material = Enum.Material.SmoothPlastic
-		tire.CanCollide = false
-		tire.CanTouch = false
-		tire.CanQuery = false
-		tire.Massless = true
+		tire.CanCollide = false; tire.CanTouch = false; tire.CanQuery = false; tire.Massless = true
 		tire.Parent = rig.Model
 
 		local m = Instance.new("Motor6D")
-		m.Name = jointName
-		m.Part0 = root
-		m.Part1 = tire
-		m.C0 = CFrame.new(0, wheelY * scale, zOff * scale)
-		m.C1 = CFrame.new()
+		m.Name = jointName; m.Part0 = root; m.Part1 = tire
+		m.C0 = CFrame.new(0, wheelY * scale, zOff * scale); m.C1 = CFrame.new()
 		m.Parent = root
 
 		local rim = Instance.new("Part")
-		rim.Name = jointName .. "_Rim"
-		rim.Shape = Enum.PartType.Cylinder
-		rim.Size = Vector3.new(0.92, 1.75, 1.75) * scale
-		rim.CFrame = tire.CFrame
-		rim.Color = chrome
-		rim.Material = Enum.Material.Metal
+		rim.Name = jointName .. "_Rim"; rim.Shape = Enum.PartType.Cylinder
+		rim.Size = Vector3.new(0.92, 1.75, 1.75) * scale; rim.CFrame = tire.CFrame
+		rim.Color = chrome; rim.Material = Enum.Material.Metal
 		rim.CanCollide = false; rim.CanTouch = false; rim.CanQuery = false; rim.Massless = true
 		rim.Parent = rig.Model
 		local rw = Instance.new("WeldConstraint"); rw.Part0 = tire; rw.Part1 = rim; rw.Parent = rim
 
 		local spoke = Instance.new("Part")
 		spoke.Name = jointName .. "_Spoke"
-		spoke.Size = Vector3.new(0.98, 0.24, 1.72) * scale
-		spoke.CFrame = tire.CFrame
-		spoke.Color = teamCol
-		spoke.Material = Enum.Material.Metal
+		spoke.Size = Vector3.new(0.98, 0.24, 1.72) * scale; spoke.CFrame = tire.CFrame
+		spoke.Color = teamCol; spoke.Material = Enum.Material.Metal
 		spoke.CanCollide = false; spoke.CanTouch = false; spoke.CanQuery = false; spoke.Massless = true
 		spoke.Parent = rig.Model
 		local sw = Instance.new("WeldConstraint"); sw.Part0 = tire; sw.Part1 = spoke; sw.Parent = spoke
@@ -786,7 +975,6 @@ function MafiaVisualBuilder.BuildMotorbikeCourierRig(
 	makeSpinWheel("FrontWheelJoint", -3.25)
 	makeSpinWheel("RearWheelJoint", 2.95)
 
-	-- Frame, Engine, Tank, Fairing, Forks, Handlebars, Exhaust & Headlight
 	add(root, "BikeEngine", Vector3.new(1.55, 1.45, 2.15), CFrame.new(0, -1.45, -0.35), darkSteel, Enum.Material.Metal, nil)
 	add(root, "BikeTank", Vector3.new(1.62, 0.92, 1.88), CFrame.new(0, -0.42, -1.25) * CFrame.Angles(math.rad(-14), 0, 0), teamCol, Enum.Material.Metal, nil)
 	add(root, "BikeFairing", Vector3.new(1.52, 1.38, 1.42), CFrame.new(0, -0.45, -2.55) * CFrame.Angles(math.rad(-22), 0, 0), P.Charcoal, Enum.Material.Metal, nil)
@@ -798,21 +986,24 @@ function MafiaVisualBuilder.BuildMotorbikeCourierRig(
 	add(root, "ExhaustL", Vector3.new(3.2, 0.36, 0.36), CFrame.new(-0.96, -1.85, 1.65) * CFrame.Angles(0, math.rad(90), math.rad(8)), chrome, Enum.Material.Metal, Enum.PartType.Cylinder)
 	add(root, "ExhaustR", Vector3.new(3.2, 0.36, 0.36), CFrame.new(0.96, -1.85, 1.65) * CFrame.Angles(0, math.rad(90), math.rad(8)), chrome, Enum.Material.Metal, Enum.PartType.Cylinder)
 
-	-- Steel Rear Cargo Rack + Toggleable Visible Ingredient Cargo Crate!
 	add(root, "CargoRack", Vector3.new(1.92, 0.18, 2.10), CFrame.new(0, -0.68, 2.65), darkSteel, Enum.Material.Metal, nil)
 	local crate = add(root, "CarriedCargoCrate", Vector3.new(1.82, 1.48, 1.88), CFrame.new(0, 0.16, 2.65), P.Walnut, Enum.Material.WoodPlanks, nil)
-	crate.Transparency = 1 -- Visible when loaded with Market ingredients!
+	crate.Transparency = 1
 
 	CollectionService:AddTag(rig.Model, "AnimatedMotorbikeWheels")
 	return rig, crate
 end
 
 -- ============================================================================
--- 4. ARTICULATED TACTICAL DEATH ANIMATION SYSTEM (Rivals, Bodyguards, Mafia)
+-- 4. ARTICULATED TACTICAL DEATH ANIMATION SYSTEM (R15 Rivals, Guards & Mafia)
 -- ============================================================================
 local ACTIVE_COMBAT_TAGS = {
 	"RivalAIUnit",
 	"MafiaUnit",
+	"ApexMafiaUnit",
+	"RivalSamuraiUnit",
+	"PenthouseBossUnit",
+	"MercenaryMafiaUnit",
 	"PlayerBodyguardUnit",
 	"TurfGuardUnit",
 	"AnimatedRaiderLimbs",
@@ -820,7 +1011,7 @@ local ACTIVE_COMBAT_TAGS = {
 
 local function findDeathFloorY(model: Model, root: BasePart, hum: Humanoid): number
 	local ignore: { Instance } = { model }
-	for _, folderName in ipairs({ "RivalAIUnits", "PlayerBodyguards", "MafiaSyndicateUnits", "TurfNPCs" }) do
+	for _, folderName in ipairs({ "RivalAIUnits", "PlayerBodyguards", "MafiaSyndicateUnits", "TurfNPCs", "UrbanTurfForces", "CentralParkRivalSamurai", "ApexMafiaUnits", "MercenaryMafiaUnits" }) do
 		local f = Workspace:FindFirstChild(folderName)
 		if f then
 			table.insert(ignore, f)
@@ -854,116 +1045,96 @@ local function dropNPCWeaponOnDeath(model: Model, hitDir: Vector3, sideSign: num
 		return
 	end
 
-	local dropFolder = Instance.new("Model")
-	dropFolder.Name = "DroppedNPCWeapon"
-	local primary = weaponParts[1]
+	local dropModel = Instance.new("Model")
+	dropModel.Name = "DroppedNPCWeapon"
+	local primary: BasePart? = nil
 	for _, wp in ipairs(weaponParts) do
-		for _, ch in ipairs(wp:GetChildren()) do
-			if ch:IsA("WeldConstraint") or ch:IsA("JointInstance") then
+		local clone = wp:Clone()
+		clone.Anchored = false
+		clone.CanCollide = (primary == nil)
+		clone.CanTouch = false
+		clone.CanQuery = false
+		clone.Massless = (primary ~= nil)
+		for _, ch in ipairs(clone:GetChildren()) do
+			if ch:IsA("WeldConstraint") or ch:IsA("Motor6D") then
 				ch:Destroy()
 			end
 		end
-		wp.Anchored = false
-		wp.CanCollide = (wp == primary)
-		wp.CanTouch = false
-		wp.CanQuery = false
-		wp.Massless = (wp ~= primary)
-		wp.Parent = dropFolder
-		if wp ~= primary then
+		clone.Parent = dropModel
+		if not primary then
+			primary = clone
+		else
 			local w = Instance.new("WeldConstraint")
 			w.Part0 = primary
-			w.Part1 = wp
-			w.Parent = wp
+			w.Part1 = clone
+			w.Parent = clone
 		end
+		wp.Transparency = 1
 	end
-	dropFolder.PrimaryPart = primary
-	dropFolder.Parent = Workspace
 
-	local sideVec = Vector3.new(-hitDir.Z, 0, hitDir.X) * sideSign
-	primary.AssemblyLinearVelocity = (hitDir * 4.5) + (sideVec * 4.2) + Vector3.new(0, 5.5, 0)
-	primary.AssemblyAngularVelocity = Vector3.new(math.random(-10, 10), math.random(-12, 12), math.random(-10, 10))
-
-	task.delay(3.05, function()
-		if dropFolder.Parent then
-			dropFolder:Destroy()
-		end
-	end)
+	if primary then
+		dropModel.PrimaryPart = primary
+		dropModel.Parent = Workspace
+		local sideVec = Vector3.new(-hitDir.Z, 0, hitDir.X) * sideSign
+		primary.AssemblyLinearVelocity = hitDir * 7.5 + sideVec * 4.5 + Vector3.new(0, 6.0, 0)
+		primary.AssemblyAngularVelocity = Vector3.new(math.random(-7, 7), math.random(-7, 7), math.random(-7, 7))
+		task.delay(2.75, function()
+			if dropModel.Parent then
+				dropModel:Destroy()
+			end
+		end)
+	end
 end
 
--- Server-side trigger: stops AI/physics cleanly, detaches weapon to clatter onto the street,
--- tags model for 60 FPS client articulated collapse + ground dust + fade-out, and destroys after 3.15s.
 function MafiaVisualBuilder.PlayDeathSequence(
 	model: Model,
 	isBoss: boolean?,
-	onGroundImpact: ((Vector3) -> ())?
+	onGroundImpact: ((impactPos: Vector3) -> ())?
 ): ()
 	if not model.Parent or model:GetAttribute("IsDying") == true then
 		return
 	end
 	model:SetAttribute("IsDying", true)
 
-	for _, tag in ipairs(ACTIVE_COMBAT_TAGS) do
-		if CollectionService:HasTag(model, tag) then
-			CollectionService:RemoveTag(model, tag)
+	local root = model:FindFirstChild("HumanoidRootPart")
+	local hum = model:FindFirstChildOfClass("Humanoid")
+	if not root or not root:IsA("BasePart") or not hum then
+		task.delay(0.25, function()
+			if model.Parent then model:Destroy() end
+		end)
+		return
+	end
+
+	for _, tagName in ipairs(ACTIVE_COMBAT_TAGS) do
+		if CollectionService:HasTag(model, tagName) then
+			CollectionService:RemoveTag(model, tagName)
 		end
 	end
 
-	-- Immediately hide overhead nameplate / health bar
 	for _, desc in ipairs(model:GetDescendants()) do
 		if desc:IsA("BillboardGui") then
 			desc.Enabled = false
 		end
 	end
 
-	local hum = model:FindFirstChildOfClass("Humanoid")
-	local root = model:FindFirstChild("HumanoidRootPart")
-	if not hum or not root or not root:IsA("BasePart") then
-		task.delay(0.5, function()
-			if model.Parent then model:Destroy() end
-		end)
-		return
+	local scale = tonumber(model:GetAttribute("BaseScale")) or 1.0
+	local floorY = findDeathFloorY(model, root, hum)
+	local hitAttr = model:GetAttribute("LastHitDir")
+	local hitDir = if typeof(hitAttr) == "Vector3" and hitAttr.Magnitude > 0.05
+		then hitAttr.Unit
+		else -root.CFrame.LookVector
+	local flatHit = Vector3.new(hitDir.X, 0, hitDir.Z)
+	if flatHit.Magnitude < 0.05 then
+		flatHit = Vector3.new(0, 0, 1)
+	else
+		flatHit = flatHit.Unit
 	end
 
-	hum.BreakJointsOnDeath = false
-	hum.WalkSpeed = 0
-	hum.JumpPower = 0
-	hum.AutoRotate = false
-	hum.PlatformStand = true
-
-	local floorY = findDeathFloorY(model, root, hum)
-	local scale = math.clamp(root.Size.Y / 2.35, 0.75, 1.8)
+	local style = if isBoss then 2 else math.random(1, 3)
 	local sideSign = if math.random() < 0.5 then -1 else 1
 
-	local rawHit = model:GetAttribute("LastHitDir")
-	local flatHit: Vector3
-	if typeof(rawHit) == "Vector3" then
-		local h = Vector3.new(rawHit.X, 0, rawHit.Z)
-		flatHit = if h.Magnitude > 0.05 then h.Unit else -root.CFrame.LookVector
-	else
-		local back = -root.CFrame.LookVector
-		local hb = Vector3.new(back.X, 0, back.Z)
-		flatHit = if hb.Magnitude > 0.05 then hb.Unit else Vector3.new(0, 0, 1)
-	end
-
-	-- Pick weighted tactical death style: 1 = Back Stagger Fall, 2 = Drop-to-Knees Face-Down, 3 = Side-Spin Collapse
-	local style: number
-	if isBoss then
-		style = if math.random() < 0.72 then 2 else 1
-	else
-		local r = math.random()
-		if r < 0.42 then
-			style = 1
-		elseif r < 0.76 then
-			style = 2
-		else
-			style = 3
-		end
-	end
-
-	-- Detach NPC weapon so it pops free and clatters on the ground
 	dropNPCWeaponOnDeath(model, flatHit, sideSign)
 
-	-- Disable collisions & queries on corpse so players/bullets never snag on fallen units
 	for _, desc in ipairs(model:GetDescendants()) do
 		if desc:IsA("BasePart") then
 			desc.CanCollide = false
@@ -984,7 +1155,6 @@ function MafiaVisualBuilder.PlayDeathSequence(
 	model:SetAttribute("DeathHitDir", flatHit)
 	CollectionService:AddTag(model, "DyingNPCUnit")
 
-	-- Emit muffled body-drop impact SFX synced with pavement hit
 	if onGroundImpact then
 		local impactDelay = if style == 2 then 0.80 else 0.50
 		local impactPos = Vector3.new(root.Position.X, floorY, root.Position.Z)
@@ -1000,6 +1170,116 @@ function MafiaVisualBuilder.PlayDeathSequence(
 			model:Destroy()
 		end
 	end)
+end
+
+-- ============================================================================
+-- 5. ELITE R15 SYNDICATE SPECIALISTS (Samurai Mafia, Ninja Assassin, Warlord, Assassin)
+-- ============================================================================
+function MafiaVisualBuilder.BuildSyndicateSpecialistRig(
+	modelName: string,
+	specialistKind: "SamuraiMafia" | "NinjaMafia" | "ApexWarlord" | "ApexAssassin",
+	scale: number,
+	spawnCF: CFrame,
+	forPreview: boolean?
+): RigHandle
+	local isSamurai = (specialistKind == "SamuraiMafia")
+	local isNinja = (specialistKind == "NinjaMafia")
+	local isWarlord = (specialistKind == "ApexWarlord")
+	local torsoCol = if isSamurai then P.Obsidian elseif isNinja then P.Charcoal elseif isWarlord then Color3.fromRGB(24, 24, 30) else P.Obsidian
+	local pantsCol = P.Obsidian
+	local armCol = if isSamurai then P.Charcoal else torsoCol
+	local skinCol = P.SkinWarm
+
+	local rig = MafiaVisualBuilder.CreateBaseRig(modelName, scale, spawnCF, skinCol, torsoCol, pantsCol, armCol, P.Obsidian, 1.0, forPreview)
+	local rawAdd = rig.AddPart
+	local function add(parentPart: BasePart, name: string, size: Vector3, relCF: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?, isWeapon: boolean?): Part
+		local p = rawAdd(parentPart, name, size, relCF, col, mat, shape)
+		if isWeapon then p:SetAttribute("IsNPCWeapon", true) end
+		return p
+	end
+
+	if isSamurai then
+		-- KUROGANE SAMURAI MAFIA (Authentic R15 Yakuza Ronin):
+		-- Dark haori coat, crimson lapels & obi sash, lamellar steel chest do, layered sode pauldrons,
+		-- braided Ronin Kasa hat with tarnished brass crescent clan crest, Oni menpo lower mask, hip saya & curved forged katana!
+		add(rig.Torso, "HaoriLapelL", Vector3.new(0.28, 1.62, 1.08), CFrame.new(-0.48, 0.04, -0.02), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "HaoriLapelR", Vector3.new(0.28, 1.62, 1.08), CFrame.new(0.48, 0.04, -0.02), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "ChestDoArmor", Vector3.new(1.88, 1.24, 0.24), CFrame.new(0, 0.08, -0.50), P.Gunmetal, Enum.Material.Metal, nil, false)
+		add(rig.Torso, "ChestCord", Vector3.new(1.94, 0.14, 0.28), CFrame.new(0, 0.42, -0.52), P.TarnishedBrass, Enum.Material.Metal, nil, false)
+		add(rig.LowerTorso, "ObiSash", Vector3.new(2.14, 0.44, 1.18), CFrame.new(0, 0.04, 0), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.LowerTorso, "KusazuriL", Vector3.new(0.88, 0.72, 0.18), CFrame.new(-0.54, -0.44, -0.54), P.Gunmetal, Enum.Material.Metal, nil, false)
+		add(rig.LowerTorso, "KusazuriR", Vector3.new(0.88, 0.72, 0.18), CFrame.new(0.54, -0.44, -0.54), P.Gunmetal, Enum.Material.Metal, nil, false)
+		add(rig.LeftArm, "SodePauldronL", Vector3.new(1.12, 0.72, 1.14), CFrame.new(-0.14, 0.22, 0), P.Gunmetal, Enum.Material.Metal, nil, false)
+		add(rig.LeftArm, "SodeTrimL", Vector3.new(1.16, 0.14, 1.18), CFrame.new(-0.14, -0.08, 0), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.RightArm, "SodePauldronR", Vector3.new(1.12, 0.72, 1.14), CFrame.new(0.14, 0.22, 0), P.Gunmetal, Enum.Material.Metal, nil, false)
+		add(rig.RightArm, "SodeTrimR", Vector3.new(1.16, 0.14, 1.18), CFrame.new(0.14, -0.08, 0), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.LeftLowerArm, "KoteBracerL", Vector3.new(1.06, 0.76, 1.06), CFrame.new(0, -0.04, 0), P.Gunmetal, Enum.Material.Metal, nil, false)
+		add(rig.RightLowerArm, "KoteBracerR", Vector3.new(1.06, 0.76, 1.06), CFrame.new(0, -0.04, 0), P.Gunmetal, Enum.Material.Metal, nil, false)
+		-- Conical Ronin Kasa Hat + Brass Clan Crest + Oni Menpo Lower Mask
+		add(rig.Head, "KasaBrim", Vector3.new(0.20, 2.48, 2.48), CFrame.new(0, 0.56, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
+		add(rig.Head, "KasaCrown", Vector3.new(0.42, 1.38, 1.38), CFrame.new(0, 0.84, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Charcoal, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
+		add(rig.Head, "ClanCrestL", Vector3.new(0.12, 0.52, 0.12), CFrame.new(-0.24, 0.92, -0.70) * CFrame.Angles(0, 0, math.rad(34)), P.TarnishedBrass, Enum.Material.Metal, nil, false)
+		add(rig.Head, "ClanCrestR", Vector3.new(0.12, 0.52, 0.12), CFrame.new(0.24, 0.92, -0.70) * CFrame.Angles(0, 0, math.rad(-34)), P.TarnishedBrass, Enum.Material.Metal, nil, false)
+		add(rig.Head, "OniMenpo", Vector3.new(1.12, 0.44, 0.44), CFrame.new(0, -0.24, -0.40), P.Obsidian, Enum.Material.Metal, nil, false)
+		-- Hip Saya Scabbard + Curved Forged Katana gripped directly in R15 RightHand!
+		add(rig.LowerTorso, "SayaScabbard", Vector3.new(0.16, 0.20, 3.05), CFrame.new(-1.06, -0.08, 0.42) * CFrame.Angles(math.rad(-14), 0, 0), P.Obsidian, Enum.Material.SmoothPlastic, nil, false)
+		add(rig.RightHand, "KatanaHilt", Vector3.new(0.16, 0.18, 0.96), CFrame.new(0, 0.02, -0.32), P.Obsidian, Enum.Material.Fabric, nil, true)
+		add(rig.RightHand, "KatanaWrap", Vector3.new(0.18, 0.20, 0.18), CFrame.new(0, 0.02, -0.10), P.DeepRed, Enum.Material.Fabric, nil, true)
+		add(rig.RightHand, "KatanaTsuba", Vector3.new(0.44, 0.44, 0.09), CFrame.new(0, 0.02, -0.82), P.TarnishedBrass, Enum.Material.Metal, nil, true)
+		add(rig.RightHand, "KatanaBlade", Vector3.new(0.07, 0.18, 3.35), CFrame.new(0, 0.04, -2.52), P.BrushedSteel, Enum.Material.Metal, nil, true)
+
+	elseif isNinja then
+		-- KAGE NINJA ASSASSIN MAFIA (Authentic R15 Shadow Shinobi):
+		-- Matte-graphite shinobi wrap hood leaving focused Roblox eyes visible, steel forehead headband plate,
+		-- flowing oxblood shinobi scarf with rear tails, ballistic harness, shin/forearm wraps, back ninjato & dual forged tanto blades!
+		add(rig.Torso, "StealthHarness", Vector3.new(2.04, 1.44, 1.14), CFrame.new(0, 0.04, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "HarnessStrapL", Vector3.new(0.22, 1.54, 1.20), CFrame.new(-0.54, 0.04, 0), P.Gunmetal, Enum.Material.Leather, nil, false)
+		add(rig.Torso, "HarnessStrapR", Vector3.new(0.22, 1.54, 1.20), CFrame.new(0.54, 0.04, 0), P.Gunmetal, Enum.Material.Leather, nil, false)
+		add(rig.Torso, "CrimsonScarf", Vector3.new(1.56, 0.32, 1.24), CFrame.new(0, 0.78, 0), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "ScarfTailL", Vector3.new(0.26, 1.28, 0.10), CFrame.new(-0.34, 0.22, 0.68) * CFrame.Angles(math.rad(14), 0, math.rad(-10)), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "ScarfTailR", Vector3.new(0.24, 1.06, 0.10), CFrame.new(0.24, 0.30, 0.66) * CFrame.Angles(math.rad(12), 0, math.rad(12)), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "BackNinjato", Vector3.new(0.14, 2.85, 0.20), CFrame.new(0.12, 0.20, 0.64) * CFrame.Angles(0, 0, math.rad(-26)), P.Gunmetal, Enum.Material.Metal, nil, false)
+		add(rig.Torso, "NinjatoHilt", Vector3.new(0.18, 0.62, 0.22), CFrame.new(0.76, 1.48, 0.64) * CFrame.Angles(0, 0, math.rad(-26)), P.DeepRed, Enum.Material.Fabric, nil, false)
+		-- Forearm & Shin Stealth Wraps
+		add(rig.LeftLowerArm, "ArmWrapL", Vector3.new(1.06, 0.84, 1.06), CFrame.new(0, 0, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
+		add(rig.RightLowerArm, "ArmWrapR", Vector3.new(1.06, 0.84, 1.06), CFrame.new(0, 0, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
+		add(rig.LeftLowerLeg, "ShinWrapL", Vector3.new(1.04, 0.92, 1.04), CFrame.new(0, 0, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
+		add(rig.RightLowerLeg, "ShinWrapR", Vector3.new(1.04, 0.92, 1.04), CFrame.new(0, 0, 0), P.Obsidian, Enum.Material.Fabric, nil, false)
+		-- Shinobi Cowl leaving eye slit visible + Metallic Forehead Plate + Lower Cloth Mask
+		add(rig.Head, "CowlTop", Vector3.new(1.26, 0.56, 1.28), CFrame.new(0, 0.42, 0.04), P.Obsidian, Enum.Material.Fabric, nil, false)
+		add(rig.Head, "CowlBack", Vector3.new(1.24, 1.06, 0.72), CFrame.new(0, 0.02, 0.34), P.Obsidian, Enum.Material.Fabric, nil, false)
+		add(rig.Head, "HeadbandPlate", Vector3.new(0.76, 0.24, 0.12), CFrame.new(0, 0.36, -0.60), P.BrushedSteel, Enum.Material.Metal, nil, false)
+		add(rig.Head, "StealthMask", Vector3.new(1.22, 0.54, 0.52), CFrame.new(0, -0.24, -0.38), P.Charcoal, Enum.Material.Fabric, nil, false)
+		-- Dual Obsidian Tanto Blades gripped directly in R15 RightHand & LeftHand!
+		add(rig.RightHand, "TantoGripR", Vector3.new(0.14, 0.16, 0.68), CFrame.new(0, 0, -0.28), P.Obsidian, Enum.Material.SmoothPlastic, nil, true)
+		add(rig.RightHand, "TantoBladeR", Vector3.new(0.07, 0.17, 1.82), CFrame.new(0, 0, -1.46), P.BrushedSteel, Enum.Material.Metal, nil, true)
+		add(rig.LeftHand, "TantoGripL", Vector3.new(0.14, 0.16, 0.68), CFrame.new(0, 0, -0.28), P.Obsidian, Enum.Material.SmoothPlastic, nil, true)
+		add(rig.LeftHand, "TantoBladeL", Vector3.new(0.07, 0.17, 1.72), CFrame.new(0, 0, -1.40), P.BrushedSteel, Enum.Material.Metal, nil, true)
+
+	elseif isWarlord then
+		-- APEX SYNDICATE WARLORD COMMANDER (Authentic R15 Boss Mobster + Drum Tommy Gun!)
+		add(rig.Torso, "ArmoredPlate", Vector3.new(2.14, 1.54, 1.24), CFrame.new(0, 0.04, 0), P.Gunmetal, Enum.Material.Metal, nil, false)
+		add(rig.Torso, "DressShirt", Vector3.new(0.64, 1.38, 0.14), CFrame.new(0, 0.12, -0.58), P.OffWhite, Enum.Material.Fabric, nil, false)
+		add(rig.Torso, "CrimsonTie", Vector3.new(0.24, 1.18, 0.12), CFrame.new(0, 0.08, -0.64), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.LowerTorso, "OvercoatTail", Vector3.new(2.24, 1.44, 1.22), CFrame.new(0, -0.68, 0.10), P.Obsidian, Enum.Material.Fabric, nil, false)
+		add(rig.Head, "FedoraBrim", Vector3.new(0.16, 2.08, 2.08), CFrame.new(0, 0.54, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
+		add(rig.Head, "FedoraCrown", Vector3.new(0.62, 1.34, 1.34), CFrame.new(0, 0.86, 0) * CFrame.Angles(0, 0, math.rad(90)), P.Obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
+		add(rig.Head, "FedoraBand", Vector3.new(0.16, 1.40, 1.40), CFrame.new(0, 0.64, 0) * CFrame.Angles(0, 0, math.rad(90)), P.DeepRed, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
+		add(rig.Head, "DarkShades", Vector3.new(1.12, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil, false)
+		attachNPCWeapon(rig, "TommyDrum", P.Gunmetal)
+
+	else
+		-- APEX ASSASSIN MAFIA (Authentic R15 Shadow Hitman + Suppressed Assassin Rifle!)
+		add(rig.Torso, "TacRig", Vector3.new(2.02, 1.42, 1.18), CFrame.new(0, 0.04, 0), P.Charcoal, Enum.Material.Metal, nil, false)
+		add(rig.Torso, "CrimsonCollar", Vector3.new(1.52, 0.28, 1.18), CFrame.new(0, 0.80, 0), P.DeepRed, Enum.Material.Fabric, nil, false)
+		add(rig.LowerTorso, "AssassinCoat", Vector3.new(2.08, 1.44, 1.16), CFrame.new(0, -0.68, 0.10), P.Obsidian, Enum.Material.Fabric, nil, false)
+		addHairStyle(rig, "Slick", P.HairDark)
+		add(rig.Head, "AssassinMask", Vector3.new(1.22, 0.52, 0.46), CFrame.new(0, -0.24, -0.40), P.Obsidian, Enum.Material.Metal, nil, false)
+		add(rig.Head, "AssassinShades", Vector3.new(1.10, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil, false)
+		attachNPCWeapon(rig, "AssassinRifle", P.Gunmetal)
+	end
+
+	return rig
 end
 
 return MafiaVisualBuilder

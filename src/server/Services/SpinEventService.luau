@@ -34,7 +34,7 @@ export type SpinPrizeSpec = {
 	Rarity: "Common" | "Rare" | "Epic" | "Legendary",
 	Weight: number,
 	AccentColor: Color3,
-	PreviewKind: "Weapon" | "Ammo" | "Bodyguard" | "Equipment" | "Premium",
+	PreviewKind: "Weapon" | "Ammo" | "Bodyguard" | "Equipment" | "Premium" | "Warehouse" | "Dish" | "Empire",
 	PreviewId: string,
 }
 
@@ -51,27 +51,27 @@ SpinEventService.PRIZES = {
 	{
 		Index = 1, Id = "FishCrate", Title = "Fresh Fish Crate (+12)", ShortLabel = "FISH x12",
 		Category = "Fish", Rarity = "Common", Weight = 17, AccentColor = Color3.fromRGB(58, 128, 168),
-		PreviewKind = "Equipment", PreviewId = "InstantEmpireCrate",
+		PreviewKind = "Warehouse", PreviewId = "Fish",
 	},
 	{
 		Index = 2, Id = "MeatCrate", Title = "Prime Meat Crate (+12)", ShortLabel = "MEAT x12",
 		Category = "Meat", Rarity = "Common", Weight = 16, AccentColor = Color3.fromRGB(152, 58, 52),
-		PreviewKind = "Equipment", PreviewId = "SyndicateArmorBundle",
+		PreviewKind = "Warehouse", PreviewId = "Meat",
 	},
 	{
 		Index = 3, Id = "VegCrate", Title = "Farm Vegetable Crate (+12)", ShortLabel = "VEG x12",
 		Category = "Vegetable", Rarity = "Common", Weight = 17, AccentColor = Color3.fromRGB(64, 134, 78),
-		PreviewKind = "Equipment", PreviewId = "TacticalAmmoCrate",
+		PreviewKind = "Warehouse", PreviewId = "Vegetable",
 	},
 	{
 		Index = 4, Id = "FruitCrate", Title = "Exotic Fruit Crate (+12)", ShortLabel = "FRUIT x12",
 		Category = "Fruit", Rarity = "Common", Weight = 16, AccentColor = Color3.fromRGB(172, 118, 52),
-		PreviewKind = "Equipment", PreviewId = "InstantEmpireCrate",
+		PreviewKind = "Warehouse", PreviewId = "Fruit",
 	},
 	{
 		Index = 5, Id = "GoldJackpot", Title = "Syndicate Gold Vault (+550G)", ShortLabel = "+550 GOLD",
 		Category = "Gold", Rarity = "Rare", Weight = 12, AccentColor = Color3.fromRGB(186, 152, 74),
-		PreviewKind = "Equipment", PreviewId = "InstantEmpireCrate",
+		PreviewKind = "Empire", PreviewId = "DAY",
 	},
 	{
 		Index = 6, Id = "ArmorAmmo", Title = "Kevlar Vest + Ammo Pack", ShortLabel = "ARMOR + AMMO",

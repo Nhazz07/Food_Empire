@@ -73,7 +73,7 @@ local function sendAction(action: string, arg: any?): ()
 		AudioController.PlayCoins()
 	elseif action == "CookRecipe" or action == "ServeCustomerOrder" or action == "SearBoostCook" then
 		AudioController.PlayCook()
-	elseif action == "BuyRobuxItem" or action == "BuyMotorbikeCoins" or action == "BuyDualStove" or action == "BuyVIPBooths" or action == "BuyMafiaSedan" or action == "ToggleMafiaSedan" or action == "CrackTerritoryVault" or action == "ClaimEmperorTribute" or action == "BuyWeaponMod" or action == "SetGuardStance" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireWaiter" or action == "HireCourier" or action == "BuyCentralParkBranch" or action == "ToggleCentralParkStaff" or action == "DefendCentralParkBranch" or action == "StartSmugglerConvoy" or action == "StartGangWarDrop" or action == "TriggerBikeTurbo" or action == "ClaimSyndicateContract" or action == "HireRaider" or action == "HireBodyguard" or action == "RecruitBodyguard" or action == "BuyGuardGear" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
+	elseif action == "BuyRobuxItem" or action == "BuyMotorbikeCoins" or action == "BuyDualStove" or action == "BuyVIPBooths" or action == "BuyMafiaSedan" or action == "ToggleMafiaSedan" or action == "BuyArmoredVan" or action == "ToggleArmoredVan" or action == "BuyGetawayCoupe" or action == "ToggleGetawayCoupe" or action == "BuyVehicleArmor" or action == "SetVehiclePaint" or action == "ClaimDailyVault" or action == "TriggerGodfatherPrestige" or action == "CreateFamily" or action == "JoinFamily" or action == "CommandAllAttack" or action == "CommandAllRecall" or action == "CrackTerritoryVault" or action == "ClaimEmperorTribute" or action == "BuyWeaponMod" or action == "SetGuardStance" or action == "HireMercenaryMafia" or action == "OrderMercenaryAssault" or action == "HireMafiaRestaurantChef" or action == "BuyFrontBusiness" or action == "CollectBusinessSafe" or action == "StartPenthouseHeist" or action == "AcceptHitContract" or action == "PlacePlayerBounty" or action == "RaidBlackoutTruck" or action == "BuySmokeGrenades" or action == "ThrowSmokeGrenade" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireWaiter" or action == "HireCourier" or action == "BuyCentralParkBranch" or action == "ToggleCentralParkStaff" or action == "DefendCentralParkBranch" or action == "StartSmugglerConvoy" or action == "StartGangWarDrop" or action == "TriggerBikeTurbo" or action == "ClaimSyndicateContract" or action == "HireRaider" or action == "HireBodyguard" or action == "RecruitBodyguard" or action == "BuyGuardGear" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
 		AudioController.PlayFanfare()
 	elseif action ~= "GetState" and action ~= "SetSprint" then
 		AudioController.PlayClick()
@@ -104,6 +104,10 @@ end, function()
 	sendAction("ToggleScooter", nil)
 end, function()
 	sendAction("AcceptExpressDelivery", nil)
+end, function()
+	sendAction("CommandAllAttack", nil)
+end, function()
+	sendAction("CommandAllRecall", nil)
 end)
 
 EmpireMenuController.Init(hudGui, sendAction)
@@ -156,8 +160,18 @@ UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: 
 		sendAction("ToggleScooter", nil)
 	elseif input.KeyCode == Enum.KeyCode.J then
 		sendAction("ToggleMafiaSedan", nil)
+	elseif input.KeyCode == Enum.KeyCode.K then
+		sendAction("ToggleArmoredVan", nil)
+	elseif input.KeyCode == Enum.KeyCode.L then
+		sendAction("ToggleGetawayCoupe", nil)
 	elseif input.KeyCode == Enum.KeyCode.X then
 		sendAction("SetGuardStance", nil)
+	elseif input.KeyCode == Enum.KeyCode.Y then
+		sendAction("CommandAllAttack", nil)
+	elseif input.KeyCode == Enum.KeyCode.Z then
+		sendAction("CommandAllRecall", nil)
+	elseif input.KeyCode == Enum.KeyCode.T then
+		sendAction("ThrowSmokeGrenade", nil)
 	elseif input.KeyCode == Enum.KeyCode.G then
 		local on = WaypointController.Toggle()
 		HUDController.ShowToast(if on then "Objective Guide Arrow: ON" else "Objective Guide Arrow: OFF", false)

@@ -36,6 +36,7 @@ type TurfAgent = {
 	HomeBlockId: string,
 	TargetBlockId: string,
 	IsBoss: boolean,
+	BladeStyle: ("Ninja" | "Samurai")?,
 	Model: Model,
 	Humanoid: Humanoid,
 	Root: BasePart,
@@ -191,7 +192,7 @@ local function syncBlockVisuals(blockId: string): ()
 		if ownerLbl and ownerLbl:IsA("TextLabel") then
 			local ownerName = TurfConfig.GetFactionDisplayName(st.Owner)
 			if st.Status == "Contested" then
-				ownerLbl.Text = "⚔️ CONTESTED!"
+				ownerLbl.Text = "CONTESTED TURF"
 				ownerLbl.BackgroundColor3 = TurfConfig.ContestedColor
 			elseif TurfConfig.IsMafiaFaction(st.Owner) then
 				ownerLbl.Text = ownerName .. " TURF"
@@ -214,18 +215,20 @@ local function syncBlockVisuals(blockId: string): ()
 			local statusLbl = pBg:FindFirstChild("StatusLabel")
 			if statusLbl and statusLbl:IsA("TextLabel") then
 				if st.Status == "Contested" then
-					statusLbl.Text = "⚔️ CLEAR ENEMIES IN PLAZA!"
+					statusLbl.Text = "CLEAR RIVALS IN PLAZA"
 				elseif st.CaptureProgress > 0.01 and st.CapturingFaction then
 					local capName = TurfConfig.GetFactionDisplayName(st.CapturingFaction)
 					statusLbl.Text = string.format("%s CAPTURING %d%%", capName, math.floor(st.CaptureProgress * 100))
 				elseif TurfConfig.IsMafiaFaction(st.Owner) then
+					local fSpec = TurfConfig.MafiaFactions[st.Owner]
+					local squadWord = if fSpec then fSpec.GuardTitle else "MAFIA"
 					if st.DefendersAlive > 0 then
-						statusLbl.Text = string.format("🕶️ %d MAFIA GUARD%s • FIGHT!", st.DefendersAlive, if st.DefendersAlive == 1 then "" else "S")
+						statusLbl.Text = string.format("%d %s  |  FIGHT!", st.DefendersAlive, squadWord)
 					else
-						statusLbl.Text = "⚡ GUARDS CLEARED • STAND TO CAPTURE!"
+						statusLbl.Text = "RIVALS CLEARED  |  STAND TO CAPTURE"
 					end
 				else
-					statusLbl.Text = string.format("🛡️ +%dG/20s • %d GUARD%s", st.Spec.IncomeGold, st.DefendersAlive, if st.DefendersAlive == 1 then "" else "S")
+					statusLbl.Text = string.format("+%dG/20s  |  %d GUARD%s", st.Spec.IncomeGold, st.DefendersAlive, if st.DefendersAlive == 1 then "" else "S")
 				end
 			end
 		end
@@ -242,7 +245,7 @@ local function configureLightweightHumanoid(hum: Humanoid): ()
 	hum:SetStateEnabled(Enum.HumanoidStateType.PlatformStanding, false)
 end
 
--- Build a Faction-Colored Mafia Enforcer / Capo OR a Player-Base-Colored Turf Guard!
+-- Build a Realistic Ninja Assassin Mafia / Samurai Mafia Turf Specialist OR a Player Turf Guard (Zero Neon, Zero Emojis!)
 local function buildTurfAgentModel(
 	kind: "Mafia" | "PlayerGuard" | "MafiaRaider",
 	factionId: string,
@@ -253,178 +256,109 @@ local function buildTurfAgentModel(
 	patrolPoints: { Vector3 }
 ): TurfAgent
 	local isMafia = (kind ~= "PlayerGuard")
-	local scale = if isBoss then 1.18 elseif kind == "MafiaRaider" then 1.04 else 0.96
-	local factionCol = TurfConfig.ResolveFactionColor(factionId)
 	local mafiaSpec = TurfConfig.MafiaFactions[factionId]
+	local factionCol = TurfConfig.ResolveFactionColor(factionId)
+	local scale = if isBoss then 1.12 elseif kind == "MafiaRaider" then 1.02 else 0.98
+	local bladeStyle: ("Ninja" | "Samurai")? = if isMafia and mafiaSpec then mafiaSpec.BladeStyle elseif isMafia then "Samurai" else nil
+	local specialistKind: "NinjaMafia" | "SamuraiMafia" = if isMafia and mafiaSpec then mafiaSpec.SpecialistKind else "SamuraiMafia"
 
-	local suitCol = if isMafia and mafiaSpec then mafiaSpec.SuitColor else Color3.fromRGB(32, 38, 52)
-	local trimCol = if isMafia and mafiaSpec then mafiaSpec.BaseColor else factionCol
-	local badgeCol = if isMafia and mafiaSpec then mafiaSpec.BaseColor else factionCol
-	local skinCol = Color3.fromRGB(240, 202, 170)
+	local shortTag = if isMafia
+		then (if isBoss then (specialistKind .. "Boss") else specialistKind)
+		else "PlayerTurfGuard"
+	local modelName = string.format("%s_%s", shortTag, homeBlockId)
 
-	local model = Instance.new("Model")
-	local shortTag = if isMafia then (if isBoss then "MafiaCapo" else "MafiaGuard") else "PlayerTurfGuard"
-	model.Name = string.format("%s_%s", shortTag, homeBlockId)
-
-	local function makePart(name: string, sz: Vector3, col: Color3, mat: Enum.Material, shape: Enum.PartType?, collide: boolean): Part
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = sz * scale
-		p.Color = col
-		p.Material = mat
-		if shape then p.Shape = shape end
-		p.CanCollide = collide
-		p.CanTouch = collide
-		p.Massless = not collide
-		p.TopSurface = Enum.SurfaceType.Smooth
-		p.BottomSurface = Enum.SurfaceType.Smooth
-		p.Parent = model
-		return p
-	end
-
-	local function weldTo(p0: BasePart, p1: BasePart, rel: CFrame): ()
-		p1.CFrame = p0.CFrame * CFrame.new(rel.Position * scale) * rel.Rotation
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = p0
-		w.Part1 = p1
-		w.Parent = p1
-	end
-
-	local function makeJoint(name: string, p0: BasePart, p1: BasePart, c0: CFrame, c1: CFrame): ()
-		local sc0 = CFrame.new(c0.Position * scale) * c0.Rotation
-		local sc1 = CFrame.new(c1.Position * scale) * c1.Rotation
-		p1.CFrame = p0.CFrame * sc0 * sc1:Inverse()
-		local m = Instance.new("Motor6D")
-		m.Name = name
-		m.Part0 = p0
-		m.Part1 = p1
-		m.C0 = sc0
-		m.C1 = sc1
-		m.Parent = p0
-	end
-
-	-- 1. Torso
-	local rootCol = if isMafia then suitCol else trimCol
-	local root = makePart("HumanoidRootPart", Vector3.new(2.4, 2.75, 1.35), rootCol, Enum.Material.SmoothPlastic, nil, true)
-	root.CFrame = CFrame.new(spawnPos)
-
+	local rig: MafiaVisualBuilder.RigHandle
 	if isMafia then
-		local shirt = makePart("DressShirt", Vector3.new(0.95, 2.1, 0.22), Color3.fromRGB(246, 246, 250), Enum.Material.SmoothPlastic, nil, false)
-		weldTo(root, shirt, CFrame.new(0, 0.2, -0.65))
-		local tie = makePart("FactionTie", Vector3.new(0.42, 1.85, 0.28), trimCol, Enum.Material.SmoothPlastic, nil, false)
-		weldTo(root, tie, CFrame.new(0, 0.1, -0.72))
+		rig = MafiaVisualBuilder.BuildSyndicateSpecialistRig(modelName, specialistKind, scale, CFrame.new(spawnPos), false)
 	else
-		local vest = makePart("GuardVest", Vector3.new(2.5, 1.65, 1.48), Color3.fromRGB(30, 34, 46), Enum.Material.Metal, nil, false)
-		weldTo(root, vest, CFrame.new(0, 0.05, 0))
-		local emblem = makePart("FactionEmblem", Vector3.new(0.85, 0.85, 0.2), trimCol, Enum.Material.Neon, nil, false)
-		weldTo(vest, emblem, CFrame.new(0, 0.25, -0.78))
+		rig = MafiaVisualBuilder.BuildBodyguardRig(modelName, "BasicGuard", scale, CFrame.new(spawnPos), {
+			OutfitColor = factionCol,
+			IsRanged = true,
+		}, false)
 	end
 
-	-- 2. Head + Shades + Hat (Fedora for Mafia / Team Beret for Player Turf Guard)
-	local head = makePart("Head", Vector3.new(1.9, 1.9, 1.9), skinCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-	weldTo(root, head, CFrame.new(0, 2.3, 0))
+	local model = rig.Model
+	local root = rig.Root
+	local head = rig.Head
 
-	local shades = makePart("Sunglasses", Vector3.new(1.48, 0.38, 0.32), Color3.fromRGB(16, 18, 24), Enum.Material.Glass, nil, false)
-	weldTo(head, shades, CFrame.new(0, 0.14, -0.85))
+	-- Balanced stats: tough 4-man rival clan, intentionally weaker than Player's Hired 5-Min Samurai/Ninja Mafia so hired mercenaries dominate!
+	local isNinja = (bladeStyle == "Ninja")
+	local maxHp = if not isMafia then 220
+		elseif isBoss then (if isNinja then 420 else 480)
+		elseif kind == "MafiaRaider" then (if isNinja then 280 else 320)
+		else (if isNinja then 260 else 310)
 
-	if isMafia then
-		local brim = makePart("FedoraBrim", Vector3.new(0.3, 3.0, 3.0), suitCol, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
-		weldTo(head, brim, CFrame.new(0, 0.88, 0) * CFrame.Angles(0, 0, math.rad(90)))
-		local crown = makePart("FedoraCrown", Vector3.new(1.1, 1.95, 1.95), suitCol, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
-		weldTo(head, crown, CFrame.new(0, 1.42, 0) * CFrame.Angles(0, 0, math.rad(90)))
-		local band = makePart("FedoraBand", Vector3.new(0.32, 2.08, 2.08), trimCol, Enum.Material.Neon, Enum.PartType.Cylinder, false)
-		weldTo(head, band, CFrame.new(0, 1.08, 0) * CFrame.Angles(0, 0, math.rad(90)))
+	local titleText: string
+	if isMafia and mafiaSpec then
+		if isBoss then
+			titleText = mafiaSpec.BossTitle
+		elseif kind == "MafiaRaider" then
+			titleText = mafiaSpec.ShortName .. " RAIDER"
+		else
+			titleText = mafiaSpec.GuardTitle
+		end
 	else
-		local cap = makePart("GuardBeret", Vector3.new(2.1, 0.85, 2.1), trimCol, Enum.Material.Fabric, Enum.PartType.Ball, false)
-		weldTo(head, cap, CFrame.new(0.1, 0.85, 0))
+		titleText = TurfConfig.GetFactionDisplayName(factionId) .. " GUARD"
 	end
-
-	-- 3. Articulated Arms + Weapon
-	local leftArm = makePart("LeftArm", Vector3.new(0.9, 2.35, 0.9), rootCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("LeftArmJoint", root, leftArm, CFrame.new(-1.7, 1.0, 0), CFrame.new(0, 1.0, 0))
-	local rightArm = makePart("RightArm", Vector3.new(0.9, 2.35, 0.9), rootCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("RightArmJoint", root, rightArm, CFrame.new(1.7, 1.0, 0), CFrame.new(0, 1.0, 0))
-
-	local gun = makePart(
-		"TurfWeapon",
-		Vector3.new(0.34, 0.36, 2.2),
-		if isBoss then Color3.fromRGB(246, 198, 52) else Color3.fromRGB(58, 64, 78),
-		Enum.Material.Metal,
-		nil,
-		false
-	)
-	weldTo(rightArm, gun, CFrame.new(0, -1.25, -1.15))
-
-	-- 4. Articulated Legs
-	local pantsCol = if isMafia then suitCol else Color3.fromRGB(38, 44, 58)
-	local leftLeg = makePart("LeftLeg", Vector3.new(0.98, 2.4, 0.98), pantsCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("LeftLegJoint", root, leftLeg, CFrame.new(-0.58, -1.35, 0), CFrame.new(0, 1.2, 0))
-	local rightLeg = makePart("RightLeg", Vector3.new(0.98, 2.4, 0.98), pantsCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("RightLegJoint", root, rightLeg, CFrame.new(0.58, -1.35, 0), CFrame.new(0, 1.2, 0))
-
-	-- 5. Overhead Nameplate & Live HP Bar
-	local maxHp = if isBoss then 280 elseif kind == "MafiaRaider" then 155 elseif isMafia then 135 else 155
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "TurfAgentTag"
-	bb.Size = UDim2.fromOffset(if isBoss then 196 else 168, 44)
-	bb.StudsOffset = Vector3.new(0, 4.0 * scale, 0)
-	bb.MaxDistance = 135
+	bb.Size = UDim2.fromOffset(if isBoss then 204 else 184, 40)
+	bb.StudsOffset = Vector3.new(0, 3.15 * scale, 0)
+	bb.MaxDistance = 145
 	bb.Parent = head
 
 	local title = Instance.new("TextLabel")
-	title.Size = UDim2.new(1, 0, 0, 22)
-	title.BackgroundColor3 = badgeCol
-	title.BackgroundTransparency = 0.06
+	title.Size = UDim2.new(1, 0, 0, 20)
+	title.BackgroundColor3 = Color3.fromRGB(16, 17, 22)
+	title.BackgroundTransparency = 0.08
 	title.Font = Enum.Font.GothamBlack
-	title.TextSize = if isBoss then 12 else 11
-	title.TextColor3 = Color3.new(1, 1, 1)
-	if isMafia and mafiaSpec then
-		if isBoss then
-			title.Text = "👑 " .. mafiaSpec.ShortName .. " CAPO"
-		elseif kind == "MafiaRaider" then
-			title.Text = "🔥 " .. mafiaSpec.ShortName .. " RAIDER"
-		else
-			title.Text = "🕶️ " .. mafiaSpec.ShortName
-		end
-	else
-		title.Text = "🛡️ " .. TurfConfig.GetFactionDisplayName(factionId) .. " GUARD"
-	end
+	title.TextSize = if isBoss then 10 else 9
+	title.TextColor3 = if not isMafia
+		then Color3.fromRGB(192, 232, 204)
+		elseif isNinja then Color3.fromRGB(198, 214, 232)
+		else Color3.fromRGB(232, 168, 152)
+	title.Text = titleText
 	title.Parent = bb
-	local tc = Instance.new("UICorner"); tc.CornerRadius = UDim.new(0, 6); tc.Parent = title
-	local ts = Instance.new("UIStroke"); ts.Color = Color3.fromRGB(16, 18, 26); ts.Thickness = 1.4; ts.Parent = title
+	local tc = Instance.new("UICorner"); tc.CornerRadius = UDim.new(0, 4); tc.Parent = title
+	local ts = Instance.new("UIStroke")
+	ts.Color = if isMafia and mafiaSpec then mafiaSpec.BaseColor else factionCol
+	ts.Thickness = 1.2
+	ts.Parent = title
 
 	local hpBg = Instance.new("Frame")
 	hpBg.Name = "HPBarBg"
-	hpBg.Position = UDim2.new(0.05, 0, 0, 26)
-	hpBg.Size = UDim2.new(0.90, 0, 0, 14)
-	hpBg.BackgroundColor3 = Color3.fromRGB(20, 22, 30)
+	hpBg.Position = UDim2.new(0.03, 0, 0, 23)
+	hpBg.Size = UDim2.new(0.94, 0, 0, 13)
+	hpBg.BackgroundColor3 = Color3.fromRGB(14, 15, 19)
 	hpBg.Parent = bb
-	local hpc = Instance.new("UICorner"); hpc.CornerRadius = UDim.new(0, 5); hpc.Parent = hpBg
+	local hpc = Instance.new("UICorner"); hpc.CornerRadius = UDim.new(0, 3); hpc.Parent = hpBg
 
 	local hpFill = Instance.new("Frame")
 	hpFill.Name = "HPFill"
 	hpFill.Size = UDim2.fromScale(1, 1)
-	hpFill.BackgroundColor3 = if isMafia then Color3.fromRGB(238, 62, 72) else Color3.fromRGB(64, 214, 114)
+	hpFill.BackgroundColor3 = if isMafia then Color3.fromRGB(154, 30, 38) else Color3.fromRGB(78, 134, 96)
 	hpFill.Parent = hpBg
-	local hpfc = Instance.new("UICorner"); hpfc.CornerRadius = UDim.new(0, 5); hpfc.Parent = hpFill
+	local hpfc = Instance.new("UICorner"); hpfc.CornerRadius = UDim.new(0, 3); hpfc.Parent = hpFill
 
 	local hpText = Instance.new("TextLabel")
 	hpText.Name = "HPText"
 	hpText.Size = UDim2.fromScale(1, 1)
 	hpText.BackgroundTransparency = 1
-	hpText.Font = Enum.Font.GothamBlack
-	hpText.Text = string.format("❤️ %d / %d", maxHp, maxHp)
-	hpText.TextSize = 10
-	hpText.TextColor3 = Color3.new(1, 1, 1)
+	hpText.Font = Enum.Font.GothamBold
+	hpText.Text = string.format("%d / %d HP", maxHp, maxHp)
+	hpText.TextSize = 9
+	hpText.TextColor3 = Color3.fromRGB(238, 236, 232)
 	hpText.ZIndex = 3
 	hpText.Parent = hpBg
 
 	local hum = Instance.new("Humanoid")
 	hum.MaxHealth = maxHp
 	hum.Health = maxHp
-	hum.WalkSpeed = if isBoss then 15.5 elseif kind == "MafiaRaider" then 18.5 else 16.0
-	hum.HipHeight = 2.55 * scale
+	hum.WalkSpeed = if not isMafia then 17.5
+		elseif isNinja then (if isBoss then 23.5 else 22.0)
+		else (if isBoss then 20.5 else 19.2)
+	hum.HipHeight = 2.42 * scale
 	hum.BreakJointsOnDeath = false
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	configureLightweightHumanoid(hum)
@@ -440,7 +374,7 @@ local function buildTurfAgentModel(
 		local cur = math.max(0, math.ceil(hp))
 		local maxH = math.max(1, math.ceil(hum.MaxHealth))
 		hpFill.Size = UDim2.fromScale(math.clamp(hp / maxH, 0, 1), 1)
-		hpText.Text = string.format("%d / %d", cur, maxH)
+		hpText.Text = string.format("%d / %d HP", cur, maxH)
 		if hp <= 0 then
 			MafiaVisualBuilder.PlayDeathSequence(model, isBoss, function(impactPos: Vector3)
 				BlackMarketService.BroadcastSFX("BodyDrop", impactPos)
@@ -456,12 +390,22 @@ local function buildTurfAgentModel(
 	model:SetAttribute("BlockId", homeBlockId)
 	model:SetAttribute("IsMafiaBoss", isBoss)
 	model:SetAttribute("IsTurfUnit", true)
+	model:SetAttribute("MafiaTitle", titleText)
+	if bladeStyle then
+		model:SetAttribute("BladeStyle", bladeStyle)
+	end
+	if isMafia then
+		model:SetAttribute("BountyGold", if isBoss then 160 else 75)
+		model:SetAttribute("BountyExp", if isBoss then 65 else 32)
+		model:SetAttribute("BountyRep", if isBoss then 35 else 16)
+	end
 	if ownerUid then
 		model:SetAttribute("OwnerUserId", ownerUid)
 	end
 
 	if isMafia then
 		CollectionService:AddTag(model, "MafiaUnit")
+		CollectionService:AddTag(model, "AnimatedRaiderLimbs")
 	else
 		CollectionService:AddTag(model, "TurfGuardUnit")
 		CollectionService:AddTag(model, "AnimatedRaiderLimbs")
@@ -475,6 +419,7 @@ local function buildTurfAgentModel(
 		HomeBlockId = homeBlockId,
 		TargetBlockId = targetBlockId,
 		IsBoss = isBoss,
+		BladeStyle = bladeStyle,
 		Model = model,
 		Humanoid = hum,
 		Root = root,
@@ -510,6 +455,13 @@ local function countLivingDefendersForBlock(blockId: string, ownerFaction: strin
 	return n
 end
 
+local PLAZA_GUARD_OFFSETS = {
+	Vector3.new(-11, 3.8, -9),
+	Vector3.new(11, 3.8, -9),
+	Vector3.new(-11, 3.8, 9),
+	Vector3.new(11, 3.8, 9),
+}
+
 local function populateBlockGarrison(blockId: string): ()
 	local st = blockStates[blockId]
 	if not st then
@@ -531,17 +483,19 @@ local function populateBlockGarrison(blockId: string): ()
 		end
 	end
 
-	local targetNormal = 2
+	-- Every Mafia-controlled Urban Turf Block spawns EXACTLY 4 Rivals (4 Ninja Assassin Mafia or 4 Samurai Mafia; HQ blocks = 3 + 1 Boss = 4)!
+	local targetNormal = if not isMafia then 2 elseif spec.IsHQ then 3 else 4
 	local kind: "Mafia" | "PlayerGuard" = if isMafia then "Mafia" else "PlayerGuard"
 
 	while existingNormal < targetNormal do
 		existingNormal += 1
-		local sp = pts[((existingNormal - 1) % #pts) + 1] + Vector3.new(math.random(-4, 4), 1.5, math.random(-4, 4))
+		local offset = PLAZA_GUARD_OFFSETS[((existingNormal - 1) % #PLAZA_GUARD_OFFSETS) + 1]
+		local sp = spec.PlazaPos + offset
 		table.insert(activeAgents, buildTurfAgentModel(kind, st.Owner, blockId, blockId, sp, false, pts))
 	end
 
 	if isMafia and spec.IsHQ and not existingBoss then
-		local bossPos = spec.PlazaPos + Vector3.new(0, 3.5, 6)
+		local bossPos = spec.PlazaPos + PLAZA_GUARD_OFFSETS[4]
 		table.insert(activeAgents, buildTurfAgentModel("Mafia", st.Owner, blockId, blockId, bossPos, true, pts))
 	end
 
@@ -560,15 +514,16 @@ local function isInsideSafePlayerBase(pos: Vector3): boolean
 	return false
 end
 
-local function findBestEnemyTarget(agent: TurfAgent): (Humanoid?, BasePart?, number)
+local function findBestEnemyTarget(agent: TurfAgent): (Humanoid?, BasePart?, Model?, number)
 	local myPos = agent.Root.Position
 	local myFaction = agent.FactionId
 	local isMafia = (agent.Kind ~= "PlayerGuard")
 	local isNight = ReplicatedStorage:GetAttribute("IsNight") == true
-	local maxRange = if agent.Kind == "MafiaRaider" then 72 elseif isNight and isMafia then 64 else 54
+	local maxRange = if agent.Kind == "MafiaRaider" then 78 elseif isNight and isMafia then 74 elseif isMafia then 66 else 56
 
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
+	local bestModel: Model? = nil
 	local bestDist = maxRange
 
 	local function considerModel(model: Model, targetFaction: string?): ()
@@ -588,26 +543,37 @@ local function findBestEnemyTarget(agent: TurfAgent): (Humanoid?, BasePart?, num
 			bestDist = d
 			bestHum = h
 			bestRoot = r
+			bestModel = model
 		end
 	end
 
-	-- 1. Players (hostile if different faction!)
+	-- 1. Players (Mafia turf Ninja/Samurai clans ALWAYS attack players who walk near their block!)
 	for _, player in ipairs(Players:GetPlayers()) do
 		local pFaction = "Player_" .. tostring(player.UserId)
 		if pFaction ~= myFaction and player.Character then
-			if BaseService.GetPlayerBaseSlot(player) or player:GetAttribute("BaseSlot") ~= nil then
-				considerModel(player.Character, pFaction)
+			local smokeUntil = player:GetAttribute("InSmokeUntil")
+			if typeof(smokeUntil) == "number" and smokeUntil > os.clock() then
+				local r = player.Character:FindFirstChild("HumanoidRootPart")
+				if r and r:IsA("BasePart") and (r.Position - myPos).Magnitude > 16 then
+					continue
+				end
 			end
+			considerModel(player.Character, pFaction)
 		end
 	end
 
-	-- 2. Enemy Turf Guards, Raider Chefs & Bodyguards
-	for _, tagName in ipairs({ "TurfGuardUnit", "PlayerRaiderUnit", "PlayerBodyguardUnit" }) do
+	-- 2. Enemy Turf Guards, Raider Chefs, Bodyguards & Hired Mercenary Samurai/Ninja Mafia!
+	for _, tagName in ipairs({ "MercenaryMafiaUnit", "TurfGuardUnit", "PlayerRaiderUnit", "PlayerBodyguardUnit" }) do
 		for _, unit in ipairs(CollectionService:GetTagged(tagName)) do
 			if unit:IsA("Model") then
 				local fAttr = unit:GetAttribute("Faction")
-				if typeof(fAttr) == "string" and fAttr ~= myFaction then
-					considerModel(unit, fAttr)
+				local ownerUid = unit:GetAttribute("OwnerUserId")
+				local resolvedFaction = if typeof(fAttr) == "string"
+					then fAttr
+					elseif typeof(ownerUid) == "number" then ("Player_" .. tostring(ownerUid))
+					else "Player_Unknown"
+				if resolvedFaction ~= myFaction then
+					considerModel(unit, resolvedFaction)
 				end
 			end
 		end
@@ -625,7 +591,7 @@ local function findBestEnemyTarget(agent: TurfAgent): (Humanoid?, BasePart?, num
 		end
 	end
 
-	return bestHum, bestRoot, bestDist
+	return bestHum, bestRoot, bestModel, bestDist
 end
 
 local function stepAgentAI(agent: TurfAgent, now: number): ()
@@ -643,30 +609,44 @@ local function stepAgentAI(agent: TurfAgent, now: number): ()
 		return
 	end
 
-	local enemyHum, enemyRoot, enemyDist = findBestEnemyTarget(agent)
-	if enemyHum and enemyRoot then
-		local meleeRange = 11.5
-		local shootRange = if agent.IsBoss then 60 else 50
-		local cd = if agent.IsBoss then 1.05 elseif agent.Kind == "PlayerGuard" then 1.15 else 1.45
+	local enemyHum, enemyRoot, enemyModel, enemyDist = findBestEnemyTarget(agent)
+	if enemyHum and enemyRoot and enemyModel then
+		local isBladeMafia = (agent.BladeStyle ~= nil)
+		local isNinja = (agent.BladeStyle == "Ninja")
+		local meleeRange = if isBladeMafia then 13.5 else 11.5
+		local shootRange = if agent.IsBoss then 60 else 54
+		local meleeCd = if isNinja then 0.85 elseif isBladeMafia then 1.0 else 1.1
+		local rangedCd = if agent.IsBoss then 1.05 elseif agent.Kind == "PlayerGuard" then 1.15 else 1.35
 
-		if enemyDist <= meleeRange and (now - agent.LastAttackAt) >= 1.1 then
+		if enemyDist <= meleeRange and (now - agent.LastAttackAt) >= meleeCd then
 			agent.LastAttackAt = now
-			enemyHum:TakeDamage(if agent.IsBoss then 22 else 14)
-			BlackMarketService.BroadcastSFX("MeleeHit", enemyRoot.Position)
-		elseif enemyDist > meleeRange and enemyDist <= shootRange and (now - agent.LastAttackAt) >= cd then
+			local dmg = if agent.IsBoss then 26 elseif isBladeMafia then 18 else 14
+			enemyHum:TakeDamage(dmg)
+			if isBladeMafia and agent.BladeStyle then
+				local clashPoint = (agent.Root.Position + enemyRoot.Position) * 0.5 + Vector3.new(0, 1.5, 0)
+				local targetStyle = tostring(enemyModel:GetAttribute("MercenaryType") or enemyModel:GetAttribute("BladeStyle") or "Samurai")
+				BlackMarketService.SpawnBladeClashVFX(clashPoint, agent.BladeStyle, targetStyle)
+				local slashCol = if isNinja then Color3.fromRGB(168, 184, 214) else Color3.fromRGB(204, 48, 56)
+				BlackMarketService.SpawnBulletTracer(agent.Root.Position + Vector3.new(0, 1.4, 0), enemyRoot.Position, slashCol)
+				BlackMarketService.BroadcastSFX("MeleeHit", clashPoint)
+			else
+				BlackMarketService.BroadcastSFX("MeleeHit", enemyRoot.Position)
+			end
+		elseif enemyDist > meleeRange and enemyDist <= shootRange and (now - agent.LastAttackAt) >= rangedCd then
 			agent.LastAttackAt = now
 			local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
-			local tracerCol = TurfConfig.ResolveFactionColor(agent.FactionId)
+			local tracerCol = if isNinja then Color3.fromRGB(178, 192, 218) elseif isBladeMafia then Color3.fromRGB(214, 62, 68) else TurfConfig.ResolveFactionColor(agent.FactionId)
 			BlackMarketService.SpawnBulletTracer(fromPos, enemyRoot.Position, tracerCol)
 			BlackMarketService.BroadcastSFX(if agent.IsBoss then "SMGShot" else "EnemyShot", fromPos)
-			if math.random() < 0.68 then
-				enemyHum:TakeDamage(if agent.IsBoss then 15 else 10)
+			if math.random() < 0.70 then
+				enemyHum:TakeDamage(if agent.IsBoss then 16 elseif isBladeMafia then 12 else 10)
 				BlackMarketService.BroadcastSFX("MeleeHit", enemyRoot.Position)
 			end
 		end
 
-		-- Strafe / close toward enemy while staying inside territory combat zone
-		if enemyDist > 18 then
+		-- Ninja & Samurai Mafia sprint relentlessly into melee clash range; ranged guards hold standoff!
+		local closeThreshold = if isBladeMafia then 8.5 else 18
+		if enemyDist > closeThreshold then
 			agent.Humanoid:MoveTo(enemyRoot.Position)
 		else
 			agent.Humanoid:MoveTo(agent.Root.Position)
@@ -967,11 +947,11 @@ local function tryLaunchMafiaRaid(): ()
 		end
 	end
 
-	local raiderCount = if playerOwnedCount >= 5 then 3 else 2
+	local raiderCount = 4
 	local raiders: { TurfAgent } = {}
 	for i = 1, raiderCount do
-		local offset = Vector3.new((i - 2) * 6, 3.5, math.random(-5, 5))
-		local isCapo = (i == 1 and playerOwnedCount >= 4)
+		local offset = Vector3.new((i - 2.5) * 5.5, 3.5, math.random(-5, 5))
+		local isCapo = (i == 1)
 		local agent = buildTurfAgentModel(
 			"MafiaRaider",
 			attackingMafia,
@@ -997,7 +977,7 @@ local function tryLaunchMafiaRaid(): ()
 		StartedAt = os.clock(),
 	})
 
-	sendToast(ownerPlayer, string.format("🚨 %s MAFIA is raiding %s! Defend your territory!", mafiaName, target.Spec.DisplayName))
+	sendToast(ownerPlayer, string.format("%s is raiding %s! Defend your territory!", mafiaName, target.Spec.DisplayName))
 	notifyChanged(true)
 	print(string.format("[TurfService] %s launched a %d-unit raid on %s!", mafiaName, raiderCount, target.Id))
 end
@@ -1433,7 +1413,7 @@ function TurfService.Start(): ()
 			for _, blockId in ipairs(TurfConfig.BlockOrder) do
 				local st = blockStates[blockId]
 				if st and st.Status == "Controlled" and st.CaptureProgress <= 0.01 then
-					local expected = if TurfConfig.IsMafiaFaction(st.Owner) and st.Spec.IsHQ then 3 else 2
+					local expected = if TurfConfig.IsMafiaFaction(st.Owner) then 4 else 2
 					if st.DefendersAlive < expected and (t - (lastGuardDiedAt[blockId] or 0)) >= GARRISON_RESPAWN_DELAY then
 						lastGuardDiedAt[blockId] = t
 						local before = st.DefendersAlive

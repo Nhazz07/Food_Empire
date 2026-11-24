@@ -33,6 +33,14 @@ local CentralParkBranchService = require("./CentralParkBranchService")
 local SpinEventService = require("./SpinEventService")
 local SyndicateContractService = require("./SyndicateContractService")
 local CentralEventService = require("./CentralEventService")
+local WeatherService = require("./WeatherService")
+local MafiaBusinessService = require("./MafiaBusinessService")
+local BountyService = require("./BountyService")
+local SyndicateRaidService = require("./SyndicateRaidService")
+local MafiaRestaurantService = require("./MafiaRestaurantService")
+local MercenaryMafiaService = require("./MercenaryMafiaService")
+local SyndicateFamilyService = require("./SyndicateFamilyService")
+local PrestigeVaultService = require("./PrestigeVaultService")
 
 type KitchenState = {
 	IsCooking: boolean,
@@ -1534,7 +1542,20 @@ local function countReadyDishes(kitchen: KitchenState): number
 	return total
 end
 
+local CRAVING_POOL = { "GrilledFish", "ClassicBurger", "FreshSushi", "SizzlingSteak", "CrabFeast", "EmperorPlatter", "TruffleWagyuTartare", "SmokedCartelRibs" }
+local cityCravingRecipeId = "SizzlingSteak"
+local cityCravingEndsAt = os.clock() + 180
+
+local function refreshCityCraving(): ()
+	local now = os.clock()
+	if now >= cityCravingEndsAt then
+		cityCravingRecipeId = CRAVING_POOL[math.random(1, #CRAVING_POOL)]
+		cityCravingEndsAt = now + 180
+	end
+end
+
 local function buildClientPayload(player: Player): { [string]: any }
+	refreshCityCraving()
 	local profile = PlayerDataService.GetProfile(player)
 	local inv = WarehouseService.GetInventorySnapshot(player)
 	local kitchen = ensureKitchen(player)
@@ -1548,6 +1569,7 @@ local function buildClientPayload(player: Player): { [string]: any }
 			CaptureProgress = s.CaptureProgress,
 		}
 	end
+	local cravingSpec = RecipeConfig.Recipes[cityCravingRecipeId]
 
 	return {
 		BaseSlot = BaseService.GetPlayerBaseSlot(player),
@@ -1588,6 +1610,12 @@ local function buildClientPayload(player: Player): { [string]: any }
 		MotorbikeCoinCost = ScooterService.MOTORBIKE_COIN_COST,
 		OwnsMafiaSedan = ScooterService.OwnsMafiaSedan(player),
 		MafiaSedanCost = ScooterService.SEDAN_COIN_COST,
+		OwnsArmoredVan = ScooterService.OwnsArmoredVan(player),
+		ArmoredVanCost = ScooterService.VAN_COIN_COST,
+		OwnsGetawayCoupe = ScooterService.OwnsGetawayCoupe(player),
+		GetawayCoupeCost = ScooterService.COUPE_COIN_COST,
+		HasVehicleArmor = profile.HasVehicleArmor == true,
+		VehiclePaint = profile.VehiclePaint or "Obsidian",
 		GuardStance = BodyguardService.GetSquadStance(player),
 		VaultKeycards = tonumber(player:GetAttribute("VaultKeycards")) or 0,
 		RaiderCount = RaiderChefService.GetRaiderCount(player),
@@ -1607,6 +1635,20 @@ local function buildClientPayload(player: Player): { [string]: any }
 		DeliveryRunnerCooldown = DeliveryRunnerService.GetCooldownRemaining(player),
 		BlackMarket = BlackMarketService.GetCatalogPayload(player),
 		Turf = TurfService.GetSnapshotForPlayer(player),
+		CityCraving = {
+			RecipeId = cityCravingRecipeId,
+			DisplayName = if cravingSpec then cravingSpec.DisplayName else cityCravingRecipeId,
+			TimeRemaining = math.max(0, math.ceil(cityCravingEndsAt - os.clock())),
+		},
+		MenuPricing = profile.MenuPricing or "Standard",
+		Weather = WeatherService.GetSnapshot(),
+		FrontBusinesses = MafiaBusinessService.GetSnapshot(player),
+		Bounties = BountyService.GetSnapshot(player),
+		PenthouseHeist = SyndicateRaidService.GetSnapshot(),
+		MafiaRestaurants = MafiaRestaurantService.GetSnapshot(player),
+		MercenaryMafia = MercenaryMafiaService.GetSnapshot(player),
+		SyndicateFamily = SyndicateFamilyService.GetSnapshot(player),
+		PrestigeVault = PrestigeVaultService.GetSnapshot(player),
 	}
 end
 
@@ -1682,6 +1724,9 @@ function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolea
 	local profile = PlayerDataService.GetProfile(player)
 	if profile.RestaurantLevel < recipe.RequiredRestaurantLevel then
 		return false, string.format("Requires Restaurant HQ Lv.%d", recipe.RequiredRestaurantLevel)
+	end
+	if recipe.RequiredRep and profile.Reputation < recipe.RequiredRep then
+		return false, string.format("Secret Syndicate Dish requires %d Reputation!", recipe.RequiredRep)
 	end
 
 	local kitchen = ensureKitchen(player)
@@ -1825,9 +1870,15 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 	local eventRepMult = if typeof(eventRepMultAttr) == "number" then eventRepMultAttr else 1.0
 	local passCoinsMult = MonetizationService.GetPayoutMultiplier(player)
 	local passRepMult = MonetizationService.GetRepMultiplier(player)
-	local waiterTipMult = CrewService.GetWaiterTipMultiplier(player)
+	local waiterTipMult = CrewService.GetWaiterTipMultiplier(player) * (if PlayerDataService.HasBusiness(player, "DowntownLounge") then 1.15 else 1.0)
 	local starMult = RestaurantService.GetRestaurantStarInfo(player).Multiplier or 1.0
-	local rankMult = SyndicateContractService.GetRankPayoutMultiplier(player)
+	local rankMult = SyndicateContractService.GetRankPayoutMultiplier(player) * PlayerDataService.GetPrestigeMultiplier(player)
+	local pricing = profile.MenuPricing or "Standard"
+	local priceCoinMult = if pricing == "Luxury" then 1.35 elseif pricing == "Budget" then 0.85 else 1.0
+	local priceRepMult = if pricing == "Budget" then 1.25 else 1.0
+	local weatherHotAttr = ReplicatedStorage:GetAttribute("HotComfortWeatherMult")
+	local weatherHotMult = if typeof(weatherHotAttr) == "number" then weatherHotAttr else 1.0
+	refreshCityCraving()
 	local totalCoins = 0
 	local totalExp = 0
 	local totalRep = 0
@@ -1842,10 +1893,12 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 			local mwCount = math.min(qty, kitchen.MasterworkBonusCount)
 			kitchen.MasterworkBonusCount = math.max(0, kitchen.MasterworkBonusCount - mwCount)
 			local normalCount = qty - mwCount
-			local baseCoin = recipe.CoinsReward * tier.PayoutMultiplier * eventCoinsMult * passCoinsMult * waiterTipMult * starMult * rankMult
+			local cravingMult = if recipeId == cityCravingRecipeId then 2.0 else 1.0
+			local dishHotMult = if recipe.IsHotComfort then weatherHotMult else 1.0
+			local baseCoin = recipe.CoinsReward * tier.PayoutMultiplier * eventCoinsMult * passCoinsMult * waiterTipMult * starMult * rankMult * priceCoinMult * cravingMult * dishHotMult
 			totalCoins += math.floor(baseCoin) * normalCount + math.floor(baseCoin * 1.50) * mwCount
 			totalExp += recipe.ExpReward * qty
-			local baseRep = recipe.ReputationReward * eventRepMult * passRepMult * starMult
+			local baseRep = recipe.ReputationReward * eventRepMult * passRepMult * starMult * priceRepMult
 			totalRep += math.floor(baseRep) * normalCount + math.floor(baseRep * 1.50) * mwCount
 		end
 	end
@@ -2249,6 +2302,70 @@ local function setupRemotes(): ()
 				ok, msg = BlackMarketService.BuyWeaponMod(player, arg.WeaponId, arg.ModId)
 			elseif action == "ClaimEmperorTribute" then
 				ok, msg = CentralEventService.TryClaimEmperorTribute(player)
+			elseif action == "SetMenuPricing" and typeof(arg) == "string" then
+				PlayerDataService.SetMenuPricing(player, arg)
+				ok, msg = true, string.format("Restaurant Menu Pricing set to %s!", string.upper(arg))
+			elseif action == "BuySmokeGrenades" then
+				ok, msg = BlackMarketService.BuySmokeGrenades(player)
+			elseif action == "ThrowSmokeGrenade" then
+				ok, msg = BlackMarketService.ThrowSmokeGrenade(player)
+			elseif action == "HireMercenaryMafia" and typeof(arg) == "string" then
+				ok, msg = MercenaryMafiaService.TryHireWithGold(player, arg)
+			elseif action == "OrderMercenaryAssault" then
+				ok, msg = MercenaryMafiaService.OrderAssault(player, if typeof(arg) == "string" then arg else nil)
+			elseif action == "HireMafiaRestaurantChef" and typeof(arg) == "string" then
+				ok, msg = MafiaRestaurantService.TryHireChef(player, arg)
+			elseif action == "TeleportMafiaRestaurant" and typeof(arg) == "string" then
+				ok, msg = MafiaRestaurantService.TeleportToRestaurant(player, arg)
+			elseif action == "BuyFrontBusiness" and typeof(arg) == "string" then
+				ok, msg = MafiaBusinessService.BuyBusiness(player, arg)
+			elseif action == "CollectBusinessSafe" then
+				ok, msg = MafiaBusinessService.CollectSafe(player, if typeof(arg) == "string" then arg else nil)
+			elseif action == "StartPenthouseHeist" then
+				ok, msg = SyndicateRaidService.StartHeist(player)
+			elseif action == "AcceptHitContract" then
+				ok, msg = BountyService.AcceptHitContract(player)
+			elseif action == "PlacePlayerBounty" then
+				local targetN = if typeof(arg) == "table" and typeof(arg.Target) == "string" then arg.Target else nil
+				local amt = if typeof(arg) == "table" and typeof(arg.Amount) == "number" then arg.Amount else 250
+				ok, msg = BountyService.PlacePlayerBounty(player, targetN, amt)
+			elseif action == "RaidBlackoutTruck" then
+				ok, msg = WeatherService.TryRaidBlackoutTruck(player)
+			elseif action == "CycleWeather" then
+				ok, msg = WeatherService.CycleWeather()
+			elseif action == "CommandAllAttack" then
+				local bgOk, bgMsg = BodyguardService.CommandAttack(player)
+				local mOk, mMsg = MercenaryMafiaService.CommandAttack(player)
+				ok = bgOk or mOk
+				msg = if mOk then "ALL UNITS (BODYGUARDS & HIRED MAFIA) ORDERED TO ATTACK!" else bgMsg
+			elseif action == "CommandAllRecall" then
+				local bgOk, bgMsg = BodyguardService.CommandRecall(player)
+				local mOk, mMsg = MercenaryMafiaService.CommandRecall(player)
+				ok = bgOk or mOk
+				msg = if mOk then "ALL UNITS (BODYGUARDS & HIRED MAFIA) CALLED BACK TO YOUR SIDE!" else bgMsg
+			elseif action == "CreateFamily" then
+				ok, msg = SyndicateFamilyService.CreateFamily(player, if typeof(arg) == "string" then arg else nil)
+			elseif action == "JoinFamily" then
+				ok, msg = SyndicateFamilyService.JoinFamily(player, if typeof(arg) == "string" then arg else nil)
+			elseif action == "LeaveFamily" then
+				ok, msg = SyndicateFamilyService.LeaveFamily(player)
+			elseif action == "BuyArmoredVan" then
+				ok, msg = ScooterService.BuyArmoredVan(player)
+			elseif action == "ToggleArmoredVan" then
+				ok, msg = ScooterService.ToggleArmoredVan(player)
+			elseif action == "BuyGetawayCoupe" then
+				ok, msg = ScooterService.BuyGetawayCoupe(player)
+			elseif action == "ToggleGetawayCoupe" then
+				ok, msg = ScooterService.ToggleGetawayCoupe(player)
+			elseif action == "BuyVehicleArmor" then
+				ok, msg = ScooterService.BuyVehicleArmor(player)
+			elseif action == "SetVehiclePaint" and typeof(arg) == "string" then
+				ok, msg = ScooterService.SetVehiclePaint(player, arg)
+			elseif action == "ClaimDailyVault" then
+				ok, msg = PrestigeVaultService.ClaimDailyVault(player)
+			elseif action == "TriggerGodfatherPrestige" then
+				ok, msg = PrestigeVaultService.TriggerGodfatherPrestige(player)
+				if ok then syncRestaurantVisuals(player) end
 			elseif action == "TeleportSpinWheel" then
 				ok, msg = SpinEventService.TeleportToWheel(player)
 			elseif action == "SpinMarketWheel" then
@@ -2341,6 +2458,20 @@ function RestaurantService.Start(): ()
 	end)
 
 	SyndicateContractService.SetChangedCallback(function(player)
+		RestaurantService.PushStateToClient(player)
+	end)
+
+	MafiaRestaurantService.SetChangedCallback(function(player)
+		if player then
+			RestaurantService.PushStateToClient(player)
+		else
+			for _, p in ipairs(Players:GetPlayers()) do
+				RestaurantService.PushStateToClient(p)
+			end
+		end
+	end)
+
+	MercenaryMafiaService.SetChangedCallback(function(player)
 		RestaurantService.PushStateToClient(player)
 	end)
 

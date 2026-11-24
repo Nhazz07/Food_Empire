@@ -112,11 +112,11 @@ function AmbientEffectsController.Start(): ()
 		local basePos = baseCFAttr.Position
 		local baseRot = baseCFAttr - basePos
 
-		local neck = root:FindFirstChild("NeckJoint")
-		local la = root:FindFirstChild("LeftArmJoint")
-		local ra = root:FindFirstChild("RightArmJoint")
-		local ll = root:FindFirstChild("LeftLegJoint")
-		local rl = root:FindFirstChild("RightLegJoint")
+		local neck = root:FindFirstChild("NeckJoint") or model:FindFirstChild("Neck", true)
+		local la = root:FindFirstChild("LeftArmJoint") or model:FindFirstChild("LeftShoulder", true)
+		local ra = root:FindFirstChild("RightArmJoint") or model:FindFirstChild("RightShoulder", true)
+		local ll = root:FindFirstChild("LeftLegJoint") or model:FindFirstChild("LeftHip", true)
+		local rl = root:FindFirstChild("RightLegJoint") or model:FindFirstChild("RightHip", true)
 
 		local posOffset = Vector3.zero
 		local targetY = basePos.Y
@@ -398,7 +398,7 @@ function AmbientEffectsController.Start(): ()
 			end
 		end
 
-		-- 4. Animate Rival, Mafia, Customer & Bodyguard walking limbs smoothly at 60 FPS
+		-- 4. Animate R15 (and legacy) Rival, Mafia, Citizen, Chef, Waiter & Bodyguard walking/idle limbs smoothly at 60 FPS
 		local function animateMarchingUnit(unit: Instance)
 			if unit:IsA("Model") then
 				if unit:GetAttribute("IsDying") == true then
@@ -412,15 +412,72 @@ function AmbientEffectsController.Start(): ()
 				if root and root:IsA("BasePart") then
 					local vel = root.AssemblyLinearVelocity
 					local speed = Vector3.new(vel.X, 0, vel.Z).Magnitude
-					local swing = if speed > 0.8 then math.sin(elapsed * 8.5) * math.rad(34) else 0
-					local la = root:FindFirstChild("LeftArmJoint")
-					local ra = root:FindFirstChild("RightArmJoint")
-					local ll = root:FindFirstChild("LeftLegJoint")
-					local rl = root:FindFirstChild("RightLegJoint")
-					if la and la:IsA("Motor6D") then la.Transform = CFrame.Angles(swing, 0, 0) end
-					if ra and ra:IsA("Motor6D") then ra.Transform = CFrame.Angles(-swing + math.rad(16), 0, 0) end
-					if ll and ll:IsA("Motor6D") then ll.Transform = CFrame.Angles(-swing, 0, 0) end
-					if rl and rl:IsA("Motor6D") then rl.Transform = CFrame.Angles(swing, 0, 0) end
+					local isR15 = unit:GetAttribute("IsR15Rig") == true
+					if isR15 then
+						local upperTorso = unit:FindFirstChild("UpperTorso")
+						local head = unit:FindFirstChild("Head")
+						local lUpperArm = unit:FindFirstChild("LeftUpperArm")
+						local rUpperArm = unit:FindFirstChild("RightUpperArm")
+						local lLowerArm = unit:FindFirstChild("LeftLowerArm")
+						local rLowerArm = unit:FindFirstChild("RightLowerArm")
+						local lUpperLeg = unit:FindFirstChild("LeftUpperLeg")
+						local rUpperLeg = unit:FindFirstChild("RightUpperLeg")
+						local lLowerLeg = unit:FindFirstChild("LeftLowerLeg")
+						local rLowerLeg = unit:FindFirstChild("RightLowerLeg")
+
+						local waist = if upperTorso then upperTorso:FindFirstChild("Waist") else nil
+						local neck = if head then head:FindFirstChild("Neck") else nil
+						local ls = if lUpperArm then lUpperArm:FindFirstChild("LeftShoulder") else nil
+						local rs = if rUpperArm then rUpperArm:FindFirstChild("RightShoulder") else nil
+						local le = if lLowerArm then lLowerArm:FindFirstChild("LeftElbow") else nil
+						local re = if rLowerArm then rLowerArm:FindFirstChild("RightElbow") else nil
+						local lh = if lUpperLeg then lUpperLeg:FindFirstChild("LeftHip") else nil
+						local rh = if rUpperLeg then rUpperLeg:FindFirstChild("RightHip") else nil
+						local lk = if lLowerLeg then lLowerLeg:FindFirstChild("LeftKnee") else nil
+						local rk = if rLowerLeg then rLowerLeg:FindFirstChild("RightKnee") else nil
+
+						if speed > 0.8 then
+							local freq = math.clamp(speed * 0.56, 7.2, 13.5)
+							local phase = elapsed * freq
+							local stride = math.sin(phase) * math.rad(36)
+							local lKneeBend = -math.max(0, math.cos(phase)) * math.rad(46)
+							local rKneeBend = -math.max(0, -math.cos(phase)) * math.rad(46)
+							local armSwing = math.sin(phase) * math.rad(28)
+							if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.Angles(-stride, 0, 0) end
+							if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.Angles(stride, 0, 0) end
+							if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.Angles(lKneeBend, 0, 0) end
+							if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.Angles(rKneeBend, 0, 0) end
+							if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(armSwing, 0, math.rad(-4)) end
+							if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(-armSwing * 0.55 + math.rad(22), 0, math.rad(4)) end
+							if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(24) + math.max(0, armSwing) * 0.6, 0, 0) end
+							if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(32), 0, 0) end
+							if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(-4), math.sin(phase) * math.rad(6), 0) end
+							if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(math.rad(3), -math.sin(phase) * math.rad(4), 0) end
+						else
+							-- Natural living idle breathing & subtle stance sway
+							local breath = math.sin(elapsed * 2.1)
+							if lh and lh:IsA("Motor6D") then lh.Transform = CFrame.identity end
+							if rh and rh:IsA("Motor6D") then rh.Transform = CFrame.identity end
+							if lk and lk:IsA("Motor6D") then lk.Transform = CFrame.identity end
+							if rk and rk:IsA("Motor6D") then rk.Transform = CFrame.identity end
+							if ls and ls:IsA("Motor6D") then ls.Transform = CFrame.Angles(math.rad(4), 0, math.rad(-3 - breath * 1.5)) end
+							if rs and rs:IsA("Motor6D") then rs.Transform = CFrame.Angles(math.rad(16), 0, math.rad(3 + breath * 1.5)) end
+							if le and le:IsA("Motor6D") then le.Transform = CFrame.Angles(math.rad(14), 0, 0) end
+							if re and re:IsA("Motor6D") then re.Transform = CFrame.Angles(math.rad(24), 0, 0) end
+							if waist and waist:IsA("Motor6D") then waist.Transform = CFrame.Angles(math.rad(breath * 1.8), 0, 0) end
+							if neck and neck:IsA("Motor6D") then neck.Transform = CFrame.Angles(0, math.sin(elapsed * 0.7) * math.rad(6), 0) end
+						end
+					else
+						local swing = if speed > 0.8 then math.sin(elapsed * 8.5) * math.rad(34) else 0
+						local la = root:FindFirstChild("LeftArmJoint")
+						local ra = root:FindFirstChild("RightArmJoint")
+						local ll = root:FindFirstChild("LeftLegJoint")
+						local rl = root:FindFirstChild("RightLegJoint")
+						if la and la:IsA("Motor6D") then la.Transform = CFrame.Angles(swing, 0, 0) end
+						if ra and ra:IsA("Motor6D") then ra.Transform = CFrame.Angles(-swing + math.rad(16), 0, 0) end
+						if ll and ll:IsA("Motor6D") then ll.Transform = CFrame.Angles(-swing, 0, 0) end
+						if rl and rl:IsA("Motor6D") then rl.Transform = CFrame.Angles(swing, 0, 0) end
+					end
 				end
 			end
 		end

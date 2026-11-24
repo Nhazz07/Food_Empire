@@ -99,6 +99,37 @@ local guardFolder: Folder? = nil
 local guardsByPlayer: { [Player]: { BodyguardAgent } } = {}
 local slotRespawnUntil: { [Player]: { [number]: number } } = {}
 local playerUnderAttackUntil: { [Player]: number } = {}
+local playerRecallUntil: { [Player]: number } = {}
+local playerAttackOrderUntil: { [Player]: number } = {}
+
+function BodyguardService.CommandAttack(player: Player): (boolean, string)
+	playerRecallUntil[player] = nil
+	playerAttackOrderUntil[player] = os.clock() + 45
+	PlayerDataService.SetGuardStance(player, "Aggressive")
+	return true, "PERSONAL BODYGUARDS ORDERED TO ATTACK!"
+end
+
+function BodyguardService.CommandRecall(player: Player): (boolean, string)
+	playerAttackOrderUntil[player] = nil
+	playerRecallUntil[player] = os.clock() + 14
+	PlayerDataService.SetGuardStance(player, "Follow")
+	local list = guardsByPlayer[player]
+	local ch = player.Character
+	local hrp = if ch then ch:FindFirstChild("HumanoidRootPart") else nil
+	if list and hrp and hrp:IsA("BasePart") then
+		for _, g in ipairs(list) do
+			if g.Model.Parent and g.Humanoid.Health > 0 then
+				local dest = hrp.Position + Vector3.new((g.SlotIndex - 2.5) * 4.5, 1, 6.5)
+				if (dest - g.Root.Position).Magnitude > 48 then
+					g.Model:PivotTo(CFrame.new(dest))
+				else
+					g.Humanoid:MoveTo(dest)
+				end
+			end
+		end
+	end
+	return true, "PERSONAL BODYGUARDS RECALLED TO YOUR SIDE!"
+end
 local charConns: { [Player]: RBXScriptConnection } = {}
 local hpConns: { [Player]: RBXScriptConnection } = {}
 local aiThread: thread? = nil
@@ -624,24 +655,28 @@ local function hasPlayerStolenShipment(player: Player): boolean
 	return player:GetAttribute("CarryingCrate") ~= nil
 end
 
-local function findBestHostileForGuard(owner: Player, anchor: Vector3, radius: number, prioritizeBoss: boolean): (Humanoid?, BasePart?, Model?)
+local function findBestHostileForGuard(owner: Player, anchor: Vector3, radius: number, prioritizeBoss: boolean, hasAttackOrder: boolean): (Humanoid?, BasePart?, Model?)
 	local bestHum: Humanoid? = nil
 	local bestRoot: BasePart? = nil
 	local bestModel: Model? = nil
 	local bestScore = -math.huge
 	local ownerStoleShipment = hasPlayerStolenShipment(owner)
 
-	for _, tagName in ipairs({ "MafiaUnit", "RivalAIUnit" }) do
+	for _, tagName in ipairs({ "MafiaUnit", "RivalAIUnit", "ApexMafiaUnit", "RivalSamuraiUnit", "PenthouseBossUnit" }) do
 		for _, unit in ipairs(CollectionService:GetTagged(tagName)) do
 			if unit:IsA("Model") then
 				local r = unit:FindFirstChild("HumanoidRootPart")
 				local h = unit:FindFirstChildOfClass("Humanoid")
 				if r and r:IsA("BasePart") and h and h.Health > 0 then
-					local isEventRaider = (unit.Name == "BistroExtortionEnforcer") or (string.find(unit.Name, "GangWarEnforcer") ~= nil)
-					local inCentralSpinZone = (not isEventRaider) and ((math.abs(r.Position.X) <= 175 and math.abs(r.Position.Z) <= 175)
+					local isEventRaider = (unit.Name == "BistroExtortionEnforcer") or (string.find(unit.Name, "GangWarEnforcer") ~= nil) or (tagName == "ApexMafiaUnit") or (tagName == "PenthouseBossUnit")
+					local isCentralParkSamurai = (tagName == "RivalSamuraiUnit")
+					local isProvoked = unit:GetAttribute("Provoked") == true
+					local inCentralSpinZone = (not isEventRaider) and (isCentralParkSamurai
+						or (math.abs(r.Position.X) <= 175 and math.abs(r.Position.Z) <= 175)
 						or (unit:GetAttribute("RivalFactionId") == "CrimsonDonEmpire"))
-					-- Respect Central Park Spin Event peace truce unless owner stole a shipment!
-					if not inCentralSpinZone or ownerStoleShipment then
+					-- Respect Central Park Peace Truce (both Spin Zone & Central Park Samurai/Ninja Mafia) unless owner stole a shipment, they are provoked, or owner pressed ATTACK ALL [Y]!
+					local allowEngage = (not inCentralSpinZone) or ownerStoleShipment or isProvoked or (isCentralParkSamurai and hasAttackOrder)
+					if allowEngage then
 						local d = (r.Position - anchor).Magnitude
 						if d <= radius then
 							local isBoss = unit:GetAttribute("IsMafiaBoss") == true or unit:GetAttribute("IsRivalBoss") == true
@@ -722,7 +757,8 @@ local function stepGuard(agent: BodyguardAgent): ()
 		agent.StatusLabel.Text = string.format("%s  |  IN SEDAN", string.upper(agent.ClassSpec.DisplayName))
 		agent.StatusLabel.TextColor3 = Color3.fromRGB(224, 186, 114)
 		if stats.IsRanged and (now - agent.LastAttackAt) >= stats.Cooldown then
-			local tHum, tRoot, tModel = findBestHostileForGuard(owner, ownerPos, stats.Range, agent.ClassSpec.CombatStyle == "Sniper")
+			local hasOrder = (playerAttackOrderUntil[owner] or 0) > now
+			local tHum, tRoot, tModel = findBestHostileForGuard(owner, ownerPos, stats.Range, agent.ClassSpec.CombatStyle == "Sniper", hasOrder)
 			if tHum and tRoot and tModel then
 				agent.LastAttackAt = now
 				local finalDmg = math.floor(stats.Damage * (if hasBossAuraNearby(owner, agent.Root.Position) then 1.20 else 1.0))
@@ -731,6 +767,7 @@ local function stepGuard(agent: BodyguardAgent): ()
 				local tracerCol = if agent.ClassSpec.Id == "BossBodyguard" then Color3.fromRGB(255, 206, 56) else Color3.fromRGB(92, 228, 255)
 				BlackMarketService.SpawnBulletTracer(fromPos, tRoot.Position, tracerCol)
 				BlackMarketService.BroadcastSFX("SMGShot", fromPos)
+				BlackMarketService.BroadcastSFX(if tHum.Health <= 0 then "EnemyDeathScream" else "EnemyHitScream", tRoot.Position)
 			end
 		end
 		return
@@ -742,15 +779,22 @@ local function stepGuard(agent: BodyguardAgent): ()
 		return
 	end
 
-	-- Intelligent Target Selection (Snipers prioritize Boss/Elite targets up to their long range!)
-	local baseAlert = if stance == "Aggressive" then 88 elseif (playerUnderAttackUntil[owner] or 0) > now then 74 else PROTECT_RADIUS
-	local alertRadius = math.max(stats.Range + (if stance == "Aggressive" then 24 else 0), baseAlert)
-	local targetHum, targetRoot, targetModel = findBestHostileForGuard(owner, anchorPos, alertRadius, agent.ClassSpec.CombatStyle == "Sniper")
+	-- Intelligent Target Selection (Respects Recall Hold & Expanded Attack Order!)
+	local isRecalling = (playerRecallUntil[owner] or 0) > now
+	local hasAttackOrder = (playerAttackOrderUntil[owner] or 0) > now
+	local baseAlert = if hasAttackOrder then 135 elseif stance == "Aggressive" then 88 elseif (playerUnderAttackUntil[owner] or 0) > now then 74 else PROTECT_RADIUS
+	local alertRadius = math.max(stats.Range + (if stance == "Aggressive" or hasAttackOrder then 28 else 0), baseAlert)
+	local targetHum: Humanoid? = nil
+	local targetRoot: BasePart? = nil
+	local targetModel: Model? = nil
+	if not isRecalling then
+		targetHum, targetRoot, targetModel = findBestHostileForGuard(owner, anchorPos, alertRadius, agent.ClassSpec.CombatStyle == "Sniper", hasAttackOrder)
+	end
 
 	if not targetHum and (stance == "Follow" or stance == "Aggressive") then
 		local runnerPos = DeliveryRunnerService.GetActiveRunnerPosition(owner)
 		if runnerPos and (runnerPos - ownerPos).Magnitude < 120 then
-			targetHum, targetRoot, targetModel = findBestHostileForGuard(owner, runnerPos, 46, false)
+			targetHum, targetRoot, targetModel = findBestHostileForGuard(owner, runnerPos, 46, false, hasAttackOrder)
 		end
 	end
 
@@ -785,12 +829,17 @@ local function stepGuard(agent: BodyguardAgent): ()
 					local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
 					local tracerCol = if agent.ClassSpec.Id == "BossBodyguard" then Color3.fromRGB(255, 206, 56) else Color3.fromRGB(92, 228, 255)
 					BlackMarketService.SpawnBulletTracer(fromPos, targetRoot.Position, tracerCol)
-					local sfx = if agent.ClassSpec.CombatStyle == "Shotgun" or agent.ClassSpec.CombatStyle == "Sniper" then "ShotgunBlast" elseif agent.ClassSpec.CombatStyle == "Rifle" then "SMGShot" else "PistolShot"
+					local sfx = if agent.ClassSpec.CombatStyle == "Sniper"
+						then "SniperShot"
+						elseif agent.ClassSpec.CombatStyle == "Shotgun" then "ShotgunBlast"
+						elseif agent.ClassSpec.CombatStyle == "Rifle" then "RifleShot"
+						else "PistolShot"
 					BlackMarketService.BroadcastSFX(sfx, fromPos)
 				else
 					spawnGuardHitBurst(targetRoot.Position, agent.ClassSpec.AccentColor)
 					BlackMarketService.BroadcastSFX("MeleeHit", targetRoot.Position)
 				end
+				BlackMarketService.BroadcastSFX(if targetHum.Health <= 0 then "EnemyDeathScream" else "EnemyHitScream", targetRoot.Position)
 
 				if targetHum.Health <= 0 then
 					local isMafia = CollectionService:HasTag(targetModel, "MafiaUnit")

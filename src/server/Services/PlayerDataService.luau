@@ -36,6 +36,17 @@ export type PlayerProfile = {
 	OwnsMafiaSedan: boolean,
 	GuardStance: string,
 	WeaponMods: { [string]: { [string]: boolean } },
+	OwnedBusinesses: { [string]: boolean },
+	MenuPricing: string,
+	SmokeGrenades: number,
+	HasPenthouseTrophy: boolean,
+	OwnsArmoredVan: boolean,
+	OwnsGetawayCoupe: boolean,
+	HasVehicleArmor: boolean,
+	VehiclePaint: string,
+	DailyStreak: number,
+	LastDailyClaimDay: number,
+	PrestigeLevel: number,
 }
 
 export type ProfileChangedCallback = (player: Player, profile: PlayerProfile) -> ()
@@ -100,6 +111,17 @@ local function createDefaultProfile(): PlayerProfile
 		OwnsMafiaSedan = false,
 		GuardStance = "Follow",
 		WeaponMods = {},
+		OwnedBusinesses = {},
+		MenuPricing = "Standard",
+		SmokeGrenades = 2,
+		HasPenthouseTrophy = false,
+		OwnsArmoredVan = false,
+		OwnsGetawayCoupe = false,
+		HasVehicleArmor = false,
+		VehiclePaint = "Obsidian",
+		DailyStreak = 0,
+		LastDailyClaimDay = 0,
+		PrestigeLevel = 0,
 	}
 end
 
@@ -425,6 +447,93 @@ function PlayerDataService.SetArmor(player: Player, armorAmount: number): ()
 	notifyChanged(player)
 end
 
+function PlayerDataService.SetOwnedBusiness(player: Player, businessId: string, owned: boolean): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.OwnedBusinesses[businessId] = if owned then true else nil
+	notifyChanged(player)
+end
+
+function PlayerDataService.HasBusiness(player: Player, businessId: string): boolean
+	return PlayerDataService.GetProfile(player).OwnedBusinesses[businessId] == true
+end
+
+function PlayerDataService.SetMenuPricing(player: Player, tier: string): ()
+	local profile = PlayerDataService.GetProfile(player)
+	if tier ~= "Budget" and tier ~= "Standard" and tier ~= "Luxury" then
+		return
+	end
+	profile.MenuPricing = tier
+	notifyChanged(player)
+end
+
+function PlayerDataService.AddSmokeGrenades(player: Player, amount: number): number
+	local profile = PlayerDataService.GetProfile(player)
+	profile.SmokeGrenades = math.clamp((profile.SmokeGrenades or 0) + math.floor(amount), 0, 12)
+	notifyChanged(player)
+	return profile.SmokeGrenades
+end
+
+function PlayerDataService.ConsumeSmokeGrenade(player: Player): boolean
+	local profile = PlayerDataService.GetProfile(player)
+	if (profile.SmokeGrenades or 0) <= 0 then
+		return false
+	end
+	profile.SmokeGrenades -= 1
+	notifyChanged(player)
+	return true
+end
+
+function PlayerDataService.SetHasPenthouseTrophy(player: Player, owned: boolean): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.HasPenthouseTrophy = owned
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetOwnsArmoredVan(player: Player, owned: boolean): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.OwnsArmoredVan = owned
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetOwnsGetawayCoupe(player: Player, owned: boolean): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.OwnsGetawayCoupe = owned
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetHasVehicleArmor(player: Player, owned: boolean): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.HasVehicleArmor = owned
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetVehiclePaint(player: Player, paintId: string): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.VehiclePaint = paintId
+	notifyChanged(player)
+end
+
+function PlayerDataService.SetDailyVaultProgress(player: Player, streak: number, dayNum: number): ()
+	local profile = PlayerDataService.GetProfile(player)
+	profile.DailyStreak = math.clamp(math.floor(streak), 0, 7)
+	profile.LastDailyClaimDay = math.floor(dayNum)
+	notifyChanged(player)
+end
+
+function PlayerDataService.IncrementPrestige(player: Player): number
+	local profile = PlayerDataService.GetProfile(player)
+	profile.PrestigeLevel = (profile.PrestigeLevel or 0) + 1
+	profile.RestaurantLevel = 1
+	profile.Coins = 500
+	notifyChanged(player)
+	return profile.PrestigeLevel
+end
+
+function PlayerDataService.GetPrestigeMultiplier(player: Player): number
+	local pLv = PlayerDataService.GetProfile(player).PrestigeLevel or 0
+	return 1.0 + (pLv * 0.25)
+end
+
 -- Applies a 30% Gold and 30% Reputation penalty (and breaks remaining Armor) whenever the player dies!
 function PlayerDataService.ApplyDeathPenalty(player: Player): (number, number)
 	local profile = PlayerDataService.GetProfile(player)
@@ -552,6 +661,29 @@ local function loadPlayer(player: Player): ()
 					end
 				end
 			end
+			if typeof(saved.OwnedBusinesses) == "table" then
+				for bid, v in pairs(saved.OwnedBusinesses) do
+					if typeof(bid) == "string" and v == true then
+						profile.OwnedBusinesses[bid] = true
+					end
+				end
+			end
+			if typeof(saved.MenuPricing) == "string" then
+				profile.MenuPricing = saved.MenuPricing
+			end
+			if typeof(saved.SmokeGrenades) == "number" then
+				profile.SmokeGrenades = math.clamp(math.floor(saved.SmokeGrenades), 0, 12)
+			end
+			if typeof(saved.HasPenthouseTrophy) == "boolean" then
+				profile.HasPenthouseTrophy = saved.HasPenthouseTrophy
+			end
+			if typeof(saved.OwnsArmoredVan) == "boolean" then profile.OwnsArmoredVan = saved.OwnsArmoredVan end
+			if typeof(saved.OwnsGetawayCoupe) == "boolean" then profile.OwnsGetawayCoupe = saved.OwnsGetawayCoupe end
+			if typeof(saved.HasVehicleArmor) == "boolean" then profile.HasVehicleArmor = saved.HasVehicleArmor end
+			if typeof(saved.VehiclePaint) == "string" then profile.VehiclePaint = saved.VehiclePaint end
+			if typeof(saved.DailyStreak) == "number" then profile.DailyStreak = math.clamp(math.floor(saved.DailyStreak), 0, 7) end
+			if typeof(saved.LastDailyClaimDay) == "number" then profile.LastDailyClaimDay = math.floor(saved.LastDailyClaimDay) end
+			if typeof(saved.PrestigeLevel) == "number" then profile.PrestigeLevel = math.max(0, math.floor(saved.PrestigeLevel)) end
 			if typeof(saved.WaiterCount) == "number" then profile.WaiterCount = math.clamp(math.floor(saved.WaiterCount), 0, 3) end
 			if typeof(saved.CourierCount) == "number" then profile.CourierCount = math.clamp(math.floor(saved.CourierCount), 0, 2) end
 			if typeof(saved.OwnsCentralParkBranch) == "boolean" then profile.OwnsCentralParkBranch = saved.OwnsCentralParkBranch end
@@ -621,6 +753,17 @@ local function savePlayer(player: Player): ()
 		OwnsMafiaSedan = profile.OwnsMafiaSedan,
 		GuardStance = profile.GuardStance,
 		WeaponMods = profile.WeaponMods,
+		OwnedBusinesses = profile.OwnedBusinesses,
+		MenuPricing = profile.MenuPricing,
+		SmokeGrenades = profile.SmokeGrenades,
+		HasPenthouseTrophy = profile.HasPenthouseTrophy,
+		OwnsArmoredVan = profile.OwnsArmoredVan,
+		OwnsGetawayCoupe = profile.OwnsGetawayCoupe,
+		HasVehicleArmor = profile.HasVehicleArmor,
+		VehiclePaint = profile.VehiclePaint,
+		DailyStreak = profile.DailyStreak,
+		LastDailyClaimDay = profile.LastDailyClaimDay,
+		PrestigeLevel = profile.PrestigeLevel,
 		HasKevlarVest = profile.HasKevlarVest,
 		Armor = profile.Armor,
 		OwnedWeapons = profile.OwnedWeapons,

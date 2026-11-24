@@ -93,159 +93,67 @@ local function getFrontGatePos(player: Player): Vector3?
 end
 
 local function buildMafiaModel(index: number, spawnPos: Vector3, isBoss: boolean): MafiaAgent
-	local scale = if isBoss then 1.25 else 1.0
-	local model = Instance.new("Model")
-	model.Name = if isBoss then "MafiaCapoBoss" else ("MafiaEnforcer_" .. tostring(index))
+	local scale = if isBoss then 1.18 else 1.02
+	local modelName = if isBoss then "MafiaCapoBoss" else ("MafiaEnforcer_" .. tostring(index))
+	local rig = MafiaVisualBuilder.BuildRivalRig(modelName, "CrimsonDonEmpire", not isBoss, scale, CFrame.new(spawnPos), false)
+	local model = rig.Model
+	local root = rig.Root
+	local head = rig.Head
+	local tieCol = if isBoss then Color3.fromRGB(186, 148, 68) else Color3.fromRGB(154, 30, 38)
 
-	local function mPart(name: string, sz: Vector3, col: Color3, mat: Enum.Material, shape: Enum.PartType?, collide: boolean): Part
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = sz * scale
-		p.Color = col
-		p.Material = mat
-		if shape then p.Shape = shape end
-		p.CanCollide = collide
-		p.CanTouch = collide
-		p.Massless = not collide
-		p.TopSurface = Enum.SurfaceType.Smooth
-		p.BottomSurface = Enum.SurfaceType.Smooth
-		p.Parent = model
-		return p
-	end
-
-	local function weldTo(p0: BasePart, p1: BasePart, rel: CFrame)
-		p1.CFrame = p0.CFrame * CFrame.new(rel.Position * scale) * rel.Rotation
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = p0
-		w.Part1 = p1
-		w.Parent = p1
-	end
-
-	local function makeJoint(name: string, p0: BasePart, p1: BasePart, c0: CFrame, c1: CFrame)
-		local sc0 = CFrame.new(c0.Position * scale) * c0.Rotation
-		local sc1 = CFrame.new(c1.Position * scale) * c1.Rotation
-		p1.CFrame = p0.CFrame * sc0 * sc1:Inverse()
-		local m = Instance.new("Motor6D")
-		m.Name = name
-		m.Part0 = p0
-		m.Part1 = p1
-		m.C0 = sc0
-		m.C1 = sc1
-		m.Parent = p0
-	end
-
-	local suitCol = if isBoss then Color3.fromRGB(22, 22, 28) else Color3.fromRGB(30, 32, 40)
-	local tieCol = if isBoss then Color3.fromRGB(246, 196, 48) else Color3.fromRGB(196, 32, 42)
-	local skinCol = Color3.fromRGB(238, 198, 166)
-
-	-- 1. Pinstripe Suit Torso + White Dress Shirt + Crimson/Gold Tie
-	local root = mPart("HumanoidRootPart", Vector3.new(2.6, 2.85, 1.45), suitCol, Enum.Material.SmoothPlastic, nil, true)
-	root.CFrame = CFrame.new(spawnPos)
-
-	local shirt = mPart("DressShirt", Vector3.new(1.0, 2.2, 0.25), Color3.fromRGB(244, 244, 248), Enum.Material.SmoothPlastic, nil, false)
-	weldTo(root, shirt, CFrame.new(0, 0.2, -0.68))
-	local tie = mPart("MafiaTie", Vector3.new(0.42, 1.85, 0.32), tieCol, Enum.Material.SmoothPlastic, nil, false)
-	weldTo(root, tie, CFrame.new(0, 0.1, -0.74))
-
-	-- 2. Head + Dark Sunglasses + Mafia Fedora Hat
-	local head = mPart("Head", Vector3.new(2.0, 2.0, 2.0), skinCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-	weldTo(root, head, CFrame.new(0, 2.38, 0))
-
-	local shades = mPart("Sunglasses", Vector3.new(1.55, 0.42, 0.35), Color3.fromRGB(14, 16, 22), Enum.Material.Glass, nil, false)
-	weldTo(head, shades, CFrame.new(0, 0.14, -0.88))
-
-	local brim = mPart("FedoraBrim", Vector3.new(0.32, 3.2, 3.2), suitCol, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
-	weldTo(head, brim, CFrame.new(0, 0.92, 0) * CFrame.Angles(0, 0, math.rad(90)))
-	local crown = mPart("FedoraCrown", Vector3.new(1.15, 2.05, 2.05), suitCol, Enum.Material.Fabric, Enum.PartType.Cylinder, false)
-	weldTo(head, crown, CFrame.new(0, 1.48, 0) * CFrame.Angles(0, 0, math.rad(90)))
-	local band = mPart("FedoraBand", Vector3.new(0.32, 2.15, 2.15), tieCol, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, false)
-	weldTo(head, band, CFrame.new(0, 1.12, 0) * CFrame.Angles(0, 0, math.rad(90)))
-
-	-- 3. Articulated Suit Arms + Bat / Golden Boss Crowbar
-	local leftArm = mPart("LeftArm", Vector3.new(0.95, 2.45, 0.95), suitCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("LeftArmJoint", root, leftArm, CFrame.new(-1.8, 1.05, 0), CFrame.new(0, 1.05, 0))
-	local leftHand = mPart("LeftHand", Vector3.new(0.82, 0.72, 0.82), skinCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-	weldTo(leftArm, leftHand, CFrame.new(0, -1.35, 0))
-
-	local rightArm = mPart("RightArm", Vector3.new(0.95, 2.45, 0.95), suitCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("RightArmJoint", root, rightArm, CFrame.new(1.8, 1.05, 0), CFrame.new(0, 1.05, 0))
-	local rightHand = mPart("RightHand", Vector3.new(0.82, 0.72, 0.82), skinCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-	weldTo(rightArm, rightHand, CFrame.new(0, -1.35, 0))
-
-	local weapon = mPart(
-		"MafiaWeapon",
-		Vector3.new(0.38, 0.38, 3.2),
-		if isBoss then Color3.fromRGB(255, 208, 52) else Color3.fromRGB(168, 174, 188),
-		Enum.Material.Metal,
-		nil,
-		false
-	)
-	weldTo(rightHand, weapon, CFrame.new(0, -0.1, -1.6))
-
-	-- 4. Articulated Legs + Dress Shoes
-	local leftLeg = mPart("LeftLeg", Vector3.new(1.05, 2.5, 1.05), suitCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("LeftLegJoint", root, leftLeg, CFrame.new(-0.62, -1.4, 0), CFrame.new(0, 1.25, 0))
-	local leftShoe = mPart("LeftShoe", Vector3.new(1.12, 0.65, 1.5), Color3.fromRGB(16, 18, 22), Enum.Material.SmoothPlastic, nil, false)
-	weldTo(leftLeg, leftShoe, CFrame.new(0, -1.2, -0.18))
-
-	local rightLeg = mPart("RightLeg", Vector3.new(1.05, 2.5, 1.05), suitCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("RightLegJoint", root, rightLeg, CFrame.new(0.62, -1.4, 0), CFrame.new(0, 1.25, 0))
-	local rightShoe = mPart("RightShoe", Vector3.new(1.12, 0.65, 1.5), Color3.fromRGB(16, 18, 22), Enum.Material.SmoothPlastic, nil, false)
-	weldTo(rightLeg, rightShoe, CFrame.new(0, -1.2, -0.18))
-
-	-- 5. Sinister Nameplate + HP Bar
+	-- Restrained Dark-Noir Nameplate + HP Bar (Zero Emojis)
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(if isBoss then 195 else 165, 48)
-	bb.StudsOffset = Vector3.new(0, 4.2 * scale, 0)
+	bb.Size = UDim2.fromOffset(if isBoss then 196 else 168, 42)
+	bb.StudsOffset = Vector3.new(0, 3.1 * scale, 0)
 	bb.MaxDistance = 155
 	bb.Parent = head
 
 	local label = Instance.new("TextLabel")
-	label.Size = UDim2.new(1, 0, 0, 26)
-	label.BackgroundColor3 = if isBoss then Color3.fromRGB(168, 124, 18) else Color3.fromRGB(24, 24, 34)
-	label.BackgroundTransparency = 0.06
+	label.Size = UDim2.new(1, 0, 0, 21)
+	label.BackgroundColor3 = Color3.fromRGB(16, 17, 22)
+	label.BackgroundTransparency = 0.08
 	label.Font = Enum.Font.GothamBlack
-	label.Text = if isBoss then "🕶️ MAFIA CAPO BOSS" else "🕶️ FOOD MAFIA"
-	label.TextSize = if isBoss then 14 else 13
-	label.TextColor3 = if isBoss then Color3.fromRGB(255, 242, 178) else Color3.fromRGB(255, 96, 96)
+	label.Text = if isBoss then "MAFIA CAPO BOSS" else "FOOD MAFIA ENFORCER"
+	label.TextSize = if isBoss then 11 else 10
+	label.TextColor3 = if isBoss then Color3.fromRGB(238, 194, 114) else Color3.fromRGB(228, 128, 130)
 	label.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 7)
+	c.CornerRadius = UDim.new(0, 4)
 	c.Parent = label
 	local st = Instance.new("UIStroke")
 	st.Color = tieCol
-	st.Thickness = 1.6
+	st.Thickness = 1.2
 	st.Parent = label
 
 	local maxHp = if isBoss then 320 else 200
 
 	local hpBg = Instance.new("Frame")
 	hpBg.Name = "HPBarBg"
-	hpBg.Position = UDim2.new(0.05, 0, 0, 29)
-	hpBg.Size = UDim2.new(0.90, 0, 0, 15)
-	hpBg.BackgroundColor3 = Color3.fromRGB(22, 22, 30)
+	hpBg.Position = UDim2.new(0.04, 0, 0, 24)
+	hpBg.Size = UDim2.new(0.92, 0, 0, 13)
+	hpBg.BackgroundColor3 = Color3.fromRGB(14, 15, 20)
 	hpBg.Parent = bb
 	local hpc = Instance.new("UICorner")
-	hpc.CornerRadius = UDim.new(0, 6)
+	hpc.CornerRadius = UDim.new(0, 3)
 	hpc.Parent = hpBg
 
 	local hpFill = Instance.new("Frame")
 	hpFill.Name = "HPFill"
 	hpFill.Size = UDim2.fromScale(1, 1)
-	hpFill.BackgroundColor3 = Color3.fromRGB(238, 62, 72)
+	hpFill.BackgroundColor3 = Color3.fromRGB(154, 30, 38)
 	hpFill.Parent = hpBg
 	local hpfc = Instance.new("UICorner")
-	hpfc.CornerRadius = UDim.new(0, 6)
+	hpfc.CornerRadius = UDim.new(0, 3)
 	hpfc.Parent = hpFill
 
 	local hpText = Instance.new("TextLabel")
 	hpText.Name = "HPText"
 	hpText.Size = UDim2.fromScale(1, 1)
 	hpText.BackgroundTransparency = 1
-	hpText.Font = Enum.Font.GothamBlack
-	hpText.Text = string.format("❤️ %d / %d HP", maxHp, maxHp)
-	hpText.TextSize = 10
-	hpText.TextColor3 = Color3.new(1, 1, 1)
+	hpText.Font = Enum.Font.GothamBold
+	hpText.Text = string.format("%d / %d HP", maxHp, maxHp)
+	hpText.TextSize = 9
+	hpText.TextColor3 = Color3.fromRGB(238, 236, 232)
 	hpText.ZIndex = 3
 	hpText.Parent = hpBg
 
@@ -253,7 +161,7 @@ local function buildMafiaModel(index: number, spawnPos: Vector3, isBoss: boolean
 	hum.MaxHealth = maxHp
 	hum.Health = maxHp
 	hum.WalkSpeed = if isBoss then 15.5 else 18.0
-	hum.HipHeight = 2.65 * scale
+	hum.HipHeight = 2.25 * scale
 	hum.BreakJointsOnDeath = false
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.Parent = model

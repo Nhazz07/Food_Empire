@@ -6,6 +6,7 @@ local CollectionService = game:GetService("CollectionService")
 local SectorService = require("./SectorService")
 local WarehouseService = require("./WarehouseService")
 local MonetizationService = require("./MonetizationService")
+local PlayerDataService = require("./PlayerDataService")
 
 export type SectorInventory = { [string]: number }
 
@@ -71,9 +72,11 @@ local function produceForSector(sectorId: string, sector: SectorService.SectorDa
 
 	if ownerPlayer then
 		local deliveryMult = MonetizationService.GetDeliveryMultiplier(ownerPlayer)
+		local canneryBonus = if sector.Category == "Fish" and PlayerDataService.HasBusiness(ownerPlayer, "HarborCannery") then 1.25 else 1.0
 		local deliveredSummary: { string } = {}
 		for _, itemName in ipairs(ingredients) do
-			local stored = WarehouseService.AddIngredient(ownerPlayer, itemName, perItem * deliveryMult)
+			local qty = math.max(1, math.ceil(perItem * deliveryMult * canneryBonus))
+			local stored = WarehouseService.AddIngredient(ownerPlayer, itemName, qty)
 			if stored > 0 then
 				table.insert(deliveredSummary, string.format("+%d %s", stored, itemName))
 			end

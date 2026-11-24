@@ -149,6 +149,7 @@ local function createGoldenSpatulaTool(owner: Player): Tool
 						enemyHum:TakeDamage(ATTACK_DAMAGE)
 						spawnHitBurst(enemyRoot.Position)
 						BlackMarketService.BroadcastSFX("MeleeHit", enemyRoot.Position)
+						BlackMarketService.BroadcastSFX(if enemyHum.Health <= 0 then "EnemyDeathScream" else "EnemyHitScream", enemyRoot.Position)
 
 						if enemyHum.Health > 0 and pushDir.Magnitude > 0.01 then
 							enemyRoot.AssemblyLinearVelocity = pushDir.Unit * 28 + Vector3.new(0, 12, 0)
@@ -173,6 +174,7 @@ local function createGoldenSpatulaTool(owner: Player): Tool
 						enemyHum:TakeDamage(ATTACK_DAMAGE)
 						spawnHitBurst(enemyRoot.Position)
 						BlackMarketService.BroadcastSFX("MeleeHit", enemyRoot.Position)
+						BlackMarketService.BroadcastSFX(if enemyHum.Health <= 0 then "EnemyDeathScream" else "EnemyHitScream", enemyRoot.Position)
 
 						local pushDir = enemyRoot.Position - root.Position
 						if pushDir.Magnitude > 0.01 then
@@ -204,6 +206,7 @@ local function createGoldenSpatulaTool(owner: Player): Tool
 						enemyHum:TakeDamage(ATTACK_DAMAGE)
 						spawnHitBurst(enemyRoot.Position)
 						BlackMarketService.BroadcastSFX("MeleeHit", enemyRoot.Position)
+						BlackMarketService.BroadcastSFX(if enemyHum.Health <= 0 then "EnemyDeathScream" else "EnemyHitScream", enemyRoot.Position)
 						if enemyHum.Health <= 0 then
 							PlayerDataService.AddRewards(owner, 65, 25, 15)
 						end

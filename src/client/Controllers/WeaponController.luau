@@ -41,6 +41,7 @@ type WeaponProfile = {
 	RecoverSpeed: number,
 	CrosshairBloom: number,
 	AccentColor: Color3,
+	IsMelee: boolean,
 }
 
 type AmmoState = {
@@ -75,44 +76,52 @@ local CATEGORY_HANDLING: { [WeaponConfig.WeaponCategory]: {
 	CrosshairBloom: number,
 } } = {
 	Pistol = {
-		BladedYawDeg = 8,
-		StancePos = Vector3.new(0.20, 0.72, -1.55),
-		LeftGripLocal = Vector3.new(-0.18, -0.05, -0.16),
+		BladedYawDeg = 12,
+		StancePos = Vector3.new(0.18, 0.78, -1.40),
+		LeftGripLocal = Vector3.new(-0.14, -0.04, -0.14),
 		ReloadPortLocal = Vector3.new(0, -0.45, 0.02),
-		RecoverSpeed = 12.0,
+		RecoverSpeed = 12.5,
 		CrosshairBloom = 5,
 	},
 	Shotgun = {
-		BladedYawDeg = 22,
-		StancePos = Vector3.new(0.44, 0.64, -0.94),
-		LeftGripLocal = Vector3.new(-0.14, 0.34, -1.55),
+		BladedYawDeg = 25,
+		StancePos = Vector3.new(0.41, 0.68, -0.82),
+		LeftGripLocal = Vector3.new(-0.12, 0.34, -1.48),
 		ReloadPortLocal = Vector3.new(-0.04, 0.24, -0.48),
-		RecoverSpeed = 7.8,
+		RecoverSpeed = 8.0,
 		CrosshairBloom = 11,
 	},
 	SMG = {
-		BladedYawDeg = 20,
-		StancePos = Vector3.new(0.42, 0.66, -0.96),
-		LeftGripLocal = Vector3.new(-0.12, 0.10, -1.44),
+		BladedYawDeg = 23,
+		StancePos = Vector3.new(0.39, 0.70, -0.86),
+		LeftGripLocal = Vector3.new(-0.10, 0.12, -1.36),
 		ReloadPortLocal = Vector3.new(0, -0.35, -0.82),
 		RecoverSpeed = 13.5,
 		CrosshairBloom = 4,
 	},
 	AssaultRifle = {
-		BladedYawDeg = 22,
-		StancePos = Vector3.new(0.43, 0.65, -0.95),
-		LeftGripLocal = Vector3.new(-0.12, 0.24, -1.72),
+		BladedYawDeg = 25,
+		StancePos = Vector3.new(0.40, 0.69, -0.84),
+		LeftGripLocal = Vector3.new(-0.10, 0.24, -1.62),
 		ReloadPortLocal = Vector3.new(0, -0.32, -0.86),
-		RecoverSpeed = 11.5,
+		RecoverSpeed = 11.8,
 		CrosshairBloom = 5.5,
 	},
 	Sniper = {
-		BladedYawDeg = 24,
-		StancePos = Vector3.new(0.45, 0.66, -0.90),
-		LeftGripLocal = Vector3.new(-0.12, 0.34, -1.85),
+		BladedYawDeg = 27,
+		StancePos = Vector3.new(0.42, 0.70, -0.80),
+		LeftGripLocal = Vector3.new(-0.10, 0.34, -1.72),
 		ReloadPortLocal = Vector3.new(0, 0.02, -0.78),
-		RecoverSpeed = 7.2,
+		RecoverSpeed = 7.5,
 		CrosshairBloom = 10,
+	},
+	Melee = {
+		BladedYawDeg = 18,
+		StancePos = Vector3.new(0.56, 0.56, -1.02),
+		LeftGripLocal = Vector3.new(-0.14, -0.18, 0.10),
+		ReloadPortLocal = Vector3.new(0, 0, 0),
+		RecoverSpeed = 14.0,
+		CrosshairBloom = 4,
 	},
 }
 
@@ -148,6 +157,7 @@ for _, wid in ipairs(WeaponConfig.WEAPON_ORDER) do
 			RecoverSpeed = h.RecoverSpeed,
 			CrosshairBloom = h.CrosshairBloom,
 			AccentColor = w.AccentColor,
+			IsMelee = (w.IsMelee == true),
 		}
 	end
 end
@@ -250,7 +260,17 @@ local isCrouching = false
 local adsBlend = 0
 local sprintBlend = 0
 local crouchBlend = 0
+local lowReadyBlend = 0
+local lastMeleeSlashAt = -10
+local meleeSlashSide = 1
+local hitmarkerFrame: Frame? = nil
+local hitmarkerHideAt = 0
+local killFeedHolder: Frame? = nil
 local gunCameraBlend = 0
+
+local function isScopeRifle(wid: string?): boolean
+	return wid == "ShadowSniper" or wid == "PhantomAssassinRifle"
+end
 local smoothedLocalFwd = 0
 local smoothedLocalRight = 0
 local locomotionDist = 0
@@ -837,20 +857,23 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 	local moveSpeed = moveDir.Magnitude
 	local activelyShooting = isMouseDown or (now < aimFaceHoldUntil)
 	local isReloadingNow = (reloadState ~= nil)
-	local wantADS = isAimingADS and (wid ~= "ShadowSniper") and not isScoped and not isReloadingNow and not hum.Sit
+	local wantADS = isAimingADS and (not isScopeRifle(wid)) and (not profile.IsMelee) and not isScoped and not isReloadingNow and not hum.Sit
 	local wantSprint = isShiftHeld and (moveSpeed > 0.18) and not activelyShooting and not isReloadingNow and not wantADS and not isScoped and not hum.Sit
+	local wantLowReady = (not profile.IsMelee) and (not activelyShooting) and (not wantADS) and (not isReloadingNow) and (not wantSprint) and (not isScoped)
 
 	if wantSprint or hum.Sit or hum:GetState() == Enum.HumanoidStateType.Jumping then
 		isCrouching = false
 	end
 	local wantCrouch = isCrouching and not wantSprint and not hum.Sit
 
-	adsBlend += ((if wantADS then 1 else 0) - adsBlend) * (1 - math.exp(-14 * clampedDt))
+	adsBlend += ((if wantADS then 1 else 0) - adsBlend) * (1 - math.exp(-15 * clampedDt))
 	sprintBlend += ((if wantSprint then 1 else 0) - sprintBlend) * (1 - math.exp(-(if wantSprint then 10 else 18) * clampedDt))
 	crouchBlend += ((if wantCrouch then 1 else 0) - crouchBlend) * (1 - math.exp(-13 * clampedDt))
+	lowReadyBlend += ((if wantLowReady then 1 else 0) - lowReadyBlend) * (1 - math.exp(-(if wantLowReady then 5.5 else 20) * clampedDt))
 	if adsBlend < 0.004 then adsBlend = 0 end
 	if sprintBlend < 0.004 then sprintBlend = 0 end
 	if crouchBlend < 0.004 then crouchBlend = 0 end
+	if lowReadyBlend < 0.004 then lowReadyBlend = 0 end
 
 	-- 4. Subtle, smoothly blended idle breathing, walking & tactical sprint rhythm
 	smoothedMoveBlend += (math.clamp(moveSpeed, 0, 1) - smoothedMoveBlend) * (1 - math.exp(-10 * clampedDt))
@@ -977,16 +1000,36 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 		then CFrame.lookAt(root.Position, root.Position + flatClamped.Unit)
 		else root.CFrame
 
-	-- 9. Position Handle cleanly in aim frame (with ADS cheek-weld, Crouch drop, Strafe bank & Recoil kick!)
-	local adsShift = Vector3.new(-0.08 * adsBlend, 0.12 * adsBlend, 0.14 * adsBlend) * charScale
+	-- 9. Position Handle cleanly in aim frame (with Realistic Cheek-Weld ADS, Tactical Low-Ready Carry, Crouch drop & Recoil kick!)
+	local adsShift = Vector3.new(-0.10 * adsBlend, 0.14 * adsBlend, 0.18 * adsBlend) * charScale
+	local lowReadyShift = Vector3.new(-0.08 * lowReadyBlend, -0.18 * lowReadyBlend, 0.08 * lowReadyBlend) * charScale
 	local crouchShift = Vector3.new(0, -crouchDropY, -0.06 * crouchBlend * charScale)
 	local strafeSway = Vector3.new(-smoothedLocalRight * 0.05 * charScale, -math.abs(smoothedLocalRight) * 0.02 * charScale, 0)
-	local stanceWithRecoil = (profile.StancePos * charScale) + adsShift + crouchShift + strafeSway + Vector3.new(swayX, swayY + recoilUp, recoilBack)
+	local stanceWithRecoil = (profile.StancePos * charScale) + adsShift + lowReadyShift + crouchShift + strafeSway + Vector3.new(swayX, swayY + recoilUp, recoilBack)
 	local handleWorldPos = (aimBasisCF * CFrame.new(stanceWithRecoil)).Position
 	local lookPoint = handleWorldPos + worldClampedDir * 40
 	local strafeRollDeg = -smoothedLocalRight * (3.2 * (1 - 0.5 * adsBlend))
+	local lowReadyPitchDeg = -14.5 * lowReadyBlend
+	local lowReadyYawDeg = 18.0 * lowReadyBlend
+	local lowReadyRollDeg = 8.0 * lowReadyBlend
 	local baseHandleCF = CFrame.lookAt(handleWorldPos, lookPoint)
-		* CFrame.Angles(math.rad(recoilPitch), math.rad(recoilYaw), math.rad(strafeRollDeg))
+		* CFrame.Angles(math.rad(recoilPitch + lowReadyPitchDeg), math.rad(recoilYaw + lowReadyYawDeg), math.rad(strafeRollDeg + lowReadyRollDeg))
+
+	-- Procedural Melee Slash & Katana Cleave Arc Animation!
+	if profile.IsMelee then
+		local slashDt = now - lastMeleeSlashAt
+		local slashDur = if wid == "SamuraiKatana" then 0.34 else 0.24
+		if slashDt >= 0 and slashDt <= slashDur then
+			local u = slashDt / slashDur
+			local swing = math.sin(u * math.pi)
+			local arcYaw = meleeSlashSide * (-58 + u * 135)
+			local arcPitch = -24 + swing * 42
+			local lungeFwd = -0.58 * swing * charScale
+			baseHandleCF = baseHandleCF
+				* CFrame.new(meleeSlashSide * (0.28 - u * 0.65) * charScale, 0.12 * swing * charScale, lungeFwd)
+				* CFrame.Angles(math.rad(arcPitch), math.rad(arcYaw), math.rad(meleeSlashSide * 38 * swing))
+		end
+	end
 
 	-- 10. Blend seamlessly into Tactical Low-Ready Cross-Chest Sprint Carry Pose when holding [Shift]!
 	if sprintBlend > 0.005 then
@@ -1204,7 +1247,7 @@ local function updateAmmoHUD(tool: Tool?, wid: string?): ()
 
 	ammoCard.Visible = true
 	local topInset = GuiService:GetGuiInset().Y
-	local isSniperEquipped = (wid == "ShadowSniper")
+	local isSniperEquipped = isScopeRifle(wid)
 	ammoCard.Position = UDim2.new(1, -14, 0, topInset + (if isSniperEquipped then 208 else 176))
 	if scopeTriggerBtn then
 		scopeTriggerBtn.Position = UDim2.new(1, -14, 0, topInset + 176)
@@ -1213,6 +1256,19 @@ local function updateAmmoHUD(tool: Tool?, wid: string?): ()
 	local profile = getProfile(wid)
 	local st = ensureLocalAmmo(wid, tool)
 	local now = os.clock()
+
+	if profile.IsMelee then
+		if ammoWeaponLabel then ammoWeaponLabel.Text = profile.DisplayName end
+		if ammoTypeBadge then ammoTypeBadge.Text = "MELEE BLADE" end
+		if ammoMagLabel then ammoMagLabel.Text = "BLADE"; ammoMagLabel.TextColor3 = Color3.fromRGB(232, 230, 224) end
+		if ammoMaxLabel then ammoMaxLabel.Text = "CLOSE QUARTERS" end
+		if ammoReserveLabel then ammoReserveLabel.Text = "INF"; ammoReserveLabel.TextColor3 = Color3.fromRGB(178, 184, 196) end
+		if shellPipHolder then shellPipHolder.Visible = false end
+		if ammoBarBg then ammoBarBg.Visible = true end
+		if ammoBarFill then ammoBarFill.Size = UDim2.fromScale(1, 1); ammoBarFill.BackgroundColor3 = profile.AccentColor end
+		if reloadStatusLabel then reloadStatusLabel.Text = "[LMB] SLASH  |  BACKSTAB = 1.75x CRIT  |  [T] SMOKE" end
+		return
+	end
 
 	if ammoWeaponLabel then
 		ammoWeaponLabel.Text = profile.DisplayName
@@ -1434,6 +1490,23 @@ local function tryShoot(): ()
 	local st = ensureLocalAmmo(wid, tool)
 	local now = os.clock()
 
+	-- Melee Blade Swing Path (Knife & Samurai Katana: zero ammo cost, instant cleave + lunge!)
+	if profile.IsMelee then
+		if (now - lastClientFire) < profile.Cooldown then
+			return
+		end
+		lastClientFire = now
+		lastMeleeSlashAt = now
+		meleeSlashSide = -meleeSlashSide
+		aimFaceHoldUntil = now + 0.55
+		sprintBlend = 0
+		AudioController.PlayMeleeSwing(0.95)
+		AudioController.NotifyCombatThreat(root.Position, "MeleeSwing")
+		local hitPos = getCleanAimWorldPoint(char, root)
+		fireEv:FireServer(wid, hitPos, 0)
+		return
+	end
+
 	-- Block firing during magazine reload; allow interrupting shotgun shell-by-shell reload when >= 1 shell loaded
 	if reloadState and reloadState.WeaponId == wid then
 		if profile.ReloadStyle == "ShellByShell" and st.Mag >= 1 then
@@ -1460,7 +1533,10 @@ local function tryShoot(): ()
 
 	-- 1. IMMEDIATE 0ms gunshot audio response! (Preloaded & pooled, zero server-RTT delay!)
 	local hasSuppressor = tool:GetAttribute("Mod_Suppressor") == true
-	AudioController.PlayWeaponFire(wid, if hasSuppressor then 0.52 else 1.0)
+	AudioController.PlayWeaponFire(wid, if hasSuppressor then 0.65 else 1.0, hasSuppressor)
+	if not hasSuppressor then
+		AudioController.NotifyCombatThreat(root.Position, "Gunshot")
+	end
 
 	-- 2. Optimistic client magazine decrement (sequence-tracked for flicker-free server sync)
 	st.Mag = math.max(0, st.Mag - 1)
@@ -2525,6 +2601,114 @@ local function buildAimUI(): ()
 
 	-- 5. Shadow Sniper Functional Scope Overlay & Controls
 	buildSniperScopeOverlay(gui)
+
+	-- 6. Minimalist Hitmarker Cross (Body White / Headshot & Kill Crimson) + Top-Right Syndicate Kill Feed
+	local hm = Instance.new("Frame")
+	hm.Name = "CombatHitmarker"
+	hm.AnchorPoint = Vector2.new(0.5, 0.5)
+	hm.Position = UDim2.fromScale(0.5, 0.5)
+	hm.Size = UDim2.fromOffset(26, 26)
+	hm.BackgroundTransparency = 1
+	hm.Visible = false
+	hm.ZIndex = 45
+	hm.Parent = gui
+	hitmarkerFrame = hm
+
+	local hmOffsets = {
+		{ Pos = UDim2.new(0.5, -6, 0.5, -6), Rot = 45 },
+		{ Pos = UDim2.new(0.5, 6, 0.5, -6), Rot = -45 },
+		{ Pos = UDim2.new(0.5, -6, 0.5, 6), Rot = -45 },
+		{ Pos = UDim2.new(0.5, 6, 0.5, 6), Rot = 45 },
+	}
+	for i, cfg in ipairs(hmOffsets) do
+		local t = Instance.new("Frame")
+		t.Name = "Tick" .. tostring(i)
+		t.AnchorPoint = Vector2.new(0.5, 0.5)
+		t.Position = cfg.Pos
+		t.Size = UDim2.fromOffset(8, 2)
+		t.Rotation = cfg.Rot
+		t.BackgroundColor3 = Color3.fromRGB(238, 236, 232)
+		t.BorderSizePixel = 0
+		t.ZIndex = 45
+		t.Parent = hm
+	end
+
+	local kf = Instance.new("Frame")
+	kf.Name = "SyndicateKillFeed"
+	kf.AnchorPoint = Vector2.new(1, 0)
+	kf.Position = UDim2.new(1, -242, 0, topInset + 14)
+	kf.Size = UDim2.fromOffset(290, 140)
+	kf.BackgroundTransparency = 1
+	kf.ZIndex = 20
+	kf.Parent = gui
+	local kfl = Instance.new("UIListLayout")
+	kfl.Padding = UDim.new(0, 4)
+	kfl.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	kfl.Parent = kf
+	killFeedHolder = kf
+end
+
+local function showFloatingDamageNumber(worldPos: Vector3, dmg: number, isHeadshot: boolean): ()
+	local cam = Workspace.CurrentCamera
+	if not cam or not aimGui then return end
+	local screenPos, onScreen = cam:WorldToViewportPoint(worldPos + Vector3.new(0, 1.4, 0))
+	if not onScreen then return end
+	local lbl = Instance.new("TextLabel")
+	lbl.AnchorPoint = Vector2.new(0.5, 0.5)
+	lbl.Position = UDim2.fromOffset(screenPos.X + math.random(-14, 14), screenPos.Y)
+	lbl.Size = UDim2.fromOffset(100, 22)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamBlack
+	lbl.Text = if isHeadshot then string.format("CRIT -%d", dmg) else string.format("-%d", dmg)
+	lbl.TextSize = if isHeadshot then 15 else 12
+	lbl.TextColor3 = if isHeadshot then Color3.fromRGB(218, 56, 62) else Color3.fromRGB(234, 232, 226)
+	lbl.TextStrokeTransparency = 0.25
+	lbl.TextStrokeColor3 = Color3.fromRGB(10, 11, 14)
+	lbl.ZIndex = 44
+	lbl.Parent = aimGui
+	task.spawn(function()
+		for i = 1, 14 do
+			if not lbl.Parent then return end
+			lbl.Position = lbl.Position + UDim2.fromOffset(0, -2)
+			lbl.TextTransparency = i / 14
+			lbl.TextStrokeTransparency = 0.25 + (i / 14) * 0.75
+			task.wait(0.03)
+		end
+		if lbl.Parent then lbl:Destroy() end
+	end)
+end
+
+local function pushKillFeedRow(killer: string, victim: string, weapon: string, isHeadshot: boolean): ()
+	if not killFeedHolder then return end
+	local existing = killFeedHolder:GetChildren()
+	local rowCount = 0
+	for _, ch in ipairs(existing) do
+		if ch:IsA("TextLabel") then rowCount += 1 end
+	end
+	if rowCount >= 4 then
+		for _, ch in ipairs(existing) do
+			if ch:IsA("TextLabel") then ch:Destroy(); break end
+		end
+	end
+	local row = Instance.new("TextLabel")
+	row.Size = UDim2.fromOffset(286, 22)
+	row.BackgroundColor3 = Color3.fromRGB(14, 16, 21)
+	row.BackgroundTransparency = 0.14
+	row.Font = Enum.Font.GothamBold
+	row.TextSize = 10
+	row.TextColor3 = if isHeadshot then Color3.fromRGB(224, 184, 114) else Color3.fromRGB(222, 220, 214)
+	row.Text = string.format(" %s  [%s%s]  %s ", killer, string.upper(weapon), if isHeadshot then " HS" else "", victim)
+	row.TextXAlignment = Enum.TextXAlignment.Right
+	row.ZIndex = 20
+	row.Parent = killFeedHolder
+	Instance.new("UICorner", row).CornerRadius = UDim.new(0, 4)
+	local st = Instance.new("UIStroke")
+	st.Color = if isHeadshot then Color3.fromRGB(156, 36, 44) else Color3.fromRGB(52, 56, 66)
+	st.Thickness = 1
+	st.Parent = row
+	task.delay(5.5, function()
+		if row.Parent then row:Destroy() end
+	end)
 end
 
 function WeaponController.ExitScope(): ()
@@ -2534,6 +2718,29 @@ end
 function WeaponController.Start(onOpenBlackMarket: () -> ()): ()
 	AudioController.Preload()
 	buildAimUI()
+
+	-- Hook local player damage to play realistic pain/hurt vocal scream & alert nearby civilians!
+	local function bindPlayerHurtAudio(char: Model): ()
+		local hum = char:WaitForChild("Humanoid", 8)
+		if not hum or not hum:IsA("Humanoid") then return end
+		local prevHp = hum.Health
+		hum.HealthChanged:Connect(function(newHp: number)
+			if newHp < prevHp - 1.5 and newHp > 0 then
+				AudioController.PlayPlayerHurtScream(1.0)
+				local r = char:FindFirstChild("HumanoidRootPart")
+				if r and r:IsA("BasePart") then
+					AudioController.NotifyCombatThreat(r.Position, "PlayerHit")
+				end
+			elseif newHp <= 0 and prevHp > 0 then
+				AudioController.PlayEnemyDeathScream(0.95)
+			end
+			prevHp = newHp
+		end)
+	end
+	if Players.LocalPlayer.Character then
+		task.spawn(bindPlayerHurtAudio, Players.LocalPlayer.Character)
+	end
+	Players.LocalPlayer.CharacterAdded:Connect(bindPlayerHurtAudio)
 
 	task.spawn(function()
 		local remotes = ReplicatedStorage:WaitForChild("Remotes", 15)
@@ -2560,6 +2767,9 @@ function WeaponController.Start(onOpenBlackMarket: () -> ()): ()
 				if typeof(kind) ~= "string" then return end
 				local volScale = 1.0
 				if typeof(origin) == "Vector3" then
+					if kind ~= "ShotgunPump" and kind ~= "BodyDrop" then
+						AudioController.NotifyCombatThreat(origin, kind)
+					end
 					local char = Players.LocalPlayer.Character
 					local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
 					if root and root:IsA("BasePart") then
@@ -2581,6 +2791,40 @@ function WeaponController.Start(onOpenBlackMarket: () -> ()): ()
 				onOpenBlackMarket()
 			end)
 		end
+
+		local fbEv = remotes:WaitForChild("CombatFeedback", 15)
+		if fbEv and fbEv:IsA("RemoteEvent") then
+			fbEv.OnClientEvent:Connect(function(payload: any)
+				if typeof(payload) ~= "table" then return end
+				if payload.Kind == "Hit" then
+					local isHS = payload.IsHeadshot == true
+					local isKill = payload.IsKill == true
+					if hitmarkerFrame then
+						local col = if isHS or isKill then Color3.fromRGB(214, 46, 54) else Color3.fromRGB(238, 236, 232)
+						for _, ch in ipairs(hitmarkerFrame:GetChildren()) do
+							if ch:IsA("Frame") then ch.BackgroundColor3 = col end
+						end
+						local mp = UserInputService:GetMouseLocation()
+						hitmarkerFrame.Position = if isScoped then UDim2.fromScale(0.5, 0.5) else UDim2.fromOffset(mp.X, mp.Y)
+						hitmarkerFrame.Visible = true
+						hitmarkerHideAt = os.clock() + (if isHS or isKill then 0.22 else 0.14)
+					end
+					if isHS then
+						AudioController.PlayCoins()
+					end
+					if typeof(payload.HitPos) == "Vector3" and typeof(payload.Damage) == "number" then
+						showFloatingDamageNumber(payload.HitPos, payload.Damage, isHS)
+					end
+				elseif payload.Kind == "KillFeed" then
+					pushKillFeedRow(
+						tostring(payload.Killer or "Player"),
+						tostring(payload.Victim or "Hostile"),
+						tostring(payload.Weapon or "Weapon"),
+						payload.IsHeadshot == true
+					)
+				end
+			end)
+		end
 	end)
 
 	UserInputService.InputBegan:Connect(function(input: InputObject, gp: boolean)
@@ -2590,14 +2834,14 @@ function WeaponController.Start(onOpenBlackMarket: () -> ()): ()
 			tryShoot()
 		elseif input.UserInputType == Enum.UserInputType.MouseButton2 then
 			local _, wid = getEquippedToolAndId()
-			if wid == "ShadowSniper" or isScoped then
+			if isScopeRifle(wid) or isScoped then
 				toggleSniperScope()
 			elseif wid ~= nil then
 				isAimingADS = true
 			end
 		elseif input.KeyCode == Enum.KeyCode.Q then
 			local _, wid = getEquippedToolAndId()
-			if wid == "ShadowSniper" or isScoped then
+			if isScopeRifle(wid) or isScoped then
 				toggleSniperScope()
 			end
 		elseif input.KeyCode == Enum.KeyCode.LeftShift then
@@ -2696,6 +2940,10 @@ function WeaponController.Start(onOpenBlackMarket: () -> ()): ()
 			end
 		end
 
+		if hitmarkerFrame and hitmarkerFrame.Visible and os.clock() > hitmarkerHideAt then
+			hitmarkerFrame.Visible = false
+		end
+
 		for _, m in ipairs(CollectionService:GetTagged("MafiaUnit")) do
 			if m:IsA("Model") then ensureEnemyOverheadHPText(m) end
 		end
@@ -2707,7 +2955,7 @@ function WeaponController.Start(onOpenBlackMarket: () -> ()): ()
 
 		-- Detect weapon switch / unequip and cleanly reset aim/reload/scope state
 		if tool ~= lastEquippedTool or wid ~= lastEquippedWid then
-			if isScoped and wid ~= "ShadowSniper" then
+			if isScoped and not isScopeRifle(wid) then
 				exitSniperScope()
 			end
 			if wid == nil then

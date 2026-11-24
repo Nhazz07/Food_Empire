@@ -1,18 +1,41 @@
 --!strict
 
+-- CentralNPCController: 36 authentic Roblox R15 MeshPart strolling citizens & street chefs
+-- across Central Park, Central Plaza & Mid-Town Boulevards.
+-- Reacts realistically to nearby gunfire & fights: startled scream, hands raised / head-shielding,
+-- nervous shoulder glances, frantic sprint directly away from danger, then shaky nervous cooldown!
+
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players = game:GetService("Players")
 
-type LimbRig = {
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
+local AudioController = require("./AudioController")
+
+type JointCache = {
+	Waist: Motor6D?,
+	Neck: Motor6D?,
+	LeftShoulder: Motor6D?,
+	RightShoulder: Motor6D?,
+	LeftElbow: Motor6D?,
+	RightElbow: Motor6D?,
+	LeftHip: Motor6D?,
+	RightHip: Motor6D?,
+	LeftKnee: Motor6D?,
+	RightKnee: Motor6D?,
+}
+
+type CitizenRig = {
 	Model: Model,
-	RootPart: Part,
-	Torso: Part,
-	Head: Part,
-	LeftArm: Part,
-	RightArm: Part,
-	LeftLeg: Part,
-	RightLeg: Part,
+	RootPart: BasePart,
+	Head: BasePart,
+	Joints: JointCache,
+	FootOffset: number,
 	ChatLabel: TextLabel,
+	ChatStroke: UIStroke,
 	ChatGui: BillboardGui,
 	Waypoints: { Vector3 },
 	TargetIndex: number,
@@ -22,47 +45,24 @@ type LimbRig = {
 	WalkPhase: number,
 	PauseTimer: number,
 	ChatTimer: number,
+	PanicUntil: number,
+	NervousUntil: number,
+	ThreatPos: Vector3,
+	PanicStyle: number, -- 1 = arms thrown up waving, 2 = shielding head crouched sprint
+	WeaveSeed: number,
+	WasPanicking: boolean,
 }
 
 local CentralNPCController = {}
 
 local PLATFORM_Y = 1.35
+local PANIC_TRIGGER_RADIUS = 115
+local PANIC_SAFE_DIST = 108
 local heartbeatConn: RBXScriptConnection? = nil
 local npcFolder: Folder? = nil
-local rigs: { LimbRig } = {}
-
-local SKIN_TONES = {
-	Color3.fromRGB(224, 188, 156),
-	Color3.fromRGB(204, 166, 134),
-	Color3.fromRGB(168, 124, 92),
-	Color3.fromRGB(234, 202, 174),
-}
-
-local OUTFIT_COLORS = {
-	Color3.fromRGB(48, 52, 62),
-	Color3.fromRGB(92, 42, 46),
-	Color3.fromRGB(78, 62, 48),
-	Color3.fromRGB(46, 62, 54),
-	Color3.fromRGB(62, 56, 72),
-	Color3.fromRGB(116, 88, 64),
-	Color3.fromRGB(228, 226, 220), -- Tailored Chef
-	Color3.fromRGB(42, 58, 72),
-}
-
-local PANTS_COLORS = {
-	Color3.fromRGB(32, 36, 44),
-	Color3.fromRGB(48, 42, 38),
-	Color3.fromRGB(30, 44, 62),
-	Color3.fromRGB(40, 42, 48),
-}
-
-local HAIR_COLORS = {
-	Color3.fromRGB(46, 30, 20),
-	Color3.fromRGB(132, 92, 44),
-	Color3.fromRGB(24, 24, 28),
-	Color3.fromRGB(98, 52, 32),
-	Color3.fromRGB(124, 126, 132),
-}
+local rigs: { CitizenRig } = {}
+local threatWired = false
+local globalRng = Random.new(20261130)
 
 local CHAT_LINES = {
 	"Mmm, smells delicious here!",
@@ -79,76 +79,102 @@ local CHAT_LINES = {
 	"Such a lively town square!",
 }
 
-local function makePart(parent: Instance, name: string, size: Vector3, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
-	local p = Instance.new("Part")
-	p.Name = name
-	p.Size = size
-	p.Color = col
-	p.Material = mat
-	if shape then
-		p.Shape = shape
+local PANIC_LINES = {
+	"GUNSHOTS! RUN!",
+	"GET OUT OF HERE!",
+	"TAKE COVER! SHOOTING!",
+	"MAFIA FIGHT! RUN AWAY!",
+	"HELP! SOMEONE'S SHOOTING!",
+	"OH NO! GET DOWN!",
+	"STAY BACK! DON'T LOOK BACK!",
+	"CLEAR THE PLAZA! RUN!",
+}
+
+local NERVOUS_LINES = {
+	"Is the shooting over...?",
+	"My heart is pounding...",
+	"That was way too close...",
+	"Better stay away from there...",
+	"Are they still fighting...?",
+}
+
+local C_CALM_STROKE = Color3.fromRGB(64, 68, 78)
+local C_CALM_TEXT = Color3.fromRGB(228, 224, 216)
+local C_PANIC_STROKE = Color3.fromRGB(168, 36, 44)
+local C_PANIC_TEXT = Color3.fromRGB(248, 178, 174)
+local C_NERVOUS_STROKE = Color3.fromRGB(172, 142, 76)
+local C_NERVOUS_TEXT = Color3.fromRGB(236, 218, 174)
+
+local CHEF_APRONS = {
+	Color3.fromRGB(128, 34, 40),
+	Color3.fromRGB(48, 72, 58),
+	Color3.fromRGB(52, 62, 82),
+	Color3.fromRGB(98, 74, 46),
+}
+
+local function cacheR15Joints(model: Model): JointCache
+	local function getMotor(name: string): Motor6D?
+		local m = model:FindFirstChild(name, true)
+		return if m and m:IsA("Motor6D") then m else nil
 	end
-	p.Anchored = true
-	p.CanCollide = false
-	p.CanTouch = false
-	p.CanQuery = false
-	p.CastShadow = false
-	p.TopSurface = Enum.SurfaceType.Smooth
-	p.BottomSurface = Enum.SurfaceType.Smooth
-	p.Parent = parent
-	return p
+	return {
+		Waist = getMotor("Waist"),
+		Neck = getMotor("Neck"),
+		LeftShoulder = getMotor("LeftShoulder"),
+		RightShoulder = getMotor("RightShoulder"),
+		LeftElbow = getMotor("LeftElbow"),
+		RightElbow = getMotor("RightElbow"),
+		LeftHip = getMotor("LeftHip"),
+		RightHip = getMotor("RightHip"),
+		LeftKnee = getMotor("LeftKnee"),
+		RightKnee = getMotor("RightKnee"),
+	}
 end
 
-local function buildNPCModel(parent: Instance, index: number, rng: Random, startPos: Vector3, waypoints: { Vector3 }, startIdx: number): LimbRig
-	local m = Instance.new("Model")
-	m.Name = "PlazaCitizen_" .. tostring(index)
-
-	local skin = SKIN_TONES[rng:NextInteger(1, #SKIN_TONES)]
-	local shirt = OUTFIT_COLORS[(index - 1) % #OUTFIT_COLORS + 1]
-	local pants = PANTS_COLORS[rng:NextInteger(1, #PANTS_COLORS)]
-	local hair = HAIR_COLORS[rng:NextInteger(1, #HAIR_COLORS)]
+local function buildNPCModel(parent: Instance, index: number, rng: Random, startPos: Vector3, waypoints: { Vector3 }, startIdx: number): CitizenRig
 	local isChef = (index % 4 == 0)
+	local spawnCF = CFrame.new(startPos.X, PLATFORM_Y + 3.0, startPos.Z)
+	local scale = rng:NextNumber(0.95, 1.05)
 
-	-- Realistic human-proportioned citizen with SpecialMesh Head, face, tailored coat, collar, belt & footwear
-	local root = makePart(m, "Root", Vector3.new(1, 1, 1), Color3.new(1, 1, 1), Enum.Material.SmoothPlastic, nil)
-	root.Transparency = 1
-	local coatCol = if isChef then Color3.fromRGB(232, 230, 224) else shirt
-	local torso = makePart(m, "Torso", Vector3.new(2.05, 2.35, 1.12), coatCol, Enum.Material.Fabric, nil)
-	local collar = makePart(m, "Collar", Vector3.new(1.55, 0.42, 1.16), if isChef then Color3.fromRGB(122, 28, 34) else Color3.fromRGB(214, 210, 202), Enum.Material.Fabric, nil)
-	local belt = makePart(m, "Belt", Vector3.new(2.10, 0.24, 1.18), Color3.fromRGB(22, 22, 26), Enum.Material.Leather, nil)
-
-	local head = makePart(m, "Head", Vector3.new(1.26, 1.28, 1.26), skin, Enum.Material.SmoothPlastic, nil)
-	local hm = Instance.new("SpecialMesh")
-	hm.MeshType = Enum.MeshType.Head
-	hm.Scale = Vector3.new(1.18, 1.16, 1.18)
-	hm.Parent = head
-	local faceBand = makePart(m, "FaceEyes", Vector3.new(0.76, 0.14, 0.08), Color3.fromRGB(24, 24, 28), Enum.Material.SmoothPlastic, nil)
-
-	local leftArm = makePart(m, "LeftArm", Vector3.new(0.78, 2.15, 0.78), coatCol, Enum.Material.Fabric, nil)
-	local rightArm = makePart(m, "RightArm", Vector3.new(0.78, 2.15, 0.78), coatCol, Enum.Material.Fabric, nil)
-	local leftLeg = makePart(m, "LeftLeg", Vector3.new(0.86, 2.28, 0.88), pants, Enum.Material.Fabric, nil)
-	local rightLeg = makePart(m, "RightLeg", Vector3.new(0.86, 2.28, 0.88), pants, Enum.Material.Fabric, nil)
-
-	local hat: Part
+	local rigHandle: MafiaVisualBuilder.RigHandle
 	if isChef then
-		hat = makePart(m, "ChefHat", Vector3.new(0.82, 1.38, 1.38), Color3.fromRGB(238, 236, 232), Enum.Material.Fabric, Enum.PartType.Cylinder)
-		hat:SetAttribute("IsChefHat", true)
-	elseif index % 5 == 0 then
-		hat = makePart(m, "FedoraHat", Vector3.new(0.45, 1.86, 1.86), Color3.fromRGB(32, 34, 40), Enum.Material.Fabric, Enum.PartType.Cylinder)
-		hat:SetAttribute("IsFedora", true)
+		local apronCol = CHEF_APRONS[(index % #CHEF_APRONS) + 1]
+		rigHandle = MafiaVisualBuilder.BuildChefRig("PlazaCitizen_" .. tostring(index), apronCol, scale, spawnCF, false)
 	else
-		hat = makePart(m, "HairCap", Vector3.new(1.34, 0.44, 1.38), hair, Enum.Material.SmoothPlastic, nil)
+		rigHandle = MafiaVisualBuilder.BuildCustomerRig("PlazaCitizen_" .. tostring(index), index, scale, spawnCF)
 	end
-	collar:SetAttribute("IsAccessory", true)
-	belt:SetAttribute("IsAccessory", true)
-	faceBand:SetAttribute("IsAccessory", true)
 
-	-- Dark-noir refined citizen chat bubble
+	local m = rigHandle.Model
+	local root = rigHandle.Root
+	local head = rigHandle.Head
+
+	-- Measure exact vertical offset from HumanoidRootPart center down to the sole of LeftFoot
+	local footOffset = math.clamp(root.Position.Y - (rigHandle.LeftFoot.Position.Y - rigHandle.LeftFoot.Size.Y * 0.5), 2.5, 3.6)
+
+	-- Anchor ONLY HumanoidRootPart; keep all R15 limbs & welded accessories massless/non-collidable
+	root.Anchored = true
+	for _, desc in ipairs(m:GetDescendants()) do
+		if desc:IsA("BasePart") then
+			desc.CanCollide = false
+			desc.CanTouch = false
+			desc.CanQuery = false
+			desc.CastShadow = false
+			if desc ~= root then
+				desc.Anchored = false
+				desc.Massless = true
+			end
+		end
+	end
+
+	m:SetAttribute("IsPanicking", false)
+	m:SetAttribute("PanicState", "Calm")
+
+	-- Dark-noir refined citizen speech bubble
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "CitizenChat"
-	bb.Size = UDim2.fromOffset(188, 32)
-	bb.StudsOffset = Vector3.new(0, 2.2, 0)
-	bb.MaxDistance = 68
+	bb.Size = UDim2.fromOffset(198, 32)
+	bb.StudsOffset = Vector3.new(0, 2.35, 0)
+	bb.MaxDistance = 82
 	bb.Enabled = false
 	bb.Parent = head
 
@@ -156,9 +182,9 @@ local function buildNPCModel(parent: Instance, index: number, rng: Random, start
 	lbl.Size = UDim2.fromScale(1, 1)
 	lbl.BackgroundColor3 = Color3.fromRGB(16, 18, 22)
 	lbl.BackgroundTransparency = 0.08
-	lbl.Font = Enum.Font.GothamMedium
+	lbl.Font = Enum.Font.GothamBold
 	lbl.Text = ""
-	lbl.TextColor3 = Color3.fromRGB(228, 224, 216)
+	lbl.TextColor3 = C_CALM_TEXT
 	lbl.TextSize = 11
 	lbl.TextWrapped = true
 	lbl.Parent = bb
@@ -168,69 +194,183 @@ local function buildNPCModel(parent: Instance, index: number, rng: Random, start
 	corner.Parent = lbl
 
 	local stroke = Instance.new("UIStroke")
-	stroke.Color = Color3.fromRGB(64, 68, 78)
-	stroke.Thickness = 1.2
+	stroke.Color = C_CALM_STROKE
+	stroke.Thickness = 1.3
 	stroke.Parent = lbl
 
-	m.PrimaryPart = root
 	m.Parent = parent
 
 	return {
 		Model = m,
 		RootPart = root,
-		Torso = torso,
 		Head = head,
-		LeftArm = leftArm,
-		RightArm = rightArm,
-		LeftLeg = leftLeg,
-		RightLeg = rightLeg,
+		Joints = cacheR15Joints(m),
+		FootOffset = footOffset,
 		ChatLabel = lbl,
+		ChatStroke = stroke,
 		ChatGui = bb,
 		Waypoints = waypoints,
 		TargetIndex = startIdx,
 		CurrentPos = startPos,
 		FacingYaw = 0,
-		WalkSpeed = rng:NextNumber(8.2, 11.8),
+		WalkSpeed = rng:NextNumber(8.0, 11.2),
 		WalkPhase = rng:NextNumber(0, math.pi * 2),
 		PauseTimer = rng:NextNumber(0, 1.5),
 		ChatTimer = 0,
+		PanicUntil = 0,
+		NervousUntil = 0,
+		ThreatPos = Vector3.zero,
+		PanicStyle = rng:NextInteger(1, 2),
+		WeaveSeed = rng:NextNumber(0, math.pi * 2),
+		WasPanicking = false,
 	}
 end
 
-local function updateRigPose(rig: LimbRig, isWalking: boolean)
-	local bob = if isWalking then math.abs(math.sin(rig.WalkPhase)) * 0.22 else 0
-	local swing = if isWalking then math.sin(rig.WalkPhase) * math.rad(34) else 0
+local function updateRigPose(rig: CitizenRig, mode: "Walk" | "Idle" | "Panic" | "Nervous", now: number): ()
+	local j = rig.Joints
+	local phase = rig.WalkPhase
+	local bob = 0
 
-	local baseCF = CFrame.new(rig.CurrentPos.X, PLATFORM_Y + bob, rig.CurrentPos.Z) * CFrame.Angles(0, rig.FacingYaw, 0)
-	rig.RootPart.CFrame = baseCF * CFrame.new(0, 3.4, 0)
-	rig.Torso.CFrame = baseCF * CFrame.new(0, 3.48, 0)
+	if mode == "Panic" then
+		bob = math.abs(math.sin(phase)) * 0.28
+		local legSwing = math.sin(phase) * math.rad(56)
+		local kneeL = -math.max(0, -math.cos(phase)) * math.rad(68)
+		local kneeR = -math.max(0, math.cos(phase)) * math.rad(68)
 
-	local collar = rig.Model:FindFirstChild("Collar")
-	if collar and collar:IsA("BasePart") then collar.CFrame = baseCF * CFrame.new(0, 4.46, -0.02) end
-	local belt = rig.Model:FindFirstChild("Belt")
-	if belt and belt:IsA("BasePart") then belt.CFrame = baseCF * CFrame.new(0, 2.42, 0) end
+		if j.LeftHip then j.LeftHip.Transform = CFrame.Angles(-legSwing, 0, 0) end
+		if j.RightHip then j.RightHip.Transform = CFrame.Angles(legSwing, 0, 0) end
+		if j.LeftKnee then j.LeftKnee.Transform = CFrame.Angles(kneeL, 0, 0) end
+		if j.RightKnee then j.RightKnee.Transform = CFrame.Angles(kneeR, 0, 0) end
 
-	local headCF = baseCF * CFrame.new(0, 5.42, 0)
-	rig.Head.CFrame = headCF
-	local faceEyes = rig.Model:FindFirstChild("FaceEyes")
-	if faceEyes and faceEyes:IsA("BasePart") then faceEyes.CFrame = headCF * CFrame.new(0, 0.12, -0.60) end
-
-	local hat = rig.Model:FindFirstChild("ChefHat") or rig.Model:FindFirstChild("FedoraHat") or rig.Model:FindFirstChild("HairCap")
-	if hat and hat:IsA("BasePart") then
-		if hat:GetAttribute("IsChefHat") then
-			hat.CFrame = headCF * CFrame.new(0, 0.92, 0) * CFrame.Angles(0, 0, math.rad(90))
-		elseif hat:GetAttribute("IsFedora") then
-			hat.CFrame = headCF * CFrame.new(0, 0.66, 0) * CFrame.Angles(0, 0, math.rad(90))
+		local wave = math.sin(now * 14 + rig.WeaveSeed)
+		if rig.PanicStyle == 1 then
+			-- Hands thrown high overhead waving frantically in terror!
+			if j.LeftShoulder then
+				j.LeftShoulder.Transform = CFrame.Angles(math.rad(152 + wave * 16), 0, math.rad(-24 + wave * 10))
+			end
+			if j.RightShoulder then
+				j.RightShoulder.Transform = CFrame.Angles(math.rad(152 - wave * 16), 0, math.rad(24 + wave * 10))
+			end
+			if j.LeftElbow then j.LeftElbow.Transform = CFrame.Angles(math.rad(36 + math.abs(wave) * 22), 0, 0) end
+			if j.RightElbow then j.RightElbow.Transform = CFrame.Angles(math.rad(36 + math.abs(wave) * 22), 0, 0) end
 		else
-			hat.CFrame = headCF * CFrame.new(0, 0.54, 0.06)
+			-- Arms curled up shielding head while leaning forward sprinting!
+			if j.LeftShoulder then
+				j.LeftShoulder.Transform = CFrame.Angles(math.rad(128 + wave * 8), 0, math.rad(-14))
+			end
+			if j.RightShoulder then
+				j.RightShoulder.Transform = CFrame.Angles(math.rad(128 - wave * 8), 0, math.rad(14))
+			end
+			if j.LeftElbow then j.LeftElbow.Transform = CFrame.Angles(math.rad(82), 0, math.rad(18)) end
+			if j.RightElbow then j.RightElbow.Transform = CFrame.Angles(math.rad(82), 0, math.rad(-18)) end
+		end
+
+		-- Leaning forward into sprint + anxious glances left/right & back over shoulder!
+		local shoulderGlance = math.sin(now * 6.5 + rig.WeaveSeed) * math.rad(42)
+		if j.Waist then j.Waist.Transform = CFrame.Angles(math.rad(-14), math.sin(phase) * math.rad(9), 0) end
+		if j.Neck then j.Neck.Transform = CFrame.Angles(math.rad(8), shoulderGlance, 0) end
+	elseif mode == "Nervous" then
+		-- Shaky nervous pause: hunched shoulders, defensive raised hands, darting eyes/head!
+		local shiver = math.sin(now * 18 + rig.WeaveSeed) * math.rad(2.5)
+		local scanYaw = math.sin(now * 4.4 + rig.WeaveSeed) * math.rad(46)
+		if j.LeftHip then j.LeftHip.Transform = CFrame.Angles(math.rad(6), 0, 0) end
+		if j.RightHip then j.RightHip.Transform = CFrame.Angles(math.rad(-6), 0, 0) end
+		if j.LeftKnee then j.LeftKnee.Transform = CFrame.Angles(math.rad(-10), 0, 0) end
+		if j.RightKnee then j.RightKnee.Transform = CFrame.Angles(math.rad(-10), 0, 0) end
+		if j.LeftShoulder then j.LeftShoulder.Transform = CFrame.Angles(math.rad(64) + shiver, 0, math.rad(-12)) end
+		if j.RightShoulder then j.RightShoulder.Transform = CFrame.Angles(math.rad(64) - shiver, 0, math.rad(12)) end
+		if j.LeftElbow then j.LeftElbow.Transform = CFrame.Angles(math.rad(72), 0, 0) end
+		if j.RightElbow then j.RightElbow.Transform = CFrame.Angles(math.rad(72), 0, 0) end
+		if j.Waist then j.Waist.Transform = CFrame.Angles(math.rad(-10), shiver * 1.4, 0) end
+		if j.Neck then j.Neck.Transform = CFrame.Angles(math.rad(4), scanYaw, 0) end
+	elseif mode == "Walk" then
+		bob = math.abs(math.sin(phase)) * 0.16
+		local swing = math.sin(phase) * math.rad(34)
+		local kneeL = -math.max(0, -math.cos(phase)) * math.rad(38)
+		local kneeR = -math.max(0, math.cos(phase)) * math.rad(38)
+		if j.LeftHip then j.LeftHip.Transform = CFrame.Angles(-swing, 0, 0) end
+		if j.RightHip then j.RightHip.Transform = CFrame.Angles(swing, 0, 0) end
+		if j.LeftKnee then j.LeftKnee.Transform = CFrame.Angles(kneeL, 0, 0) end
+		if j.RightKnee then j.RightKnee.Transform = CFrame.Angles(kneeR, 0, 0) end
+		if j.LeftShoulder then j.LeftShoulder.Transform = CFrame.Angles(swing * 0.78, 0, math.rad(-4)) end
+		if j.RightShoulder then j.RightShoulder.Transform = CFrame.Angles(-swing * 0.78, 0, math.rad(4)) end
+		if j.LeftElbow then j.LeftElbow.Transform = CFrame.Angles(math.rad(18) + math.max(0, swing) * 0.45, 0, 0) end
+		if j.RightElbow then j.RightElbow.Transform = CFrame.Angles(math.rad(18) + math.max(0, -swing) * 0.45, 0, 0) end
+		if j.Waist then j.Waist.Transform = CFrame.Angles(math.rad(-3), math.sin(phase) * math.rad(5), 0) end
+		if j.Neck then j.Neck.Transform = CFrame.Angles(math.rad(2), -math.sin(phase) * math.rad(3), 0) end
+	else
+		local breath = math.sin(now * 2.1 + rig.WeaveSeed)
+		if j.LeftHip then j.LeftHip.Transform = CFrame.identity end
+		if j.RightHip then j.RightHip.Transform = CFrame.identity end
+		if j.LeftKnee then j.LeftKnee.Transform = CFrame.identity end
+		if j.RightKnee then j.RightKnee.Transform = CFrame.identity end
+		if j.LeftShoulder then j.LeftShoulder.Transform = CFrame.Angles(math.rad(4), 0, math.rad(-3 - breath * 1.4)) end
+		if j.RightShoulder then j.RightShoulder.Transform = CFrame.Angles(math.rad(4), 0, math.rad(3 + breath * 1.4)) end
+		if j.LeftElbow then j.LeftElbow.Transform = CFrame.Angles(math.rad(12), 0, 0) end
+		if j.RightElbow then j.RightElbow.Transform = CFrame.Angles(math.rad(12), 0, 0) end
+		if j.Waist then j.Waist.Transform = CFrame.Angles(math.rad(breath * 1.6), 0, 0) end
+		if j.Neck then j.Neck.Transform = CFrame.Angles(0, math.sin(now * 0.8 + rig.WeaveSeed) * math.rad(10), 0) end
+	end
+
+	rig.RootPart.CFrame = CFrame.new(rig.CurrentPos.X, PLATFORM_Y + rig.FootOffset + bob, rig.CurrentPos.Z)
+		* CFrame.Angles(0, rig.FacingYaw, 0)
+end
+
+local function triggerPanicNear(threatPos: Vector3): ()
+	local now = os.clock()
+	local panickedAny = false
+	local closestDist = 9999
+
+	for _, rig in ipairs(rigs) do
+		local d = (Vector3.new(rig.CurrentPos.X - threatPos.X, 0, rig.CurrentPos.Z - threatPos.Z)).Magnitude
+		if d <= PANIC_TRIGGER_RADIUS then
+			local newlyScared = rig.PanicUntil <= now
+			rig.ThreatPos = threatPos
+			local dur = globalRng:NextNumber(7.5, 10.5)
+			rig.PanicUntil = math.max(rig.PanicUntil, now + dur)
+			rig.NervousUntil = rig.PanicUntil + globalRng:NextNumber(3.0, 4.2)
+			rig.PauseTimer = 0
+			rig.Model:SetAttribute("IsPanicking", true)
+			rig.Model:SetAttribute("PanicState", "Panic")
+
+			if newlyScared or rig.ChatTimer <= 0.4 then
+				rig.ChatLabel.Text = PANIC_LINES[globalRng:NextInteger(1, #PANIC_LINES)]
+				rig.ChatLabel.TextColor3 = C_PANIC_TEXT
+				rig.ChatStroke.Color = C_PANIC_STROKE
+				rig.ChatGui.Enabled = true
+				rig.ChatTimer = globalRng:NextNumber(3.2, 4.8)
+			end
+			panickedAny = true
+			if d < closestDist then
+				closestDist = d
+			end
 		end
 	end
 
-	-- Pivot arms from shoulder & legs from hip for crisp natural walking swing
-	rig.LeftArm.CFrame = baseCF * CFrame.new(-1.42, 4.38, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -0.92, 0)
-	rig.RightArm.CFrame = baseCF * CFrame.new(1.42, 4.38, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -0.92, 0)
-	rig.LeftLeg.CFrame = baseCF * CFrame.new(-0.52, 2.28, 0) * CFrame.Angles(-swing, 0, 0) * CFrame.new(0, -1.14, 0)
-	rig.RightLeg.CFrame = baseCF * CFrame.new(0.52, 2.28, 0) * CFrame.Angles(swing, 0, 0) * CFrame.new(0, -1.14, 0)
+	if panickedAny then
+		local playerChar = Players.LocalPlayer.Character
+		local pRoot = if playerChar then playerChar:FindFirstChild("HumanoidRootPart") else nil
+		local listenerDist = if pRoot and pRoot:IsA("BasePart")
+			then (pRoot.Position - threatPos).Magnitude
+			else closestDist
+		if listenerDist <= 140 then
+			local vol = math.clamp(1 - (listenerDist / 145), 0.25, 1.0)
+			AudioController.PlayCivilianPanicScream(vol)
+		end
+	end
+end
+
+local function findNearestWaypointIdx(pos: Vector3, waypoints: { Vector3 }): number
+	local bestIdx = 1
+	local bestDist = math.huge
+	for i, wp in ipairs(waypoints) do
+		local d = (Vector3.new(wp.X - pos.X, 0, wp.Z - pos.Z)).Magnitude
+		if d < bestDist then
+			bestDist = d
+			bestIdx = i
+		end
+	end
+	return bestIdx
 end
 
 local function makeCircleWaypoints(radius: number, count: number, reverse: boolean): { Vector3 }
@@ -248,6 +388,16 @@ function CentralNPCController.Start(): ()
 		return
 	end
 
+	if not threatWired then
+		threatWired = true
+		AudioController.OnCombatThreat(function(worldPos: Vector3, _kind: string)
+			triggerPanicNear(worldPos)
+		end)
+	end
+
+	local existing = Workspace:FindFirstChild("CentralDistrictCitizens")
+	if existing then existing:Destroy() end
+
 	local folder = Instance.new("Folder")
 	folder.Name = "CentralDistrictCitizens"
 	folder.Parent = Workspace
@@ -256,7 +406,7 @@ function CentralNPCController.Start(): ()
 	local rng = Random.new(20261130)
 	table.clear(rigs)
 
-	-- Circuit 1: Expanded Grand Central Shop Promenade (fits 384x384 Central District!)
+	-- Circuit 1: Expanded Grand Central Shop Promenade
 	local outerCW: { Vector3 } = {
 		Vector3.new(-112, PLATFORM_Y, -96),
 		Vector3.new(0, PLATFORM_Y, -96),
@@ -296,7 +446,7 @@ function CentralNPCController.Start(): ()
 		Vector3.new(10, PLATFORM_Y, 126),
 	}
 
-	-- Circuit 4: NEW Mid-Town Culinary Boulevard Sidewalks (passes the 16 new Mid-Town Shops!)
+	-- Circuit 4: Mid-Town Culinary Boulevard Sidewalks
 	local midNorth: { Vector3 } = {
 		Vector3.new(-22, PLATFORM_Y, -245),
 		Vector3.new(-22, PLATFORM_Y, -455),
@@ -322,40 +472,37 @@ function CentralNPCController.Start(): ()
 		Vector3.new(-245, PLATFORM_Y, 22),
 	}
 
-	-- 36 Living Strolling Citizens, Foodies & Street Chefs across the 2x Mega Metropolis!
 	local routeDefs: { { Waypoints: { Vector3 }, StartIdx: number } } = {
-		-- 12 Outer Central Promenade Strollers
 		{ Waypoints = outerCW, StartIdx = 1 }, { Waypoints = outerCW, StartIdx = 2 },
 		{ Waypoints = outerCW, StartIdx = 3 }, { Waypoints = outerCW, StartIdx = 5 },
 		{ Waypoints = outerCW, StartIdx = 6 }, { Waypoints = outerCW, StartIdx = 7 },
 		{ Waypoints = outerCCW, StartIdx = 1 }, { Waypoints = outerCCW, StartIdx = 2 },
 		{ Waypoints = outerCCW, StartIdx = 4 }, { Waypoints = outerCCW, StartIdx = 5 },
 		{ Waypoints = outerCCW, StartIdx = 6 }, { Waypoints = outerCCW, StartIdx = 8 },
-		-- 6 Central Fountain & Shipment Bay Visitors
 		{ Waypoints = fountainCW, StartIdx = 1 }, { Waypoints = fountainCW, StartIdx = 5 }, { Waypoints = fountainCW, StartIdx = 9 },
 		{ Waypoints = fountainCCW, StartIdx = 2 }, { Waypoints = fountainCCW, StartIdx = 6 }, { Waypoints = fountainCCW, StartIdx = 10 },
-		-- 6 Central Avenue Strollers
 		{ Waypoints = ewRoute, StartIdx = 1 }, { Waypoints = ewRoute, StartIdx = 3 },
 		{ Waypoints = ewRouteEast, StartIdx = 1 }, { Waypoints = ewRouteEast, StartIdx = 3 },
 		{ Waypoints = southRoute, StartIdx = 1 }, { Waypoints = southRoute, StartIdx = 3 },
-		-- 12 Mid-Town Culinary Boulevard Citizens (3 per cardinal district!)
 		{ Waypoints = midNorth, StartIdx = 1 }, { Waypoints = midNorth, StartIdx = 2 }, { Waypoints = midNorth, StartIdx = 4 },
 		{ Waypoints = midSouth, StartIdx = 1 }, { Waypoints = midSouth, StartIdx = 2 }, { Waypoints = midSouth, StartIdx = 4 },
 		{ Waypoints = midEast, StartIdx = 1 }, { Waypoints = midEast, StartIdx = 2 }, { Waypoints = midEast, StartIdx = 4 },
 		{ Waypoints = midWest, StartIdx = 1 }, { Waypoints = midWest, StartIdx = 2 }, { Waypoints = midWest, StartIdx = 4 },
 	}
 
+	local initNow = os.clock()
 	for i, def in ipairs(routeDefs) do
 		local wp = def.Waypoints
 		local startPos = wp[def.StartIdx]
 		local nextIdx = (def.StartIdx % #wp) + 1
 		local rig = buildNPCModel(folder, i, rng, startPos, wp, nextIdx)
-		updateRigPose(rig, false)
+		updateRigPose(rig, "Idle", initNow)
 		table.insert(rigs, rig)
 	end
 
 	heartbeatConn = RunService.Heartbeat:Connect(function(dt: number)
 		local clampedDt = math.min(dt, 0.05)
+		local now = os.clock()
 		for _, rig in ipairs(rigs) do
 			if rig.ChatTimer > 0 then
 				rig.ChatTimer -= clampedDt
@@ -364,9 +511,73 @@ function CentralNPCController.Start(): ()
 				end
 			end
 
+			local isPanicking = now < rig.PanicUntil
+			local isNervous = (not isPanicking) and (now < rig.NervousUntil)
+
+			if isPanicking then
+				rig.WasPanicking = true
+				local away = Vector3.new(rig.CurrentPos.X - rig.ThreatPos.X, 0, rig.CurrentPos.Z - rig.ThreatPos.Z)
+				local distFromThreat = away.Magnitude
+				if distFromThreat >= PANIC_SAFE_DIST then
+					-- Reached safe distance -> transition into shaky nervous look-around!
+					rig.PanicUntil = now
+					rig.NervousUntil = now + rng:NextNumber(2.8, 4.0)
+					rig.Model:SetAttribute("PanicState", "Nervous")
+					rig.ChatLabel.Text = NERVOUS_LINES[rng:NextInteger(1, #NERVOUS_LINES)]
+					rig.ChatLabel.TextColor3 = C_NERVOUS_TEXT
+					rig.ChatStroke.Color = C_NERVOUS_STROKE
+					rig.ChatGui.Enabled = true
+					rig.ChatTimer = 3.0
+					updateRigPose(rig, "Nervous", now)
+					continue
+				end
+
+				local baseDir = if distFromThreat > 0.2 then (away / distFromThreat) else Vector3.new(math.cos(rig.WeaveSeed), 0, math.sin(rig.WeaveSeed))
+				-- Slight realistic organic weave so fleeing citizens scatter naturally
+				local perp = Vector3.new(-baseDir.Z, 0, baseDir.X)
+				local fleeDir = (baseDir + perp * (math.sin(now * 2.2 + rig.WeaveSeed) * 0.26)).Unit
+				local fleeSpeed = math.clamp(rig.WalkSpeed * 2.15, 19.5, 24.5)
+				local nextPos = rig.CurrentPos + fleeDir * (fleeSpeed * clampedDt)
+
+				-- Keep Central Plaza / Boulevard citizens safely on dry island ground
+				nextPos = Vector3.new(
+					math.clamp(nextPos.X, -470, 470),
+					PLATFORM_Y,
+					math.clamp(nextPos.Z, -470, 470)
+				)
+				rig.CurrentPos = nextPos
+
+				local desiredYaw = math.atan2(-fleeDir.X, -fleeDir.Z)
+				local diff = (desiredYaw - rig.FacingYaw + math.pi) % (math.pi * 2) - math.pi
+				rig.FacingYaw += diff * math.min(1, clampedDt * 13)
+
+				rig.WalkPhase += clampedDt * (fleeSpeed * 1.05)
+				updateRigPose(rig, "Panic", now)
+				continue
+			elseif isNervous then
+				if rig.WasPanicking then
+					rig.WasPanicking = false
+					rig.Model:SetAttribute("PanicState", "Nervous")
+					if rig.ChatTimer <= 0.4 then
+						rig.ChatLabel.Text = NERVOUS_LINES[rng:NextInteger(1, #NERVOUS_LINES)]
+						rig.ChatLabel.TextColor3 = C_NERVOUS_TEXT
+						rig.ChatStroke.Color = C_NERVOUS_STROKE
+						rig.ChatGui.Enabled = true
+						rig.ChatTimer = 2.8
+					end
+				end
+				updateRigPose(rig, "Nervous", now)
+				continue
+			elseif rig.Model:GetAttribute("IsPanicking") == true then
+				rig.WasPanicking = false
+				rig.Model:SetAttribute("IsPanicking", false)
+				rig.Model:SetAttribute("PanicState", "Calm")
+				rig.TargetIndex = findNearestWaypointIdx(rig.CurrentPos, rig.Waypoints)
+			end
+
 			if rig.PauseTimer > 0 then
 				rig.PauseTimer -= clampedDt
-				updateRigPose(rig, false)
+				updateRigPose(rig, "Idle", now)
 				continue
 			end
 
@@ -374,13 +585,14 @@ function CentralNPCController.Start(): ()
 			local delta = Vector3.new(target.X - rig.CurrentPos.X, 0, target.Z - rig.CurrentPos.Z)
 			local dist = delta.Magnitude
 
-			if dist < 1.2 then
+			if dist < 1.3 then
 				rig.TargetIndex = (rig.TargetIndex % #rig.Waypoints) + 1
-				-- Brief natural pause at shopfronts/corners ~35% of the time
 				if rng:NextNumber(0, 1) < 0.35 then
 					rig.PauseTimer = rng:NextNumber(1.8, 3.6)
 					if rng:NextNumber(0, 1) < 0.45 then
 						rig.ChatLabel.Text = CHAT_LINES[rng:NextInteger(1, #CHAT_LINES)]
+						rig.ChatLabel.TextColor3 = C_CALM_TEXT
+						rig.ChatStroke.Color = C_CALM_STROKE
 						rig.ChatGui.Enabled = true
 						rig.ChatTimer = 3.2
 					end
@@ -390,13 +602,12 @@ function CentralNPCController.Start(): ()
 				local dir = delta / dist
 				rig.CurrentPos += dir * step
 
-				-- Smoothly turn toward movement direction
 				local desiredYaw = math.atan2(-dir.X, -dir.Z)
 				local diff = (desiredYaw - rig.FacingYaw + math.pi) % (math.pi * 2) - math.pi
 				rig.FacingYaw += diff * math.min(1, clampedDt * 8)
 
 				rig.WalkPhase += clampedDt * (rig.WalkSpeed * 0.92)
-				updateRigPose(rig, true)
+				updateRigPose(rig, "Walk", now)
 			end
 		end
 	end)

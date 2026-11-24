@@ -228,7 +228,9 @@ function HUDController.Init(
 	onQuickServe: QuickServeCallback,
 	onReturnHome: ReturnHomeCallback?,
 	onToggleScooter: ToggleScooterCallback?,
-	onAcceptExpress: AcceptExpressCallback?
+	onAcceptExpress: AcceptExpressCallback?,
+	onSquadAttack: (() -> ())?,
+	onSquadRecall: (() -> ())?
 ): ScreenGui
 	local playerGui = Players.LocalPlayer:WaitForChild("PlayerGui")
 
@@ -553,7 +555,7 @@ function HUDController.Init(
 	local toast = Instance.new("TextLabel")
 	toast.Name = "ToastBanner"
 	toast.AnchorPoint = Vector2.new(0.5, 1)
-	toast.Position = UDim2.new(0.5, 0, 1, -168)
+	toast.Position = UDim2.new(0.5, 0, 1, -200)
 	toast.Size = UDim2.fromOffset(470, 32)
 	toast.BackgroundColor3 = C_OBS
 	toast.BackgroundTransparency = 0.05
@@ -807,6 +809,50 @@ function HUDController.Init(
 		end
 	end)
 
+	-- Tactical Squad & Mercenary Mafia Command Strip (One-Click ATTACK [Y] / CALL BACK [Z] for Bodyguards & Hired Samurai/Ninja Mafia!)
+	local cmdStrip = Instance.new("Frame")
+	cmdStrip.Name = "SquadTacticalCommandBar"
+	cmdStrip.AnchorPoint = Vector2.new(0.5, 1)
+	cmdStrip.Position = UDim2.new(0.5, 0, 1, -166)
+	cmdStrip.Size = UDim2.fromOffset(310, 28)
+	cmdStrip.BackgroundTransparency = 1
+	cmdStrip.Parent = gui
+
+	local cmdLayout = Instance.new("UIListLayout")
+	cmdLayout.FillDirection = Enum.FillDirection.Horizontal
+	cmdLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+	cmdLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	cmdLayout.Padding = UDim.new(0, 8)
+	cmdLayout.Parent = cmdStrip
+
+	local function makeCmdBtn(name: string, text: string, bg: Color3, border: Color3, cb: (() -> ())?): TextButton
+		local b = Instance.new("TextButton")
+		b.Name = name
+		b.Size = UDim2.fromOffset(146, 26)
+		b.BackgroundColor3 = bg
+		b.AutoButtonColor = false
+		b.Font = FONT_TITLE
+		b.Text = text
+		b.TextSize = 10
+		b.TextColor3 = C_BONE
+		b.Parent = cmdStrip
+		makeCorner(b, 4)
+		makeBorderStroke(b, border, 1.2)
+		b.MouseEnter:Connect(function()
+			b.BackgroundColor3 = bg:Lerp(Color3.new(1, 1, 1), 0.12)
+		end)
+		b.MouseLeave:Connect(function()
+			b.BackgroundColor3 = bg
+		end)
+		b.MouseButton1Click:Connect(function()
+			if cb then cb() end
+		end)
+		return b
+	end
+
+	makeCmdBtn("SquadAttackBtn", "ATTACK ALL  [Y]", Color3.fromRGB(122, 26, 34), Color3.fromRGB(184, 52, 62), onSquadAttack)
+	makeCmdBtn("SquadRecallBtn", "CALL BACK  [Z]", Color3.fromRGB(36, 46, 62), Color3.fromRGB(108, 124, 148), onSquadRecall)
+
 	return gui
 end
 
@@ -858,11 +904,18 @@ function HUDController.Update(state: { [string]: any }): ()
 	if emperorBanner and typeof(emperor) == "table" then
 		local stars = if typeof(starInfo) == "table" and typeof(starInfo.Stars) == "number" then starInfo.Stars else 1
 		local rankTitle = if typeof(syn) == "table" and typeof(syn.RankTitle) == "string" then syn.RankTitle else "STREET RUNNER"
+		local pv = state.PrestigeVault
+		local pLv = if typeof(pv) == "table" and typeof(pv.PrestigeLevel) == "number" then pv.PrestigeLevel else 0
+		local fam = state.SyndicateFamily
+		local famTag = if typeof(fam) == "table" and fam.InFamily and typeof(fam.FamilyName) == "string" then ("  |  " .. fam.FamilyName) else ""
+		local pTag = if pLv > 0 then string.format(" [GODFATHER P%d]", pLv) else ""
 		emperorBanner.Text = string.format(
-			"RANK: %s  |  %d-STAR BISTRO  |  EMPEROR: %s",
+			"RANK: %s%s  |  %d-STAR BISTRO  |  EMPEROR: %s%s",
 			rankTitle,
+			pTag,
 			stars,
-			string.upper(emperor.Name or "--")
+			string.upper(emperor.Name or "--"),
+			famTag
 		)
 	end
 

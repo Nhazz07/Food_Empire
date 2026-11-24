@@ -373,8 +373,10 @@ local function tryRivalCombat(agent: RivalAgent): boolean
 			local pRoot = if char then char:FindFirstChild("HumanoidRootPart") else nil
 			local pHum = if char then char:FindFirstChildOfClass("Humanoid") else nil
 			if pRoot and pRoot:IsA("BasePart") and pHum and pHum.Health > 0 and not isInsideAnySafeBase(pRoot.Position) then
+				local smokeUntil = player:GetAttribute("InSmokeUntil")
+				local maxSight = if typeof(smokeUntil) == "number" and smokeUntil > now then 16 else bestDist
 				local d = (pRoot.Position - myPos).Magnitude
-				if d < bestDist then
+				if d < maxSight then
 					bestDist = d; nearestHum = pHum; nearestPos = pRoot.Position; nearestModel = char
 				end
 			end

@@ -4,6 +4,9 @@ local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local MonetizationService = require("./MonetizationService")
@@ -179,65 +182,34 @@ local function spawnDropOffBeacon(player: Player, order: ExpressOrder): ()
 	beam.CastShadow = false
 	beam.Parent = m
 
-	-- Waiting Express Customer NPC (Full-body!)
-	local body = Instance.new("Part")
-	body.Name = "CustomerTorso"
-	body.Size = Vector3.new(2.2, 2.7, 1.3)
-	body.CFrame = CFrame.new(pos.X, 4.4, pos.Z)
-	body.Color = Color3.fromRGB(48, 178, 232)
-	body.Material = Enum.Material.SmoothPlastic
-	body.Anchored = true
-	body.CanCollide = false
-	body.Parent = m
-
-	local head = Instance.new("Part")
-	head.Name = "CustomerHead"
-	head.Shape = Enum.PartType.Ball
-	head.Size = Vector3.new(1.9, 1.9, 1.9)
-	head.CFrame = body.CFrame * CFrame.new(0, 2.25, 0)
-	head.Color = Color3.fromRGB(246, 212, 178)
-	head.Material = Enum.Material.SmoothPlastic
-	head.Anchored = true
-	head.CanCollide = false
-	head.Parent = m
-
-	for _, lx in ipairs({ -0.55, 0.55 }) do
-		local leg = Instance.new("Part")
-		leg.Size = Vector3.new(0.95, 2.4, 0.95)
-		leg.CFrame = body.CFrame * CFrame.new(lx, -2.3, 0)
-		leg.Color = Color3.fromRGB(48, 56, 74)
-		leg.Material = Enum.Material.SmoothPlastic
-		leg.Anchored = true
-		leg.CanCollide = false
-		leg.Parent = m
+	-- Authentic Roblox R15 Neighborhood Citizen Customer NPC!
+	local rig = MafiaVisualBuilder.BuildCustomerRig("ExpressCustomer", math.random(1, 8), 1.02, CFrame.new(pos.X, 4.1, pos.Z))
+	for _, d in ipairs(rig.Model:GetDescendants()) do
+		if d:IsA("BasePart") then
+			d.Anchored = true
+			d.CanCollide = false
+		end
 	end
-	for _, ax in ipairs({ -1.55, 1.55 }) do
-		local arm = Instance.new("Part")
-		arm.Size = Vector3.new(0.8, 2.2, 0.8)
-		arm.CFrame = body.CFrame * CFrame.new(ax, 0.6, 0) * CFrame.Angles(0, 0, math.rad(if ax < 0 then -140 else 140))
-		arm.Color = Color3.fromRGB(48, 178, 232)
-		arm.Material = Enum.Material.SmoothPlastic
-		arm.Anchored = true
-		arm.CanCollide = false
-		arm.Parent = m
-	end
+	rig.Model.Parent = m
+	local body = rig.Root
+	local head = rig.Head
 
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(230, 46)
-	bb.StudsOffset = Vector3.new(0, 3.8, 0)
+	bb.Size = UDim2.fromOffset(224, 40)
+	bb.StudsOffset = Vector3.new(0, 3.1, 0)
 	bb.MaxDistance = 300
 	bb.Parent = head
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(20, 30, 46)
-	lbl.BackgroundTransparency = 0.06
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+	lbl.BackgroundTransparency = 0.08
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = string.format("🛵 %s's EXPRESS ORDER! [E]", string.upper(order.CustomerName))
-	lbl.TextSize = 13
-	lbl.TextColor3 = Color3.fromRGB(255, 228, 108)
+	lbl.Text = string.format("%s'S EXPRESS ORDER  [E]", string.upper(order.CustomerName))
+	lbl.TextSize = 11
+	lbl.TextColor3 = Color3.fromRGB(238, 206, 114)
 	lbl.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 8)
+	c.CornerRadius = UDim.new(0, 5)
 	c.Parent = lbl
 
 	local prompt = Instance.new("ProximityPrompt")

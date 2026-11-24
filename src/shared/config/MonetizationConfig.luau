@@ -139,6 +139,26 @@ local Items: { [string]: MonetizationItem } = {
 		Description = "Instant 100/100 Kevlar Armor + Full Base HP + +750 Gold & +60 rounds for your equipped weapon!",
 		AccentColor = Color3.fromRGB(52, 164, 242),
 	},
+	SamuraiMafiaContract = {
+		Id = "SamuraiMafiaContract",
+		DisplayName = "Samurai Mafia Strike Squad (5m)",
+		Kind = "DevProduct",
+		AssetId = 0, -- Replace 0 with your Developer Product ID from Roblox Creator Hub
+		RobuxPrice = 199,
+		Badge = "5M CONTRACT",
+		Description = "Hires 3 elite Kurogane Samurai Mafia enforcers (stronger than rival samurai) for 5 minutes to fight rival mafia & capture restaurants (or hire for 20,000 Gold)!",
+		AccentColor = Color3.fromRGB(168, 42, 48),
+	},
+	NinjaMafiaContract = {
+		Id = "NinjaMafiaContract",
+		DisplayName = "Ninja Assassin Mafia Squad (5m)",
+		Kind = "DevProduct",
+		AssetId = 0, -- Replace 0 with your Developer Product ID from Roblox Creator Hub
+		RobuxPrice = 199,
+		Badge = "5M CONTRACT",
+		Description = "Hires 3 elite Kage Ninja Mafia assassins (stronger than rival mafia) for 5 minutes with shadow-step blade clashes (or hire for 20,000 Gold)!",
+		AccentColor = Color3.fromRGB(62, 68, 86),
+	},
 }
 
 local MonetizationConfig: MonetizationConfigType = {
@@ -155,6 +175,8 @@ local MonetizationConfig: MonetizationConfigType = {
 		"GoldenEmperorSuitPass",
 		"TacticalAmmoCrate",
 		"SyndicateArmorBundle",
+		"SamuraiMafiaContract",
+		"NinjaMafiaContract",
 	},
 	Items = Items,
 }

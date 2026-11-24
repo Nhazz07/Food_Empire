@@ -159,7 +159,8 @@ local function handleFishingResult(player: Player, token: any, accuracy: any): (
 		local rareLabel = if isTuna then "✨ RARE GOLDEN TUNA" else "🦞 GIANT KING CRAB"
 		local recipeHint = if isTuna then "Golden Tuna Sashimi (+240G)" else "Giant King Crab Platter (+260G)"
 
-		local addedRare = WarehouseService.AddIngredient(player, rareId, 1)
+		local rareQty = if ReplicatedStorage:GetAttribute("DoubleRareCatch") == true then 2 else 1
+		local addedRare = WarehouseService.AddIngredient(player, rareId, rareQty)
 		local addedFish = WarehouseService.AddIngredient(player, "fish", 2)
 		local passMult = MonetizationService.GetPayoutMultiplier(player)
 		local bonusGold = math.floor(35 * passMult)

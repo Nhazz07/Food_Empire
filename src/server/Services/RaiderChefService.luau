@@ -9,6 +9,9 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local SectorConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("SectorConfig")
 )
+local MafiaVisualBuilder = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
+)
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local SectorService = require("./SectorService")
@@ -89,150 +92,59 @@ local function buildRaiderChefModel(owner: Player, index: number, spawnPos: Vect
 	local teamCol = if slot and SectorConfig.FactionColors[slot]
 		then SectorConfig.FactionColors[slot]
 		else Color3.fromRGB(58, 152, 232)
-	local darkTrim = Color3.new(teamCol.R * 0.72, teamCol.G * 0.72, teamCol.B * 0.72)
 
-	local model = Instance.new("Model")
-	model.Name = string.format("RaiderChef_%d_%d", owner.UserId, index)
+	local modelName = string.format("RaiderChef_%d_%d", owner.UserId, index)
+	local rig = MafiaVisualBuilder.BuildChefRig(modelName, teamCol, 1.0, CFrame.new(spawnPos), true)
+	local model = rig.Model
+	local root = rig.Root
+	local head = rig.Head
 
-	local function makePart(name: string, size: Vector3, color: Color3, mat: Enum.Material, shape: Enum.PartType?, collide: boolean): Part
-		local p = Instance.new("Part")
-		p.Name = name
-		p.Size = size
-		p.Color = color
-		p.Material = mat
-		if shape then
-			p.Shape = shape
-		end
-		p.CanCollide = collide
-		p.CanTouch = collide
-		p.Massless = not collide
-		p.CastShadow = true
-		p.TopSurface = Enum.SurfaceType.Smooth
-		p.BottomSurface = Enum.SurfaceType.Smooth
-		p.Parent = model
-		return p
-	end
-
-	local function weldTo(parentPart: BasePart, childPart: BasePart, relCF: CFrame): ()
-		childPart.CFrame = parentPart.CFrame * relCF
-		local w = Instance.new("WeldConstraint")
-		w.Part0 = parentPart
-		w.Part1 = childPart
-		w.Parent = childPart
-	end
-
-	local function makeJoint(name: string, part0: BasePart, part1: BasePart, c0: CFrame, c1: CFrame): Motor6D
-		part1.CFrame = part0.CFrame * c0 * c1:Inverse()
-		local m = Instance.new("Motor6D")
-		m.Name = name
-		m.Part0 = part0
-		m.Part1 = part1
-		m.C0 = c0
-		m.C1 = c1
-		m.Parent = part0
-		return m
-	end
-
-	local skinCol = Color3.fromRGB(246, 212, 178)
-	local pantsCol = Color3.fromRGB(44, 52, 68)
-	local bootCol = Color3.fromRGB(26, 28, 36)
-
-	-- 1. Team-Colored Executive Raider Coat + White Apron
-	local root = makePart("HumanoidRootPart", Vector3.new(2.4, 2.75, 1.35), teamCol, Enum.Material.SmoothPlastic, nil, true)
-	root.CFrame = CFrame.new(spawnPos)
-
-	local apron = makePart("Apron", Vector3.new(2.5, 1.45, 1.45), Color3.fromRGB(250, 250, 254), Enum.Material.SmoothPlastic, nil, false)
-	weldTo(root, apron, CFrame.new(0, -0.68, 0))
-
-	-- 2. Head + Determined Eyes + Pleated Team Chef Toque Hat
-	local head = makePart("Head", Vector3.new(1.95, 1.95, 1.95), skinCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-	weldTo(root, head, CFrame.new(0, 2.3, 0))
-
-	for _, ex in ipairs({ -0.34, 0.34 }) do
-		local eye = makePart("Eye", Vector3.new(0.24, 0.26, 0.14), Color3.fromRGB(24, 24, 30), Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-		weldTo(head, eye, CFrame.new(ex, 0.12, -0.9))
-	end
-
-	local hatBand = makePart("HatBand", Vector3.new(0.72, 2.05, 2.05), darkTrim, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, false)
-	weldTo(head, hatBand, CFrame.new(0, 1.0, 0) * CFrame.Angles(0, 0, math.rad(90)))
-	local hatPuff = makePart("ChefHat", Vector3.new(2.4, 1.55, 2.35), Color3.fromRGB(255, 255, 255), Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-	hatPuff.CastShadow = false
-	weldTo(head, hatPuff, CFrame.new(0, 1.85, 0))
-
-	-- 3. Articulated Arms + Glowing Golden Spatula!
-	local leftArm = makePart("LeftArm", Vector3.new(0.9, 2.4, 0.9), teamCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("LeftArmJoint", root, leftArm, CFrame.new(-1.7, 1.0, 0), CFrame.new(0, 1.0, 0))
-	local leftHand = makePart("LeftHand", Vector3.new(0.78, 0.7, 0.78), skinCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-	weldTo(leftArm, leftHand, CFrame.new(0, -1.32, 0))
-
-	local rightArm = makePart("RightArm", Vector3.new(0.9, 2.4, 0.9), teamCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("RightArmJoint", root, rightArm, CFrame.new(1.7, 1.0, 0), CFrame.new(0, 1.0, 0))
-	local rightHand = makePart("RightHand", Vector3.new(0.78, 0.7, 0.78), skinCol, Enum.Material.SmoothPlastic, Enum.PartType.Ball, false)
-	weldTo(rightArm, rightHand, CFrame.new(0, -1.32, 0))
-
-	local spatHandle = makePart("SpatulaHandle", Vector3.new(0.28, 0.28, 1.55), Color3.fromRGB(132, 86, 54), Enum.Material.Wood, nil, false)
-	weldTo(rightHand, spatHandle, CFrame.new(0, -0.05, -0.95))
-	local spatBlade = makePart("SpatulaBlade", Vector3.new(0.95, 0.2, 1.35), Color3.fromRGB(255, 212, 54), Enum.Material.Neon, nil, false)
-	spatBlade.CastShadow = false
-	weldTo(spatHandle, spatBlade, CFrame.new(0, 0, -1.35))
-
-	-- 4. Articulated Legs + Chef Boots
-	local leftLeg = makePart("LeftLeg", Vector3.new(1.0, 2.45, 1.0), pantsCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("LeftLegJoint", root, leftLeg, CFrame.new(-0.6, -1.38, 0), CFrame.new(0, 1.22, 0))
-	local leftBoot = makePart("LeftBoot", Vector3.new(1.08, 0.6, 1.4), bootCol, Enum.Material.SmoothPlastic, nil, false)
-	weldTo(leftLeg, leftBoot, CFrame.new(0, -1.18, -0.16))
-
-	local rightLeg = makePart("RightLeg", Vector3.new(1.0, 2.45, 1.0), pantsCol, Enum.Material.SmoothPlastic, nil, false)
-	makeJoint("RightLegJoint", root, rightLeg, CFrame.new(0.6, -1.38, 0), CFrame.new(0, 1.22, 0))
-	local rightBoot = makePart("RightBoot", Vector3.new(1.08, 0.6, 1.4), bootCol, Enum.Material.SmoothPlastic, nil, false)
-	weldTo(rightLeg, rightBoot, CFrame.new(0, -1.18, -0.16))
-
-	-- 5. Nameplate + Live Health Bar
+	-- Nameplate + Live Health Bar (Zero Emojis)
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(165, 44)
-	bb.StudsOffset = Vector3.new(0, 3.7, 0)
+	bb.Size = UDim2.fromOffset(168, 40)
+	bb.StudsOffset = Vector3.new(0, 3.1, 0)
 	bb.MaxDistance = 130
 	bb.Parent = head
 
 	local lbl = Instance.new("TextLabel")
-	lbl.Size = UDim2.new(1, 0, 0, 24)
-	lbl.BackgroundColor3 = teamCol
+	lbl.Size = UDim2.new(1, 0, 0, 20)
+	lbl.BackgroundColor3 = Color3.fromRGB(16, 17, 22)
 	lbl.BackgroundTransparency = 0.08
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = "⚔️ RAIDER CHEF #" .. tostring(index)
-	lbl.TextSize = 13
-	lbl.TextColor3 = Color3.new(1, 1, 1)
+	lbl.Text = "RAIDER CHEF #" .. tostring(index)
+	lbl.TextSize = 10
+	lbl.TextColor3 = Color3.fromRGB(238, 236, 232)
 	lbl.Parent = bb
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 7)
+	c.CornerRadius = UDim.new(0, 4)
 	c.Parent = lbl
 	local st = Instance.new("UIStroke")
-	st.Color = Color3.fromRGB(16, 20, 30)
-	st.Thickness = 1.5
+	st.Color = teamCol
+	st.Thickness = 1.2
 	st.Parent = lbl
 
 	local hpBg = Instance.new("Frame")
-	hpBg.Position = UDim2.new(0.08, 0, 0, 29)
-	hpBg.Size = UDim2.new(0.84, 0, 0, 9)
-	hpBg.BackgroundColor3 = Color3.fromRGB(24, 26, 36)
+	hpBg.Position = UDim2.new(0.05, 0, 0, 24)
+	hpBg.Size = UDim2.new(0.90, 0, 0, 10)
+	hpBg.BackgroundColor3 = Color3.fromRGB(14, 15, 20)
 	hpBg.Parent = bb
 	local hpc = Instance.new("UICorner")
-	hpc.CornerRadius = UDim.new(0, 5)
+	hpc.CornerRadius = UDim.new(0, 3)
 	hpc.Parent = hpBg
 
 	local hpFill = Instance.new("Frame")
 	hpFill.Size = UDim2.fromScale(1, 1)
-	hpFill.BackgroundColor3 = Color3.fromRGB(72, 224, 108)
+	hpFill.BackgroundColor3 = Color3.fromRGB(78, 146, 98)
 	hpFill.Parent = hpBg
 	local hpfc = Instance.new("UICorner")
-	hpfc.CornerRadius = UDim.new(0, 5)
+	hpfc.CornerRadius = UDim.new(0, 3)
 	hpfc.Parent = hpFill
 
 	local hum = Instance.new("Humanoid")
 	hum.MaxHealth = 120
 	hum.Health = 120
 	hum.WalkSpeed = WALK_SPEED
-	hum.HipHeight = 2.6
+	hum.HipHeight = 2.25
 	hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
 	hum.Parent = model
 

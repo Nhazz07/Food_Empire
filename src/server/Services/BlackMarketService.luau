@@ -12,6 +12,7 @@ local PlayerDataService = require("./PlayerDataService")
 local BaseService = require("./BaseService")
 local MonetizationService = require("./MonetizationService")
 local SyndicateContractService = require("./SyndicateContractService")
+local SyndicateFamilyService = require("./SyndicateFamilyService")
 
 export type BlackMarketItemSpec = {
 	Id: string,
@@ -42,6 +43,8 @@ export type BlackMarketItemSpec = {
 	AudioKey: ("PistolShot" | "ShotgunBlast" | "SMGShot")?,
 	ModelStyle: string?,
 	AccentColor: Color3,
+	IsMelee: boolean?,
+	AlwaysSuppressed: boolean?,
 }
 
 local BlackMarketService = {}
@@ -84,6 +87,8 @@ for _, weaponId in ipairs(WeaponConfig.WEAPON_ORDER) do
 			AudioKey = w.AudioKey,
 			ModelStyle = w.ModelStyle,
 			AccentColor = w.AccentColor,
+			IsMelee = w.IsMelee,
+			AlwaysSuppressed = w.AlwaysSuppressed,
 		}
 	end
 end
@@ -127,7 +132,13 @@ local reloadEv: RemoteEvent? = nil
 local ammoSyncEv: RemoteEvent? = nil
 local sfxEv: RemoteEvent? = nil
 local openUiEv: RemoteEvent? = nil
+local combatFeedbackEv: RemoteEvent? = nil
+local hostileKilledListeners: { (player: Player, hitModel: Model, weaponName: string) -> () } = {}
 local lastFireAt: { [Player]: number } = {}
+
+function BlackMarketService.OnHostileKilled(cb: (player: Player, hitModel: Model, weaponName: string) -> ()): ()
+	table.insert(hostileKilledListeners, cb)
+end
 local conns: { RBXScriptConnection } = {}
 local charConns: { [Player]: RBXScriptConnection } = {}
 local charRemoveConns: { [Player]: RBXScriptConnection } = {}
@@ -475,6 +486,100 @@ function BlackMarketService.SpawnBulletTracer(fromPos: Vector3, toPos: Vector3, 
 	end)
 end
 
+-- Cinematic Steel-on-Steel Blade Clash VFX when Ninja Mafia vs Samurai Mafia (or Katana vs Katana) fight!
+function BlackMarketService.SpawnBladeClashVFX(clashPos: Vector3, styleA: string, styleB: string): ()
+	local isCrossStyle = (styleA ~= styleB)
+	local anchor = Instance.new("Part")
+	anchor.Name = "BladeClashVFX"
+	anchor.Size = Vector3.new(0.6, 0.6, 0.6)
+	anchor.CFrame = CFrame.new(clashPos)
+	anchor.Transparency = 1
+	anchor.Anchored = true
+	anchor.CanCollide = false
+	anchor.CanTouch = false
+	anchor.CanQuery = false
+	anchor.Parent = Workspace
+
+	-- 1. Forged-Steel Metallic Spark Shower
+	local sparks = Instance.new("ParticleEmitter")
+	sparks.Color = ColorSequence.new(Color3.fromRGB(255, 232, 168), Color3.fromRGB(234, 148, 56))
+	sparks.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.38), NumberSequenceKeypoint.new(1, 0) })
+	sparks.Lifetime = NumberRange.new(0.18, 0.36)
+	sparks.Speed = NumberRange.new(16, 30)
+	sparks.SpreadAngle = Vector2.new(180, 180)
+	sparks.Drag = 4
+	sparks.LightEmission = 0.85
+	sparks.Parent = anchor
+	sparks:Emit(if isCrossStyle then 24 else 14)
+
+	-- 2. Shadow-Step Ink/Smoke Burst when Ninja clashes with Samurai!
+	if styleA == "Ninja" or styleB == "Ninja" then
+		local smoke = Instance.new("ParticleEmitter")
+		smoke.Color = ColorSequence.new(Color3.fromRGB(36, 40, 50), Color3.fromRGB(92, 98, 112))
+		smoke.Transparency = NumberSequence.new({ NumberSequenceKeypoint.new(0, 0.25), NumberSequenceKeypoint.new(1, 1) })
+		smoke.Size = NumberSequence.new({ NumberSequenceKeypoint.new(0, 1.4), NumberSequenceKeypoint.new(1, 3.8) })
+		smoke.Lifetime = NumberRange.new(0.28, 0.52)
+		smoke.Speed = NumberRange.new(6, 14)
+		smoke.SpreadAngle = Vector2.new(180, 180)
+		smoke.Parent = anchor
+		smoke:Emit(14)
+	end
+
+	-- 3. Twin Crossed Steel & Crimson Slash Arcs
+	local slashA = Instance.new("Part")
+	slashA.Name = "SlashArcA"
+	slashA.Size = Vector3.new(0.16, 0.45, if isCrossStyle then 6.4 else 4.8)
+	slashA.CFrame = CFrame.new(clashPos) * CFrame.Angles(math.rad(math.random(-25, 25)), math.rad(math.random(0, 180)), math.rad(35))
+	slashA.Color = if styleA == "Samurai" then Color3.fromRGB(218, 54, 62) else Color3.fromRGB(178, 198, 228)
+	slashA.Material = Enum.Material.Neon
+	slashA.Transparency = 0.22
+	slashA.Anchored = true
+	slashA.CanCollide = false
+	slashA.CanTouch = false
+	slashA.CanQuery = false
+	slashA.Parent = Workspace
+
+	local slashB = slashA:Clone()
+	slashB.Name = "SlashArcB"
+	slashB.CFrame = CFrame.new(clashPos) * CFrame.Angles(math.rad(math.random(-25, 25)), math.rad(math.random(0, 180)), math.rad(-35))
+	slashB.Color = if styleB == "Samurai" then Color3.fromRGB(224, 64, 72) else Color3.fromRGB(238, 224, 178)
+	slashB.Parent = Workspace
+
+	-- 4. Subtle Steel Shockwave Ring
+	local ring = Instance.new("Part")
+	ring.Name = "ClashShockRing"
+	ring.Shape = Enum.PartType.Cylinder
+	ring.Size = Vector3.new(0.14, 1.8, 1.8)
+	ring.CFrame = CFrame.new(clashPos) * CFrame.Angles(0, 0, math.rad(90))
+	ring.Color = if isCrossStyle then Color3.fromRGB(232, 184, 96) else Color3.fromRGB(210, 214, 224)
+	ring.Material = Enum.Material.SmoothPlastic
+	ring.Transparency = 0.35
+	ring.Anchored = true
+	ring.CanCollide = false
+	ring.CanTouch = false
+	ring.CanQuery = false
+	ring.Parent = Workspace
+
+	task.spawn(function()
+		for i = 1, 7 do
+			if not ring.Parent then break end
+			local s = 1.8 + i * (if isCrossStyle then 1.05 else 0.72)
+			ring.Size = Vector3.new(0.12, s, s)
+			ring.Transparency = 0.35 + (i / 7) * 0.65
+			if slashA.Parent then slashA.Transparency = 0.22 + (i / 7) * 0.78 end
+			if slashB.Parent then slashB.Transparency = 0.22 + (i / 7) * 0.78 end
+			task.wait(0.025)
+		end
+		if slashA.Parent then slashA:Destroy() end
+		if slashB.Parent then slashB:Destroy() end
+		if ring.Parent then ring:Destroy() end
+	end)
+
+	task.delay(0.75, function()
+		if anchor.Parent then anchor:Destroy() end
+	end)
+end
+
 -- Preserves existing StreetPistol, PepperShotgun & TacticalSMG models intact,
 -- and builds distinct sculpted realistic models for the 6 new expansion weapons!
 local function buildGunTool(weaponId: string): Tool
@@ -607,6 +712,55 @@ local function buildGunTool(weaponId: string): Tool
 		gPart("Compensator", Vector3.new(0.32, 0.32, 0.38), CFrame.new(0, 0.66, -1.46), goldTrim, Enum.Material.Metal, nil)
 		gPart("FrontSight", Vector3.new(0.09, 0.11, 0.11), CFrame.new(0, 0.88, -1.48), Color3.fromRGB(255, 226, 94), Enum.Material.Neon, nil)
 		gPart("MuzzleTip", Vector3.new(0.18, 0.18, 0.10), CFrame.new(0, 0.66, -1.68), Color3.fromRGB(22, 20, 18), Enum.Material.Metal, nil)
+	elseif weaponId == "MafiaKnife" then
+		-- Concealed Stiletto Mafia Knife (no trigger guard; realistic stiletto silhouette)
+		for _, ch in ipairs(tool:GetChildren()) do
+			if ch.Name == "TriggerGuardBottom" or ch.Name == "TriggerGuardFront" or ch.Name == "Trigger" then
+				ch:Destroy()
+			end
+		end
+		handle.Size = Vector3.new(0.24, 0.88, 0.28)
+		tool.Grip = CFrame.new(0, -0.18, 0) * CFrame.Angles(math.rad(-82), 0, 0)
+		gPart("BrassBolster", Vector3.new(0.32, 0.14, 0.34), CFrame.new(0, 0.48, 0), goldTrim, Enum.Material.Metal, nil)
+		gPart("PommelCap", Vector3.new(0.26, 0.12, 0.30), CFrame.new(0, -0.48, 0), darkSteel, Enum.Material.Metal, nil)
+		gPart("CarbonBlade", Vector3.new(0.08, 1.65, 0.22), CFrame.new(0, 1.36, 0), chromeSilver, Enum.Material.Metal, nil)
+		gPart("BladeSpine", Vector3.new(0.06, 1.45, 0.08), CFrame.new(0, 1.28, 0.08), darkSteel, Enum.Material.Metal, nil)
+		gPart("MuzzleTip", Vector3.new(0.08, 0.24, 0.14), CFrame.new(0, 2.28, 0), chromeSilver, Enum.Material.Metal, nil)
+	elseif weaponId == "SamuraiKatana" then
+		-- Hand-Forged Kurogane Yakuza Samurai Katana
+		for _, ch in ipairs(tool:GetChildren()) do
+			if ch.Name == "TriggerGuardBottom" or ch.Name == "TriggerGuardFront" or ch.Name == "Trigger" then
+				ch:Destroy()
+			end
+		end
+		handle.Size = Vector3.new(0.24, 1.35, 0.28)
+		tool.Grip = CFrame.new(0, -0.25, 0) * CFrame.Angles(math.rad(-84), 0, 0)
+		gPart("SilkWrapBand", Vector3.new(0.26, 0.22, 0.30), CFrame.new(0, 0.15, 0), Color3.fromRGB(142, 26, 34), Enum.Material.Fabric, nil)
+		gPart("PommelKashira", Vector3.new(0.28, 0.14, 0.32), CFrame.new(0, -0.72, 0), goldTrim, Enum.Material.Metal, nil)
+		gPart("TsubaGuard", Vector3.new(0.56, 0.10, 0.56), CFrame.new(0, 0.72, 0), goldTrim, Enum.Material.Metal, nil)
+		gPart("HabakiCollar", Vector3.new(0.20, 0.22, 0.26), CFrame.new(0, 0.86, 0), goldTrim, Enum.Material.Metal, nil)
+		gPart("KatanaBladeLower", Vector3.new(0.07, 2.35, 0.24), CFrame.new(0, 2.12, -0.02), chromeSilver, Enum.Material.Metal, nil)
+		gPart("KatanaBladeUpper", Vector3.new(0.06, 1.85, 0.20), CFrame.new(0, 4.18, -0.14) * CFrame.Angles(math.rad(-6), 0, 0), brushedSteel, Enum.Material.Metal, nil)
+		gPart("MuzzleTip", Vector3.new(0.06, 0.35, 0.14), CFrame.new(0, 5.18, -0.26) * CFrame.Angles(math.rad(-10), 0, 0), chromeSilver, Enum.Material.Metal, nil)
+	elseif weaponId == "SyndicateTommyDrum" then
+		-- Heavy 50-Round Mafia Drum Submachine Gun
+		gPart("WoodStock", Vector3.new(0.32, 0.62, 1.42), CFrame.new(0, 0.34, 0.86) * CFrame.Angles(math.rad(-8), 0, 0), woodStock, Enum.Material.Wood, nil)
+		gPart("Receiver", Vector3.new(0.38, 0.48, 1.56), CFrame.new(0, 0.58, -0.48), darkSteel, Enum.Material.Metal, nil)
+		gPart("DrumMag", Vector3.new(0.42, 1.05, 1.05), CFrame.new(0, 0.02, -0.82), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("DrumCenter", Vector3.new(0.46, 0.34, 0.34), CFrame.new(0, 0.02, -0.82), goldTrim, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("WoodForegrip", Vector3.new(0.26, 0.66, 0.30), CFrame.new(0, 0.16, -1.68), woodStock, Enum.Material.Wood, nil)
+		gPart("FinnedBarrel", Vector3.new(1.65, 0.24, 0.24), CFrame.new(0, 0.60, -2.06) * CFrame.Angles(0, math.rad(90), 0), brushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("CuttsCompensator", Vector3.new(0.26, 0.28, 0.36), CFrame.new(0, 0.60, -2.98), darkSteel, Enum.Material.Metal, nil)
+		gPart("MuzzleTip", Vector3.new(0.22, 0.22, 0.12), CFrame.new(0, 0.60, -3.22), Color3.fromRGB(16, 18, 22), Enum.Material.Metal, nil)
+	elseif weaponId == "PhantomAssassinRifle" then
+		-- Integrally Suppressed Anti-Armor Assassin Marksman Rifle
+		gPart("AssassinStock", Vector3.new(0.34, 0.68, 1.48), CFrame.new(0, 0.42, 0.94), polymerGrip, Enum.Material.SmoothPlastic, nil)
+		gPart("ChassisBody", Vector3.new(0.38, 0.50, 2.30), CFrame.new(0, 0.54, -0.84), Color3.fromRGB(24, 26, 32), Enum.Material.Metal, nil)
+		gPart("OxbloodStripe", Vector3.new(0.40, 0.10, 1.65), CFrame.new(0, 0.62, -0.78), Color3.fromRGB(142, 26, 34), Enum.Material.Metal, nil)
+		gPart("BoxMag", Vector3.new(0.26, 0.68, 0.50), CFrame.new(0, 0.04, -0.80), darkSteel, Enum.Material.Metal, nil)
+		gPart("ScopeTube", Vector3.new(1.55, 0.28, 0.28), CFrame.new(0, 1.04, -0.62) * CFrame.Angles(0, math.rad(90), 0), polymerGrip, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("SuppressedBarrel", Vector3.new(2.55, 0.30, 0.30), CFrame.new(0, 0.60, -3.15) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		gPart("MuzzleTip", Vector3.new(0.24, 0.24, 0.14), CFrame.new(0, 0.60, -4.48), Color3.fromRGB(14, 16, 20), Enum.Material.Metal, nil)
 	elseif weaponId == "CrimsonDragonAR" then
 		-- Mythic Crimson-Gold 5.56mm Custom Assault Rifle
 		gPart("BufferTube", Vector3.new(0.95, 0.24, 0.24), CFrame.new(0, 0.56, 0.68) * CFrame.Angles(0, math.rad(90), 0), darkSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
@@ -772,24 +926,67 @@ function BlackMarketService.SyncPlayerAmmoAndGear(player: Player): ()
 	grantOwnedGearToPlayer(player, false)
 end
 
-local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, hitPos: Vector3, dmg: number, usedWeaponId: string): boolean
+local function getTargetDisplayName(hitModel: Model): string
+	local titleAttr = hitModel:GetAttribute("RivalTitle")
+	if typeof(titleAttr) == "string" and titleAttr ~= "" then
+		return titleAttr
+	end
+	local mafiaAttr = hitModel:GetAttribute("MafiaTitle")
+	if typeof(mafiaAttr) == "string" and mafiaAttr ~= "" then
+		return mafiaAttr
+	end
+	return hitModel.Name
+end
+
+local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, hitPos: Vector3, baseDmg: number, usedWeaponId: string, isHeadshot: boolean): boolean
 	local targetHum = hitModel:FindFirstChildOfClass("Humanoid")
 	if not targetHum or targetHum.Health <= 0 then
 		return false
 	end
 
+	local spec = BlackMarketService.ITEMS[usedWeaponId]
+	local weaponName = if spec then spec.DisplayName else usedWeaponId
+	local dmg = if isHeadshot then math.ceil(baseDmg * 1.75) else baseDmg
+
 	local isRival = CollectionService:HasTag(hitModel, "RivalAIUnit")
 	local isMafia = CollectionService:HasTag(hitModel, "MafiaUnit")
+	local isApexMafia = CollectionService:HasTag(hitModel, "ApexMafiaUnit")
+	local isRivalSamurai = CollectionService:HasTag(hitModel, "RivalSamuraiUnit")
+	local isPenthouseBoss = CollectionService:HasTag(hitModel, "PenthouseBossUnit")
 	local isEnemyTurfGuard = CollectionService:HasTag(hitModel, "TurfGuardUnit")
 		and hitModel:GetAttribute("Faction") ~= ("Player_" .. tostring(player.UserId))
-	if isRival or isMafia or isEnemyTurfGuard then
+	if isRival or isMafia or isApexMafia or isRivalSamurai or isPenthouseBoss or isEnemyTurfGuard then
 		local hitDir = hitPos - root.Position
 		if hitDir.Magnitude > 0.05 then
 			hitModel:SetAttribute("LastHitDir", hitDir.Unit)
 		end
 		targetHum:TakeDamage(dmg)
+		local isKill = (targetHum.Health <= 0)
 		emitCombatSFX("MeleeHit", hitPos, nil)
-		if targetHum.Health <= 0 then
+		emitCombatSFX(if isKill then "EnemyDeathScream" else "EnemyHitScream", hitPos, nil)
+		if combatFeedbackEv then
+			combatFeedbackEv:FireClient(player, {
+				Kind = "Hit",
+				Damage = dmg,
+				IsHeadshot = isHeadshot,
+				IsKill = isKill,
+				HitPos = hitPos,
+			})
+		end
+		if isKill then
+			local targetName = getTargetDisplayName(hitModel)
+			if combatFeedbackEv then
+				combatFeedbackEv:FireAllClients({
+					Kind = "KillFeed",
+					Killer = player.DisplayName,
+					Victim = targetName,
+					Weapon = weaponName,
+					IsHeadshot = isHeadshot,
+				})
+			end
+			for _, cb in ipairs(hostileKilledListeners) do
+				task.spawn(cb, player, hitModel, weaponName)
+			end
 			local isMafiaBoss = hitModel:GetAttribute("IsMafiaBoss") == true
 			local isRivalBoss = hitModel:GetAttribute("IsRivalBoss") == true
 			if isRivalBoss then
@@ -805,6 +1002,14 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 				if toastEv and toastEv:IsA("RemoteEvent") then
 					toastEv:FireAllClients(string.format("%s eliminated THE CRIMSON DON (+%dG, +%d Rep).", player.DisplayName, g, r))
 				end
+			elseif isApexMafia or isRivalSamurai or isPenthouseBoss then
+				local goldAttr = hitModel:GetAttribute("BountyGold")
+				local expAttr = hitModel:GetAttribute("BountyExp")
+				local repAttr = hitModel:GetAttribute("BountyRep")
+				local g = if typeof(goldAttr) == "number" then goldAttr else 240
+				local e = if typeof(expAttr) == "number" then expAttr else 95
+				local r = if typeof(repAttr) == "number" then repAttr else 50
+				PlayerDataService.AddRewards(player, g, e, r)
 			elseif isMafiaBoss then
 				PlayerDataService.AddRewards(player, 220, 80, 45)
 			elseif isMafia then
@@ -820,19 +1025,45 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 				local r = if typeof(repAttr) == "number" then repAttr else math.floor(g * 0.28)
 				PlayerDataService.AddRewards(player, g, e, r)
 			end
-			grantKillAmmoBonus(player, usedWeaponId)
+			if not (spec and spec.IsMelee) then
+				grantKillAmmoBonus(player, usedWeaponId)
+			end
 			SyndicateContractService.RecordProgress(player, "EliminateHostiles", 1)
 		end
 		return true
 	end
 
-	-- PvP outside safe plazas
+	-- PvP outside safe plazas (respects Syndicate Family co-op friendly-fire immunity!)
 	local otherPlayer = Players:GetPlayerFromCharacter(hitModel)
-	if otherPlayer and otherPlayer ~= player then
+	if otherPlayer and otherPlayer ~= player and not SyndicateFamilyService.AreFamilyAllies(player, otherPlayer) then
 		if not isInsideOwnBase(otherPlayer, hitPos) and not isInsideOwnBase(player, root.Position) then
-			targetHum:TakeDamage(math.floor(dmg * 0.75))
+			local pvpDmg = math.floor(dmg * 0.75)
+			targetHum:TakeDamage(pvpDmg)
+			local isKill = (targetHum.Health <= 0)
 			emitCombatSFX("MeleeHit", hitPos, nil)
-			if targetHum.Health <= 0 then
+			emitCombatSFX(if isKill then "EnemyDeathScream" else "EnemyHitScream", hitPos, nil)
+			if combatFeedbackEv then
+				combatFeedbackEv:FireClient(player, {
+					Kind = "Hit",
+					Damage = pvpDmg,
+					IsHeadshot = isHeadshot,
+					IsKill = isKill,
+					HitPos = hitPos,
+				})
+			end
+			if isKill then
+				if combatFeedbackEv then
+					combatFeedbackEv:FireAllClients({
+						Kind = "KillFeed",
+						Killer = player.DisplayName,
+						Victim = otherPlayer.DisplayName,
+						Weapon = weaponName,
+						IsHeadshot = isHeadshot,
+					})
+				end
+				for _, cb in ipairs(hostileKilledListeners) do
+					task.spawn(cb, player, hitModel, weaponName)
+				end
 				PlayerDataService.AddRewards(player, 50, 25, 15)
 				grantKillAmmoBonus(player, usedWeaponId)
 			end
@@ -872,6 +1103,56 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 
 	local ackSeq = if typeof(shotSeq) == "number" then shotSeq else nil
 
+	local now = os.clock()
+	local cd = spec.Cooldown or 0.35
+	if lastFireAt[player] and (now - lastFireAt[player]) < (cd * 0.78) then
+		return
+	end
+
+	-- Close-Quarters Blade Combat (Stiletto Mafia Knife & Kurogane Samurai Katana — zero ammo cost, wide cleave + backstab crit!)
+	if spec.IsMelee == true then
+		lastFireAt[player] = now
+		local bladeRange = spec.Range or 12
+		local bladeDmg = spec.Damage or 52
+		local look = root.CFrame.LookVector
+		local origin = root.Position + Vector3.new(0, 1.2, 0)
+		local slashEnd = origin + look * bladeRange
+		local slashCol = if weaponId == "SamuraiKatana" then Color3.fromRGB(218, 52, 58) else Color3.fromRGB(214, 218, 226)
+		BlackMarketService.SpawnBulletTracer(origin + root.CFrame.RightVector * -2.2, slashEnd + root.CFrame.RightVector * 2.2, slashCol)
+		emitCombatSFX("MeleeHit", origin, player)
+
+		local hitAny = false
+		for _, tagName in ipairs({ "RivalAIUnit", "MafiaUnit", "ApexMafiaUnit", "RivalSamuraiUnit", "PenthouseBossUnit", "TurfGuardUnit" }) do
+			for _, unit in ipairs(CollectionService:GetTagged(tagName)) do
+				if unit:IsA("Model") then
+					local uRoot = unit:FindFirstChild("HumanoidRootPart")
+					local uHum = unit:FindFirstChildOfClass("Humanoid")
+					if uRoot and uRoot:IsA("BasePart") and uHum and uHum.Health > 0 then
+						local toTarget = uRoot.Position - root.Position
+						local dist = toTarget.Magnitude
+						if dist <= bladeRange and (dist < 4.5 or look:Dot(toTarget.Unit) >= 0.20) then
+							local isBackstab = toTarget.Unit:Dot(uRoot.CFrame.LookVector) > 0.35
+							unit:SetAttribute("SuppressedHitAt", now)
+							applyBulletHit(player, root, unit, uRoot.Position, bladeDmg, weaponId, isBackstab)
+							hitAny = true
+						end
+					end
+				end
+			end
+		end
+		if not hitAny then
+			for _, otherP in ipairs(Players:GetPlayers()) do
+				if otherP ~= player and otherP.Character then
+					local oRoot = otherP.Character:FindFirstChild("HumanoidRootPart")
+					if oRoot and oRoot:IsA("BasePart") and (oRoot.Position - root.Position).Magnitude <= bladeRange then
+						applyBulletHit(player, root, otherP.Character, oRoot.Position, bladeDmg, weaponId, false)
+					end
+				end
+			end
+		end
+		return
+	end
+
 	-- If reloading: allow interrupting shell-by-shell shotgun reload when >= 1 shell is chambered
 	if st.Reloading then
 		if spec.ReloadStyle == "ShellByShell" and st.Mag >= 1 then
@@ -888,11 +1169,6 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 		return
 	end
 
-	local now = os.clock()
-	local cd = spec.Cooldown or 0.35
-	if lastFireAt[player] and (now - lastFireAt[player]) < (cd * 0.78) then
-		return
-	end
 	lastFireAt[player] = now
 
 	-- Deduct 1 round authoritatively and sync immediately
@@ -903,7 +1179,7 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 	local muzzlePart = char:FindFirstChild("MuzzleTip", true)
 	local origin = if muzzlePart and muzzlePart:IsA("BasePart") then muzzlePart.Position else (root.Position + Vector3.new(0, 1.5, 0))
 	local hasHeavyBarrel = PlayerDataService.HasWeaponMod(player, weaponId, "HeavyBarrel")
-	local hasSuppressor = PlayerDataService.HasWeaponMod(player, weaponId, "Suppressor")
+	local hasSuppressor = (spec.AlwaysSuppressed == true) or PlayerDataService.HasWeaponMod(player, weaponId, "Suppressor")
 	local range = math.floor((spec.Range or 95) * (if hasHeavyBarrel then 1.18 else 1.0))
 	local pellets = spec.Pellets or 1
 	local dmg = math.ceil((spec.Damage or 25) * (if hasHeavyBarrel then 1.22 else 1.0))
@@ -941,10 +1217,11 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 		if result and result.Instance then
 			local hitModel = result.Instance:FindFirstAncestorOfClass("Model")
 			if hitModel then
+				local isHeadshot = (result.Instance.Name == "Head" or string.find(result.Instance.Name, "Hat") ~= nil or string.find(result.Instance.Name, "Fedora") ~= nil or string.find(result.Instance.Name, "Helmet") ~= nil)
 				if hasSuppressor then
 					hitModel:SetAttribute("SuppressedHitAt", os.clock())
 				end
-				didHit = applyBulletHit(player, root, hitModel, hitPos, dmg, weaponId)
+				didHit = applyBulletHit(player, root, hitModel, hitPos, dmg, weaponId, isHeadshot)
 			end
 		end
 
@@ -952,7 +1229,7 @@ local function handleWeaponFire(player: Player, weaponId: any, aimPoint: any, sh
 			then Color3.fromRGB(255, 108, 56)
 			elseif weaponId == "GoldenEmperorPistol" then Color3.fromRGB(255, 224, 96)
 			elseif weaponId == "CrimsonDragonAR" then Color3.fromRGB(255, 86, 104)
-			elseif weaponId == "ShadowSniper" then Color3.fromRGB(196, 138, 255)
+			elseif weaponId == "ShadowSniper" or weaponId == "PhantomAssassinRifle" then Color3.fromRGB(196, 138, 255)
 			else Color3.fromRGB(255, 224, 92)
 		BlackMarketService.SpawnBulletTracer(origin, hitPos, tracerCol)
 	end
@@ -1134,8 +1411,11 @@ function BlackMarketService.BuyAmmo(player: Player, ammoTypeRaw: string, packInd
 		return false, string.format("%s reserve is already full (%d / %d)!", ammoSpec.ShortName, cur, ammoSpec.MaxReserve)
 	end
 
-	if not PlayerDataService.SpendCoins(player, pack.Price) then
-		return false, string.format("Need %d Gold for +%d %s!", pack.Price, pack.Quantity, ammoSpec.ShortName)
+	local finalPrice = if PlayerDataService.HasBusiness(player, "BackAlleyArms")
+		then math.max(10, math.floor(pack.Price * 0.80))
+		else pack.Price
+	if not PlayerDataService.SpendCoins(player, finalPrice) then
+		return false, string.format("Need %d Gold for +%d %s!", finalPrice, pack.Quantity, ammoSpec.ShortName)
 	end
 
 	local newVal = PlayerDataService.AddAmmo(player, ammoSpec.Id, pack.Quantity, ammoSpec.MaxReserve)
@@ -1272,6 +1552,71 @@ function BlackMarketService.BuyWeaponMod(player: Player, weaponId: string, modId
 	return true, string.format("Installed %s on %s!", modSpec.DisplayName, spec.DisplayName)
 end
 
+function BlackMarketService.BuySmokeGrenades(player: Player): (boolean, string)
+	local prof = PlayerDataService.GetProfile(player)
+	if (prof.SmokeGrenades or 0) >= 12 then
+		return false, "Smoke Grenades full (12/12)! Press [T] to deploy a tactical smoke screen."
+	end
+	if not PlayerDataService.SpendCoins(player, 180) then
+		return false, "Need 180 Gold to buy 3x Tactical Smoke Grenades!"
+	end
+	local newCount = PlayerDataService.AddSmokeGrenades(player, 3)
+	return true, string.format("Bought 3x Tactical Smoke Grenades (%d/12). Press [T] to deploy smoke cover!", newCount)
+end
+
+function BlackMarketService.ThrowSmokeGrenade(player: Player): (boolean, string)
+	local char = player.Character
+	local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
+	if not char or not root or not root:IsA("BasePart") then
+		return false, "Character unavailable!"
+	end
+	if not PlayerDataService.ConsumeSmokeGrenade(player) then
+		return false, "Out of Smoke Grenades! Buy 3x (180G) in Black Market (M) -> Armor/Med."
+	end
+
+	local dropPos = root.Position + root.CFrame.LookVector * 10 + Vector3.new(0, -1.5, 0)
+	local canister = Instance.new("Part")
+	canister.Name = "TacticalSmokeCanister"
+	canister.Shape = Enum.PartType.Cylinder
+	canister.Size = Vector3.new(0.85, 0.36, 0.36)
+	canister.CFrame = CFrame.new(dropPos) * CFrame.Angles(0, 0, math.rad(90))
+	canister.Color = Color3.fromRGB(36, 40, 46)
+	canister.Material = Enum.Material.Metal
+	canister.Anchored = true
+	canister.CanCollide = false
+	canister.Parent = Workspace
+
+	local pe = Instance.new("ParticleEmitter")
+	pe.Color = ColorSequence.new(Color3.fromRGB(72, 76, 84), Color3.fromRGB(118, 122, 130))
+	pe.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.25),
+		NumberSequenceKeypoint.new(0.5, 0.08),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	pe.Size = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 4.5),
+		NumberSequenceKeypoint.new(0.5, 11.5),
+		NumberSequenceKeypoint.new(1, 15.0),
+	})
+	pe.Lifetime = NumberRange.new(2.4, 3.6)
+	pe.Rate = 48
+	pe.Speed = NumberRange.new(2, 6)
+	pe.SpreadAngle = Vector2.new(180, 180)
+	pe.Parent = canister
+
+	player:SetAttribute("InSmokeUntil", os.clock() + 10)
+	emitCombatSFX("ShotgunBlast", dropPos, nil)
+	task.delay(10, function()
+		if pe.Parent then pe.Rate = 0 end
+		task.delay(3.5, function()
+			if canister.Parent then canister:Destroy() end
+		end)
+	end)
+
+	local rem = PlayerDataService.GetProfile(player).SmokeGrenades or 0
+	return true, string.format("Tactical Smoke Screen deployed (10s stealth cover, %d left)!", rem)
+end
+
 function BlackMarketService.GetCatalogPayload(player: Player): { [string]: any }
 	local profile = PlayerDataService.GetProfile(player)
 	local armor = math.clamp(math.floor(profile.Armor or 0), 0, 100)
@@ -1291,6 +1636,8 @@ function BlackMarketService.GetCatalogPayload(player: Player): { [string]: any }
 		WeaponMods = profile.WeaponMods or {},
 		HasKevlarVest = armor > 0,
 		Armor = armor,
+		SmokeGrenades = profile.SmokeGrenades or 0,
+		HasAmmoDiscount = PlayerDataService.HasBusiness(player, "BackAlleyArms"),
 	}
 end
 
@@ -1320,6 +1667,7 @@ function BlackMarketService.Start(): ()
 	ammoSyncEv = ensureRemote("AmmoSync")
 	sfxEv = ensureRemote("CombatSFX")
 	openUiEv = ensureRemote("OpenBlackMarketUI")
+	combatFeedbackEv = ensureRemote("CombatFeedback")
 
 	if fireEv then
 		table.insert(conns, fireEv.OnServerEvent:Connect(handleWeaponFire))

@@ -25,8 +25,8 @@ local ModelPreviewHelper = require("./ModelPreviewHelper")
 
 export type MenuTab = "Kitchen" | "Warehouses" | "Upgrades" | "BlackMarket" | "Shop"
 export type ActionCallback = (action: string, arg: any?) -> ()
-type BlackMarketSubTab = "Weapons" | "Ammo" | "Bodyguards" | "Premium"
-type WeaponFilter = "All" | "Pistol" | "Shotgun" | "SMG" | "AssaultRifle" | "Sniper" | "Gear"
+type BlackMarketSubTab = "Weapons" | "Ammo" | "Bodyguards" | "Mercenaries" | "Premium"
+type WeaponFilter = "All" | "Melee" | "Pistol" | "Shotgun" | "SMG" | "AssaultRifle" | "Sniper" | "Gear"
 type GuardViewMode = "Classes" | "Gear"
 type GuardGearFilter = "All" | "Armor" | "Helmet" | "Outfit" | "Weapon" | "Attachment" | "Tactical"
 
@@ -53,6 +53,8 @@ local C_DISABLED = Color3.fromRGB(38, 41, 49)
 local DEFENSE_COSTS: { [number]: number } = { [2] = 500, [3] = 1200 }
 
 local BLACK_MARKET_ROBUX_IDS = {
+	"SamuraiMafiaContract",
+	"NinjaMafiaContract",
 	"GoldenEmperorPistolPass",
 	"CrimsonDragonARPass",
 	"BossBodyguardPass",
@@ -265,6 +267,46 @@ local function renderKitchen(state: { [string]: any }): ()
 	)
 	starLbl.Parent = starBar
 
+	-- Live City Craving (2.0x Gold Dish) & Menu Pricing Strategy Bar
+	local craving = state.CityCraving
+	local cravingId = if typeof(craving) == "table" then tostring(craving.RecipeId or "") else ""
+	local cravingName = if typeof(craving) == "table" then tostring(craving.DisplayName or "Sizzling Steak") else "Sizzling Steak"
+	local cravingRem = if typeof(craving) == "table" and typeof(craving.TimeRemaining) == "number" then craving.TimeRemaining else 120
+	local curPricing = tostring(state.MenuPricing or "Standard")
+
+	local econBar = makeCard(scrollFrame, 52, C_STEEL)
+	local cravLbl = Instance.new("TextLabel")
+	cravLbl.Position = UDim2.new(0, 14, 0, 6)
+	cravLbl.Size = UDim2.new(1, -286, 1, -12)
+	cravLbl.BackgroundTransparency = 1
+	cravLbl.Font = Enum.Font.GothamBlack
+	cravLbl.TextWrapped = true
+	cravLbl.TextXAlignment = Enum.TextXAlignment.Left
+	cravLbl.TextSize = 11
+	cravLbl.TextColor3 = C_TEXT_PRIMARY
+	cravLbl.Text = string.format("CITY CRAVING (2.0X GOLD): %s (%ds)\nMENU PRICING: %s", string.upper(cravingName), cravingRem, string.upper(curPricing))
+	cravLbl.Parent = econBar
+
+	local pOpts = {
+		{ Id = "Budget", Label = "BUDGET +25% REP" },
+		{ Id = "Standard", Label = "STANDARD" },
+		{ Id = "Luxury", Label = "LUXURY +35% G" },
+	}
+	for i, po in ipairs(pOpts) do
+		local isSel = (curPricing == po.Id)
+		local pb = makeBtn(
+			econBar,
+			po.Label,
+			if isSel then C_OWNED else C_BG_SUBTLE,
+			UDim2.new(1, -276 + (i - 1) * 90, 0.5, -14),
+			UDim2.fromOffset(86, 28),
+			function()
+				if dispatchAction then dispatchAction("SetMenuPricing", po.Id) end
+			end
+		)
+		pb.TextSize = 8
+	end
+
 	local banner = makeCard(scrollFrame, 58, C_BRASS)
 	local statusLbl = Instance.new("TextLabel")
 	statusLbl.Position = UDim2.new(0, 16, 0, 8)
@@ -321,7 +363,7 @@ local function renderKitchen(state: { [string]: any }): ()
 	if typeof(waiting) == "table" and waiting.CustomerName then
 		local isCookingOrder = waiting.IsBeingCooked == true
 		local orderCard = makeCard(scrollFrame, 72, if isCookingOrder then C_BRASS else C_OWNED)
-		makeMonogramBox(orderCard, "ORD", if isCookingOrder then C_BRASS else C_OWNED, 10)
+		ModelPreviewHelper.CreatePreview(orderCard, "Dish", "ActiveOrder", UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 9), Color3.fromRGB(22, 24, 31), if isCookingOrder then C_BRASS else C_OWNED)
 
 		local custTitle = Instance.new("TextLabel")
 		custTitle.Position = UDim2.new(0, 78, 0, 10)
@@ -365,10 +407,13 @@ local function renderKitchen(state: { [string]: any }): ()
 		)
 	end
 
+	local playerRep = (state.Profile and state.Profile.Reputation) or 0
 	for idx, recipeId in ipairs(RecipeConfig.Order) do
 		local recipe = RecipeConfig.Recipes[recipeId]
 		if recipe then
-			local canAfford = restLevel >= recipe.RequiredRestaurantLevel
+			local repLocked = (recipe.RequiredRep ~= nil and playerRep < recipe.RequiredRep)
+			local isCravingDish = (recipeId == cravingId)
+			local canAfford = (restLevel >= recipe.RequiredRestaurantLevel) and (not repLocked)
 			local parts: { string } = {}
 			for ing, need in pairs(recipe.Ingredients) do
 				local have = stock[ing] or 0
@@ -376,8 +421,8 @@ local function renderKitchen(state: { [string]: any }): ()
 				table.insert(parts, string.format("%s %d/%d", ing, have, need))
 			end
 
-			local card = makeCard(scrollFrame, 76, if canAfford then C_BRASS else C_BORDER_STRONG)
-			makeMonogramBox(card, string.format("R%02d", idx), if canAfford then C_BRASS else C_BORDER, 12)
+			local card = makeCard(scrollFrame, 76, if isCravingDish then C_OXBLOOD elseif canAfford then C_BRASS else C_BORDER_STRONG)
+			ModelPreviewHelper.CreatePreview(card, "Dish", recipeId, UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 11), Color3.fromRGB(22, 24, 31), if isCravingDish then C_OXBLOOD elseif canAfford then C_BRASS else C_BORDER)
 
 			local nameLbl = Instance.new("TextLabel")
 			nameLbl.Position = UDim2.new(0, 78, 0, 10)
@@ -386,10 +431,11 @@ local function renderKitchen(state: { [string]: any }): ()
 			nameLbl.Font = Enum.Font.GothamBlack
 			nameLbl.TextXAlignment = Enum.TextXAlignment.Left
 			nameLbl.TextSize = 13
-			nameLbl.TextColor3 = C_TEXT_PRIMARY
+			nameLbl.TextColor3 = if isCravingDish then Color3.fromRGB(246, 212, 124) else C_TEXT_PRIMARY
 			nameLbl.Text = string.format(
-				"%s  |  %.0fs COOK  |  +%dG  |  +%d REP",
+				"%s%s  |  %.0fs  |  +%dG  |  +%d REP",
 				string.upper(recipe.DisplayName),
+				if isCravingDish then " [2X CRAVING]" elseif recipe.IsSecretSyndicate then " [SECRET]" else "",
 				recipe.CookTime,
 				recipe.CoinsReward,
 				recipe.ReputationReward
@@ -409,8 +455,9 @@ local function renderKitchen(state: { [string]: any }): ()
 			reqLbl.Parent = card
 
 			local allStovesBusy = kitchen.IsCooking and (not kitchen.HasDualStove or kitchen.IsCooking2)
-			local btnText = if restLevel < recipe.RequiredRestaurantLevel
-				then string.format("LOCKED HQ LV.%d", recipe.RequiredRestaurantLevel)
+			local btnText = if repLocked
+				then string.format("REQ %d REP", recipe.RequiredRep or 150)
+				elseif restLevel < recipe.RequiredRestaurantLevel then string.format("LOCKED HQ LV.%d", recipe.RequiredRestaurantLevel)
 				elseif allStovesBusy then "BUSY"
 				else "COOK"
 
@@ -499,7 +546,7 @@ local function renderWarehouses(state: { [string]: any }): ()
 		end
 
 		local card = makeCard(scrollFrame, 86, if isLocked then C_BORDER_STRONG else C_STEEL)
-		makeMonogramBox(card, string.upper(string.sub(category, 1, 3)), if isLocked then C_BORDER else C_STEEL, 17)
+		ModelPreviewHelper.CreatePreview(card, "Warehouse", category, UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 15), Color3.fromRGB(22, 24, 31), if isLocked then C_BORDER else C_STEEL)
 
 		local header = Instance.new("TextLabel")
 		header.Position = UDim2.new(0, 78, 0, 9)
@@ -574,7 +621,7 @@ local function renderUpgrades(state: { [string]: any }): ()
 
 	local function addUpgradeRow(code: string, titleTxt: string, descTxt: string, btnTxt: string, btnBg: Color3, onClick: () -> ()): Frame
 		local card = makeCard(scrollFrame :: ScrollingFrame, 84, C_BORDER_STRONG)
-		makeMonogramBox(card, code, C_BORDER_STRONG, 16)
+		ModelPreviewHelper.CreatePreview(card, "Empire", code, UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 15), Color3.fromRGB(22, 24, 31), C_BORDER_STRONG)
 		local lbl = Instance.new("TextLabel")
 		lbl.Position = UDim2.new(0, 78, 0, 10)
 		lbl.Size = UDim2.new(1, -242, 0, 20)
@@ -692,7 +739,7 @@ local function renderUpgrades(state: { [string]: any }): ()
 	else
 		local cardAccent = if underShakedown then C_OXBLOOD elseif branchStaffed then C_OWNED else C_BRASS
 		local card = makeCard(scrollFrame :: ScrollingFrame, 88, cardAccent)
-		makeMonogramBox(card, "PRK", cardAccent, 18)
+		ModelPreviewHelper.CreatePreview(card, "Empire", "PRK", UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 17), Color3.fromRGB(22, 24, 31), cardAccent)
 		local lbl = Instance.new("TextLabel")
 		lbl.Position = UDim2.new(0, 78, 0, 10)
 		lbl.Size = UDim2.new(1, -334, 0, 20)
@@ -804,6 +851,156 @@ local function renderUpgrades(state: { [string]: any }): ()
 		end
 	)
 
+	-- Armored Syndicate Van ([K]), Midnight Getaway Coupe ([L]), Garage Armor & Paint!
+	local ownsVan = state.OwnsArmoredVan == true
+	local vanCost = state.ArmoredVanCost or 1800
+	addUpgradeRow(
+		"VAN",
+		"ARMORED SYNDICATE VAN  |  KEY [K]  |  +25% VAULT BONUS",
+		"46-speed heavy ballistic cargo van (68 Overdrive) with sliding doors, bullbar & rear Bodyguard seats.",
+		if ownsVan then "DRIVE VAN [K]" else string.format("BUY  %dG", vanCost),
+		if ownsVan then C_OWNED else C_OXBLOOD,
+		function()
+			if dispatchAction then
+				dispatchAction(if ownsVan then "ToggleArmoredVan" else "BuyArmoredVan", nil)
+			end
+		end
+	)
+
+	local ownsCoupe = state.OwnsGetawayCoupe == true
+	local coupeCost = state.GetawayCoupeCost or 2600
+	addUpgradeRow(
+		"CPE",
+		"MIDNIGHT GETAWAY COUPE  |  KEY [L]  |  84 TOP SPEED",
+		"Low-slung dark-noir muscle coupe (62 Base / 84 Twin-Turbo Overdrive). Fastest street getaway car in the city!",
+		if ownsCoupe then "DRIVE COUPE [L]" else string.format("BUY  %dG", coupeCost),
+		if ownsCoupe then C_OWNED else C_OXBLOOD,
+		function()
+			if dispatchAction then
+				dispatchAction(if ownsCoupe then "ToggleGetawayCoupe" else "BuyGetawayCoupe", nil)
+			end
+		end
+	)
+
+	local hasVehArmor = state.HasVehicleArmor == true
+	local curPaint = tostring(state.VehiclePaint or "Obsidian")
+	local garCard = makeCard(scrollFrame :: ScrollingFrame, 88, C_STEEL)
+	ModelPreviewHelper.CreatePreview(garCard, "Empire", "GAR", UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 17), Color3.fromRGB(22, 24, 31), C_STEEL)
+	local gTitle = Instance.new("TextLabel")
+	gTitle.Position = UDim2.new(0, 78, 0, 8)
+	gTitle.Size = UDim2.new(1, -242, 0, 18)
+	gTitle.BackgroundTransparency = 1
+	gTitle.Font = Enum.Font.GothamBlack
+	gTitle.TextXAlignment = Enum.TextXAlignment.Left
+	gTitle.TextSize = 12
+	gTitle.TextColor3 = C_TEXT_PRIMARY
+	gTitle.Text = string.format("SYNDICATE GARAGE  |  PAINT: %s  |  ARMOR: %s", string.upper(curPaint), if hasVehArmor then "INSTALLED" else "NONE")
+	gTitle.Parent = garCard
+
+	local pRow = Instance.new("Frame")
+	pRow.Position = UDim2.new(0, 78, 0, 34)
+	pRow.Size = UDim2.new(1, -242, 0, 34)
+	pRow.BackgroundTransparency = 1
+	pRow.Parent = garCard
+	local pLay = Instance.new("UIListLayout")
+	pLay.FillDirection = Enum.FillDirection.Horizontal
+	pLay.Padding = UDim.new(0, 5)
+	pLay.Parent = pRow
+
+	local paintList = {
+		{ Id = "Obsidian", Label = "BLACK" },
+		{ Id = "Oxblood", Label = "OXBLOOD" },
+		{ Id = "Gunmetal", Label = "STEEL" },
+		{ Id = "MidnightNavy", Label = "NAVY" },
+		{ Id = "BrushedBrass", Label = "BRASS" },
+	}
+	for _, pt in ipairs(paintList) do
+		local isP = (curPaint == pt.Id)
+		local pb = makeBtn(pRow, pt.Label, if isP then C_OWNED else C_BG_SUBTLE, UDim2.new(), UDim2.new(0.20, -4, 0, 30), function()
+			if dispatchAction then dispatchAction("SetVehiclePaint", pt.Id) end
+		end)
+		pb.TextSize = 9
+	end
+
+	makeBtn(garCard, if hasVehArmor then "ARMOR ON" else "ARMOR 700G", if hasVehArmor then C_OWNED else C_OXBLOOD, UDim2.new(1, -156, 0.5, -17), UDim2.fromOffset(144, 34), function()
+		if not hasVehArmor and dispatchAction then dispatchAction("BuyVehicleArmor", nil) end
+	end)
+
+	-- 7-Day Daily Syndicate Vault & Godfather Prestige Rebirth
+	local pv = state.PrestigeVault
+	if typeof(pv) == "table" then
+		local canClaim = pv.CanClaimToday == true
+		addUpgradeRow(
+			"DAY",
+			string.format("7-DAY SYNDICATE VAULT  |  STREAK: %d / 7", tonumber(pv.Streak) or 0),
+			tostring(pv.NextRewardLabel or "Daily login rewards escalating up to a FREE 5-Minute Samurai Mafia Contract on Day 7!"),
+			if canClaim then "CLAIM VAULT" else "CLAIMED TODAY",
+			if canClaim then C_OWNED else C_DISABLED,
+			function()
+				if canClaim and dispatchAction then dispatchAction("ClaimDailyVault", nil) end
+			end
+		)
+
+		local pLv = tonumber(pv.PrestigeLevel) or 0
+		local canP = pv.CanPrestige == true
+		addUpgradeRow(
+			"PRS",
+			string.format("GODFATHER PRESTIGE  |  CURRENT: P%d (+%d%% GOLD & REP)", pLv, pLv * 25),
+			"At HQ Lv.10 or 2,000 Rep, rebirth your HQ for a permanent +25% lifetime multiplier while keeping all weapons, vehicles & bodyguards!",
+			if canP then "PRESTIGE NOW" else "REQ LV.10 / 2K REP",
+			if canP then C_BRASS else C_DISABLED,
+			function()
+				if canP and dispatchAction then dispatchAction("TriggerGodfatherPrestige", nil) end
+			end
+		)
+	end
+
+	-- Syndicate Families (Co-op Crew Alliance)
+	local fam = state.SyndicateFamily
+	if typeof(fam) == "table" then
+		local inFam = fam.InFamily == true
+		local membersStr = if typeof(fam.Members) == "table" then table.concat(fam.Members, ", ") else ""
+		local famCard = makeCard(scrollFrame :: ScrollingFrame, 84, if inFam then C_OWNED else C_BRASS)
+		ModelPreviewHelper.CreatePreview(famCard, "Empire", "FAM", UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 15), Color3.fromRGB(22, 24, 31), if inFam then C_OWNED else C_BRASS)
+		local fTitle = Instance.new("TextLabel")
+		fTitle.Position = UDim2.new(0, 78, 0, 10)
+		fTitle.Size = UDim2.new(1, -334, 0, 20)
+		fTitle.BackgroundTransparency = 1
+		fTitle.Font = Enum.Font.GothamBlack
+		fTitle.TextXAlignment = Enum.TextXAlignment.Left
+		fTitle.TextSize = 13
+		fTitle.TextColor3 = C_TEXT_PRIMARY
+		fTitle.Text = if inFam then string.format("SYNDICATE FAMILY: %s", tostring(fam.FamilyName or "FAMILY")) else "SYNDICATE FAMILIES  |  CO-OP ALLIANCE"
+		fTitle.Parent = famCard
+
+		local fDesc = Instance.new("TextLabel")
+		fDesc.Position = UDim2.new(0, 78, 0, 32)
+		fDesc.Size = UDim2.new(1, -334, 0, 42)
+		fDesc.BackgroundTransparency = 1
+		fDesc.Font = Enum.Font.Gotham
+		fDesc.TextWrapped = true
+		fDesc.TextXAlignment = Enum.TextXAlignment.Left
+		fDesc.TextSize = 11
+		fDesc.TextColor3 = C_TEXT_MUTED
+		fDesc.Text = if inFam
+			then ("Members: " .. membersStr .. "  |  No Friendly Fire + +20% Co-op Raid Dividends!")
+			else "Found or join a Mafia Family with friends in the server for zero friendly fire & shared +20% raid dividends."
+		fDesc.Parent = famCard
+
+		if inFam then
+			makeBtn(famCard, "LEAVE FAMILY", C_OXBLOOD_DARK, UDim2.new(1, -156, 0.5, -17), UDim2.fromOffset(144, 34), function()
+				if dispatchAction then dispatchAction("LeaveFamily", nil) end
+			end)
+		else
+			makeBtn(famCard, "JOIN OPEN", C_STEEL, UDim2.new(1, -242, 0.5, -17), UDim2.fromOffset(82, 34), function()
+				if dispatchAction then dispatchAction("JoinFamily", nil) end
+			end)
+			makeBtn(famCard, "CREATE FAMILY", C_OWNED, UDim2.new(1, -152, 0.5, -17), UDim2.fromOffset(140, 34), function()
+				if dispatchAction then dispatchAction("CreateFamily", nil) end
+			end)
+		end
+	end
+
 	local keycards = tonumber(state.VaultKeycards) or 0
 	addUpgradeRow(
 		"VLT",
@@ -830,6 +1027,168 @@ local function renderUpgrades(state: { [string]: any }): ()
 			end
 		end
 	)
+
+	-- Dynamic Noir Weather & Midnight Blackout Bullion Truck
+	local weather = state.Weather
+	if typeof(weather) == "table" then
+		local blackoutLive = weather.BlackoutTruckActive == true
+		addUpgradeRow(
+			"WTH",
+			string.format("CITY WEATHER: %s", tostring(weather.Title or "CLEAR NOIR")),
+			tostring(weather.BonusDesc or "Dynamic Noir Rainstorm, Harbor Fog & Midnight Blackout events."),
+			if blackoutLive then "RAID TRUCK +480G" else "SHIFT WEATHER",
+			if blackoutLive then C_OXBLOOD else C_STEEL,
+			function()
+				if dispatchAction then
+					dispatchAction(if blackoutLive then "RaidBlackoutTruck" else "CycleWeather", nil)
+				end
+			end
+		)
+	end
+
+	-- 3-Stage Crimson Don's Penthouse Heist (Endgame Raid)
+	local heist = state.PenthouseHeist
+	local heistStage = if typeof(heist) == "table" and typeof(heist.ActiveStage) == "number" then heist.ActiveStage else 0
+	local heistCd = if typeof(heist) == "table" and typeof(heist.Cooldown) == "number" then heist.Cooldown else 0
+	addUpgradeRow(
+		"HST",
+		if heistStage > 0 then string.format("CRIMSON DON PENTHOUSE HEIST  |  STAGE %d / 3 LIVE", heistStage) else "THE CRIMSON DON'S PENTHOUSE HEIST  |  3-STAGE RAID",
+		"Breach the fortified Syndicate Penthouse Compound, crack the Gold Vault & defeat the Armored Crimson Don (+1,200G, +180 Rep & Trophy)!",
+		if heistStage > 0 then "WARP TO RAID" elseif heistCd > 0 then string.format("LOCKED %ds", heistCd) else "LAUNCH HEIST",
+		if heistStage > 0 or heistCd <= 0 then C_OXBLOOD else C_DISABLED,
+		function()
+			if (heistStage > 0 or heistCd <= 0) and dispatchAction then
+				EmpireMenuController.Close()
+				dispatchAction("StartPenthouseHeist", nil)
+			end
+		end
+	)
+
+	-- Syndicate Bounty Board & Hit Contracts
+	local bnt = state.Bounties
+	local hitLive = typeof(bnt) == "table" and bnt.HitActive == true
+	local hitCd = if typeof(bnt) == "table" and typeof(bnt.HitCooldown) == "number" then bnt.HitCooldown else 0
+	local bntCard = makeCard(scrollFrame :: ScrollingFrame, 84, C_OXBLOOD)
+	ModelPreviewHelper.CreatePreview(bntCard, "Empire", "BNT", UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 15), Color3.fromRGB(22, 24, 31), C_OXBLOOD)
+	local bLbl = Instance.new("TextLabel")
+	bLbl.Position = UDim2.new(0, 78, 0, 10)
+	bLbl.Size = UDim2.new(1, -334, 0, 20)
+	bLbl.BackgroundTransparency = 1
+	bLbl.Font = Enum.Font.GothamBlack
+	bLbl.TextXAlignment = Enum.TextXAlignment.Left
+	bLbl.TextSize = 13
+	bLbl.TextColor3 = C_TEXT_PRIMARY
+	bLbl.Text = if hitLive then string.format("ACTIVE HIT CONTRACT: %s", string.upper(tostring(bnt.HitTargetName or "TARGET"))) else "SYNDICATE BOUNTY BOARD & HIT CONTRACTS"
+	bLbl.Parent = bntCard
+	local bDesc = Instance.new("TextLabel")
+	bDesc.Position = UDim2.new(0, 78, 0, 32)
+	bDesc.Size = UDim2.new(1, -334, 0, 42)
+	bDesc.BackgroundTransparency = 1
+	bDesc.Font = Enum.Font.Gotham
+	bDesc.TextWrapped = true
+	bDesc.TextXAlignment = Enum.TextXAlignment.Left
+	bDesc.TextSize = 11
+	bDesc.TextColor3 = C_TEXT_MUTED
+	bDesc.Text = "Accept high-value Hit Contracts on armored Syndicate Lieutenants (+460G–620G) or post a 250G bounty on a rival player."
+	bDesc.Parent = bntCard
+	makeBtn(bntCard, "BOUNTY 250G", C_BG_SUBTLE, UDim2.new(1, -242, 0.5, -17), UDim2.fromOffset(82, 34), function()
+		if dispatchAction then dispatchAction("PlacePlayerBounty", { Amount = 250 }) end
+	end)
+	makeBtn(bntCard, if hitLive then "WARP TARGET" elseif hitCd > 0 then string.format("READY %ds", hitCd) else "ACCEPT HIT", if hitLive or hitCd <= 0 then C_OXBLOOD else C_DISABLED, UDim2.new(1, -152, 0.5, -17), UDim2.fromOffset(140, 34), function()
+		if (hitLive or hitCd <= 0) and dispatchAction then
+			EmpireMenuController.Close()
+			dispatchAction("AcceptHitContract", nil)
+		end
+	end)
+
+	-- 3 Apex Mafia-Controlled City Restaurants (Conquer -> Hire Chef -> Sell Food -> Defend Revenge!)
+	local mafiaRests = state.MafiaRestaurants
+	if typeof(mafiaRests) == "table" then
+		for _, mr in ipairs(mafiaRests) do
+			if typeof(mr) == "table" and typeof(mr.Id) == "string" then
+				local rid = mr.Id
+				local owned = mr.OwnedByMe == true
+				local chefHired = mr.ChefHired == true
+				local underRev = mr.UnderRevenge == true
+				local cardAcc = if underRev then C_OXBLOOD elseif owned then C_OWNED else C_BRASS
+				local mCard = makeCard(scrollFrame :: ScrollingFrame, 88, cardAcc)
+				local restIcon = if rid == "ObsidianNoodleHouse" then "RST_Noodle" elseif rid == "VelvetSteakhouse" then "RST_Steak" else "RST_Oyster"
+				ModelPreviewHelper.CreatePreview(mCard, "Empire", restIcon, UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 17), Color3.fromRGB(22, 24, 31), cardAcc)
+
+				local mTitle = Instance.new("TextLabel")
+				mTitle.Position = UDim2.new(0, 78, 0, 10)
+				mTitle.Size = UDim2.new(1, -334, 0, 20)
+				mTitle.BackgroundTransparency = 1
+				mTitle.Font = Enum.Font.GothamBlack
+				mTitle.TextXAlignment = Enum.TextXAlignment.Left
+				mTitle.TextSize = 13
+				mTitle.TextColor3 = C_TEXT_PRIMARY
+				mTitle.Text = if underRev
+					then string.format("%s  |  REVENGE RAID (%ds)!", string.upper(tostring(mr.DisplayName)), tonumber(mr.RevengeTimeLeft) or 0)
+					elseif owned and chefHired then string.format("%s  |  OWNED & SELLING (+%dG)", string.upper(tostring(mr.DisplayName)), tonumber(mr.CycleGold) or 100)
+					elseif owned then string.format("%s  |  CONQUERED (HIRE CHEF)", string.upper(tostring(mr.DisplayName)))
+					else string.format("%s  |  %s (%d ALIVE)", string.upper(tostring(mr.DisplayName)), string.upper(tostring(mr.FactionName)), tonumber(mr.DefendersAlive) or 3)
+				mTitle.Parent = mCard
+
+				local mDesc = Instance.new("TextLabel")
+				mDesc.Position = UDim2.new(0, 78, 0, 32)
+				mDesc.Size = UDim2.new(1, -334, 0, 44)
+				mDesc.BackgroundTransparency = 1
+				mDesc.Font = Enum.Font.Gotham
+				mDesc.TextWrapped = true
+				mDesc.TextXAlignment = Enum.TextXAlignment.Left
+				mDesc.TextSize = 11
+				mDesc.TextColor3 = C_TEXT_MUTED
+				mDesc.Text = if underRev
+					then "ALERT: Defeated Apex Mafia is raiding to take back this restaurant! Defend it or dispatch Samurai/Ninja Mafia!"
+					elseif owned then string.format("You control this City Restaurant! Hire a Chef (%dG) to cook & sell for +%dG & +%d Rep every 18s.", tonumber(mr.ChefHireCost) or 450, tonumber(mr.CycleGold) or 100, tonumber(mr.CycleRep) or 20)
+					else string.format("Guarded by strong %s! Wipe them out yourself or hire Samurai/Ninja Mafia in Black Market -> Mercenaries to conquer it.", tostring(mr.FactionName))
+				mDesc.Parent = mCard
+
+				makeBtn(mCard, "VISIT", C_BG_SUBTLE, UDim2.new(1, -242, 0.5, -17), UDim2.fromOffset(78, 34), function()
+					EmpireMenuController.Close()
+					if dispatchAction then dispatchAction("TeleportMafiaRestaurant", rid) end
+				end)
+				if owned and not chefHired then
+					makeBtn(mCard, string.format("CHEF %dG", tonumber(mr.ChefHireCost) or 450), C_OWNED, UDim2.new(1, -156, 0.5, -17), UDim2.fromOffset(144, 34), function()
+						if dispatchAction then dispatchAction("HireMafiaRestaurantChef", rid) end
+					end)
+				elseif owned and chefHired then
+					makeBtn(mCard, if underRev then "SEND MERCS" else "CHEF ACTIVE", if underRev then C_OXBLOOD else C_DISABLED, UDim2.new(1, -156, 0.5, -17), UDim2.fromOffset(144, 34), function()
+						if underRev and dispatchAction then dispatchAction("OrderMercenaryAssault", rid) end
+					end)
+				else
+					makeBtn(mCard, "SEND MERCS", C_OXBLOOD, UDim2.new(1, -156, 0.5, -17), UDim2.fromOffset(144, 34), function()
+						if dispatchAction then dispatchAction("OrderMercenaryAssault", rid) end
+					end)
+				end
+			end
+		end
+	end
+
+	-- 3 Ownable Mafia Front Businesses (Passive Wall Safes + Permanent Perks)
+	local frontBiz = state.FrontBusinesses
+	if typeof(frontBiz) == "table" then
+		for _, biz in ipairs(frontBiz) do
+			if typeof(biz) == "table" and typeof(biz.Id) == "string" then
+				local bid = biz.Id
+				local owned = biz.Owned == true
+				local safeG = tonumber(biz.SafeGold) or 0
+				addUpgradeRow(
+					"BIZ",
+					if owned then string.format("%s  |  SAFE: %d / %dG", string.upper(tostring(biz.DisplayName)), safeG, tonumber(biz.MaxSafeGold) or 700) else string.format("FRONT BUSINESS: %s", string.upper(tostring(biz.DisplayName))),
+					tostring(biz.PerkLabel or "Passive Wall Safe Gold & Empire Perk."),
+					if owned then (if safeG > 0 then string.format("COLLECT +%dG", safeG) else "FILLING...") else string.format("BUY  %dG", tonumber(biz.Cost) or 800),
+					if owned then (if safeG > 0 then C_OWNED else C_DISABLED) else C_OXBLOOD,
+					function()
+						if dispatchAction then
+							dispatchAction(if owned then "CollectBusinessSafe" else "BuyFrontBusiness", bid)
+						end
+					end
+				)
+			end
+		end
+	end
 
 	local raiderCount = state.RaiderCount or 0
 	local maxRaiders = state.MaxRaiders or 2
@@ -879,7 +1238,7 @@ local function renderUpgrades(state: { [string]: any }): ()
 		local nextRep = tonumber(syn.NextRankRep) or 0
 
 		local rankCard = makeCard(scrollFrame :: ScrollingFrame, 64, C_BRASS)
-		makeMonogramBox(rankCard, string.format("RK%d", rankTier), C_BRASS, 6)
+		ModelPreviewHelper.CreatePreview(rankCard, "Empire", "RK", UDim2.fromOffset(52, 52), UDim2.new(0, 14, 0, 6), Color3.fromRGB(22, 24, 31), C_BRASS)
 		local rHead = Instance.new("TextLabel")
 		rHead.Position = UDim2.new(0, 78, 0, 8)
 		rHead.Size = UDim2.new(1, -92, 0, 20)
@@ -1077,12 +1436,13 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 
 	local filters: { { Id: WeaponFilter, Label: string } } = {
 		{ Id = "All", Label = "ALL" },
+		{ Id = "Melee", Label = "BLADES" },
 		{ Id = "Pistol", Label = "PISTOLS" },
 		{ Id = "Shotgun", Label = "SHOTGUNS" },
 		{ Id = "SMG", Label = "SMG" },
 		{ Id = "AssaultRifle", Label = "RIFLES" },
 		{ Id = "Sniper", Label = "SNIPER" },
-		{ Id = "Gear", Label = "ARMOR / MED" },
+		{ Id = "Gear", Label = "ARMOR/SMOKE" },
 	}
 	for _, f in ipairs(filters) do
 		local active = (currentWeaponFilter == f.Id)
@@ -1209,7 +1569,7 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 				end)
 				buyBtn.TextSize = 11
 
-				if quickPack and ammoSpec then
+				if not w.IsMelee and quickPack and ammoSpec then
 					local ammoFull = curAmmo >= maxAmmo
 					local ammoBtnText = if ammoFull
 						then string.format("%s FULL", string.upper(ammoSpec.ShortName))
@@ -1222,43 +1582,72 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 					aBtn.TextSize = 10
 				end
 
-				-- Gunsmith Attachment Workbench Row (Suppressor, ExtendedMag, HeavyBarrel)
-				local modRow = Instance.new("Frame")
-				modRow.Position = UDim2.new(0, 108, 0, 108)
-				modRow.Size = UDim2.new(1, -120, 0, 28)
-				modRow.BackgroundTransparency = 1
-				modRow.Parent = card
-				local modLayout = Instance.new("UIListLayout")
-				modLayout.FillDirection = Enum.FillDirection.Horizontal
-				modLayout.Padding = UDim.new(0, 6)
-				modLayout.Parent = modRow
+				-- Gunsmith Attachment Workbench Row (for Firearms) or Blade Crit Tag (for Knife/Katana)
+				if not w.IsMelee then
+					local modRow = Instance.new("Frame")
+					modRow.Position = UDim2.new(0, 108, 0, 108)
+					modRow.Size = UDim2.new(1, -120, 0, 28)
+					modRow.BackgroundTransparency = 1
+					modRow.Parent = card
+					local modLayout = Instance.new("UIListLayout")
+					modLayout.FillDirection = Enum.FillDirection.Horizontal
+					modLayout.Padding = UDim.new(0, 6)
+					modLayout.Parent = modRow
 
-				local myMods = if typeof(weaponMods[wid]) == "table" then weaponMods[wid] else {}
-				for _, modId in ipairs(WeaponConfig.GUNSMITH_MOD_ORDER) do
-					local mSpec = WeaponConfig.GUNSMITH_MODS[modId]
-					if mSpec then
-						local hasMod = myMods[modId] == true
-						local mTxt = if hasMod
-							then string.format("%s [ON]", mSpec.ShortLabel)
-							else string.format("+%s (%dG)", mSpec.ShortLabel, mSpec.Price)
-						local mCol = if hasMod
-							then C_OWNED
-							elseif isOwned and playerCoins >= mSpec.Price then C_BG_SUBTLE
-							else C_DISABLED
-						local mb = makeBtn(modRow, mTxt, mCol, UDim2.new(), UDim2.new(1 / 3, -4, 0, 26), function()
-							if not hasMod and dispatchAction then
-								dispatchAction("BuyWeaponMod", { WeaponId = wid, ModId = modId })
-							end
-						end)
-						mb.TextSize = 9
+					local myMods = if typeof(weaponMods[wid]) == "table" then weaponMods[wid] else {}
+					for _, modId in ipairs(WeaponConfig.GUNSMITH_MOD_ORDER) do
+						local mSpec = WeaponConfig.GUNSMITH_MODS[modId]
+						if mSpec then
+							local hasMod = myMods[modId] == true
+							local mTxt = if hasMod
+								then string.format("%s [ON]", mSpec.ShortLabel)
+								else string.format("+%s (%dG)", mSpec.ShortLabel, mSpec.Price)
+							local mCol = if hasMod
+								then C_OWNED
+								elseif isOwned and playerCoins >= mSpec.Price then C_BG_SUBTLE
+								else C_DISABLED
+							local mb = makeBtn(modRow, mTxt, mCol, UDim2.new(), UDim2.new(1 / 3, -4, 0, 26), function()
+								if not hasMod and dispatchAction then
+									dispatchAction("BuyWeaponMod", { WeaponId = wid, ModId = modId })
+								end
+							end)
+							mb.TextSize = 9
+						end
 					end
 				end
 			end
 		end
 	end
 
-	-- Tactical Player Armor & Field Medkit with 3D Thumbnails
+	-- Tactical Player Armor, Field Medkit & Smoke Grenades
 	if currentWeaponFilter == "All" or currentWeaponFilter == "Gear" then
+		local smokeCount = tonumber(bm.SmokeGrenades) or 0
+		local smokeCard = makeCard(scrollFrame, 84, C_STEEL)
+		ModelPreviewHelper.CreatePreview(smokeCard, "Equipment", "SmokeGrenade", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31), C_STEEL)
+		local sName = Instance.new("TextLabel")
+		sName.Position = UDim2.new(0, 78, 0, 10)
+		sName.Size = UDim2.new(1, -246, 0, 20)
+		sName.BackgroundTransparency = 1
+		sName.Font = Enum.Font.GothamBlack
+		sName.TextXAlignment = Enum.TextXAlignment.Left
+		sName.TextSize = 13
+		sName.TextColor3 = C_TEXT_PRIMARY
+		sName.Text = string.format("TACTICAL SMOKE GRENADES  (%d / 12)  |  KEY [T]", smokeCount)
+		sName.Parent = smokeCard
+		local sDesc = Instance.new("TextLabel")
+		sDesc.Position = UDim2.new(0, 78, 0, 34)
+		sDesc.Size = UDim2.new(1, -246, 0, 40)
+		sDesc.BackgroundTransparency = 1
+		sDesc.Font = Enum.Font.Gotham
+		sDesc.TextWrapped = true
+		sDesc.TextXAlignment = Enum.TextXAlignment.Left
+		sDesc.TextSize = 11
+		sDesc.TextColor3 = C_TEXT_MUTED
+		sDesc.Text = "Deploys a dense 10-second tactical smoke screen that breaks Rival & Apex Mafia line-of-sight during escapes or flanks."
+		sDesc.Parent = smokeCard
+		makeBtn(smokeCard, if smokeCount >= 12 then "FULL (12)" else "BUY 3X  180G", if smokeCount >= 12 then C_DISABLED else C_OXBLOOD, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
+			if smokeCount < 12 and dispatchAction then dispatchAction("BuySmokeGrenades", nil) end
+		end)
 		local gearItems = {
 			{ Id = "KevlarVest", Name = "Kevlar Plate Armor", Price = 420, Kind = "Armor", Desc = "+100 breakable ballistic protection. Absorbs gunfire and melee hits until depleted." },
 			{ Id = "Medkit", Name = "Field Trauma Kit", Price = 150, Kind = "Consumable", Desc = "Immediate 100% Base Health recovery and 6-second sprint adrenaline." },
@@ -1807,6 +2196,145 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 	end
 end
 
+local function renderBlackMarketMercenaries(state: { [string]: any }): ()
+	if not scrollFrame then return end
+	local merc = state.MercenaryMafia or {}
+	local active = merc.Active == true
+	local mercType = tostring(merc.MercType or "")
+	local remSec = tonumber(merc.TimeRemaining) or 0
+	local targetRest = merc.TargetRestaurantId
+	local goldCost = tonumber(merc.GoldCost) or 20000
+	local coins = tonumber(state.Profile and state.Profile.Coins) or 0
+
+	local statusCard = makeCard(scrollFrame, 56, if active then C_OWNED else C_OXBLOOD)
+	local sLbl = Instance.new("TextLabel")
+	sLbl.Position = UDim2.new(0, 14, 0, 6)
+	sLbl.Size = UDim2.new(1, -28, 1, -12)
+	sLbl.BackgroundTransparency = 1
+	sLbl.Font = Enum.Font.GothamBlack
+	sLbl.TextWrapped = true
+	sLbl.TextXAlignment = Enum.TextXAlignment.Left
+	sLbl.TextSize = 12
+	sLbl.TextColor3 = if active then Color3.fromRGB(178, 232, 184) else C_BRASS
+	if active then
+		local mins = math.floor(remSec / 60)
+		local secs = remSec % 60
+		sLbl.Text = string.format(
+			"ACTIVE 5-MIN CONTRACT: %s MAFIA (%02d:%02d LEFT)  |  MODE: %s",
+			string.upper(mercType),
+			mins,
+			secs,
+			string.upper(tostring(merc.Mode or "ATTACK"))
+		)
+	else
+		sLbl.Text = "HIRE STRONGER 5-MINUTE MERCENARY MAFIA (20,000 GOLD OR 199 R$)\nStronger than Rival Samurai/Ninja Mafia! Clash with Blade Spark VFX & storm Mafia Restaurants!"
+	end
+	sLbl.Parent = statusCard
+
+	local mercSpecs = {
+		{
+			Type = "Samurai",
+			Code = "SMR",
+			Name = "KUROGANE SAMURAI MAFIA (3 ENFORCERS  |  5 MIN)",
+			Desc = "3 elite Yakuza Samurai Enforcers (1,550 HP, 134 DMG katanas — stronger than Rival Samurai). Dominates Central Park Samurai clashes & restaurant raids!",
+			RobuxId = "SamuraiMafiaContract",
+		},
+		{
+			Type = "Ninja",
+			Code = "NJA",
+			Name = "KAGE NINJA ASSASSIN MAFIA (3 ASSASSINS  |  5 MIN)",
+			Desc = "3 lethal Shinobi Assassins (1,350 HP, 29 Speed, 1.6x shadow-step crits — stronger than Rival Ninja/Samurai) with steel-spark clash VFX!",
+			RobuxId = "NinjaMafiaContract",
+		},
+	}
+
+	for _, ms in ipairs(mercSpecs) do
+		local c = makeCard(scrollFrame, 108, C_OXBLOOD)
+		ModelPreviewHelper.CreatePreview(c, "Empire", ms.Code, UDim2.fromOffset(66, 78), UDim2.new(0, 14, 0, 15), Color3.fromRGB(22, 24, 31), C_OXBLOOD)
+		local t = Instance.new("TextLabel")
+		t.Position = UDim2.new(0, 92, 0, 10)
+		t.Size = UDim2.new(1, -266, 0, 20)
+		t.BackgroundTransparency = 1
+		t.Font = Enum.Font.GothamBlack
+		t.TextXAlignment = Enum.TextXAlignment.Left
+		t.TextSize = 13
+		t.TextColor3 = C_TEXT_PRIMARY
+		t.Text = ms.Name
+		t.Parent = c
+
+		local d = Instance.new("TextLabel")
+		d.Position = UDim2.new(0, 92, 0, 34)
+		d.Size = UDim2.new(1, -266, 0, 62)
+		d.BackgroundTransparency = 1
+		d.Font = Enum.Font.Gotham
+		d.TextWrapped = true
+		d.TextXAlignment = Enum.TextXAlignment.Left
+		d.TextYAlignment = Enum.TextYAlignment.Top
+		d.TextSize = 11
+		d.TextColor3 = C_TEXT_MUTED
+		d.Text = ms.Desc
+		d.Parent = c
+
+		local gBtn = makeBtn(c, string.format("HIRE  %d G", goldCost), if coins >= goldCost then C_OXBLOOD else C_DISABLED, UDim2.new(1, -162, 0, 14), UDim2.fromOffset(150, 36), function()
+			if dispatchAction then dispatchAction("HireMercenaryMafia", ms.Type) end
+		end)
+		gBtn.TextSize = 11
+
+		local rBtn = makeBtn(c, "HIRE  R$ 199 (5M)", C_ROBUX, UDim2.new(1, -162, 0, 58), UDim2.fromOffset(150, 36), function()
+			showConfirmDialog(
+				"CONFIRM 5-MIN MAFIA CONTRACT",
+				string.format("Deploy %s for 5 minutes for R$ 199?\nStronger than Rival Samurai/Ninja Mafia — use ATTACK [Y] & CALL BACK [Z] anytime!", ms.Name),
+				"HIRE  R$ 199",
+				C_ROBUX,
+				function()
+					if dispatchAction then dispatchAction("BuyRobuxItem", ms.RobuxId) end
+				end
+			)
+		end)
+		rBtn.TextSize = 10
+		local rst = rBtn:FindFirstChildOfClass("UIStroke")
+		if rst then rst.Color = C_BRASS end
+	end
+
+	-- Command Panel: Direct your Samurai/Ninja Mafia to storm a Mafia-Controlled Restaurant!
+	local cmdCard = makeCard(scrollFrame, 84, C_BRASS)
+	local cHead = Instance.new("TextLabel")
+	cHead.Position = UDim2.new(0, 14, 0, 6)
+	cHead.Size = UDim2.new(1, -24, 0, 18)
+	cHead.BackgroundTransparency = 1
+	cHead.Font = Enum.Font.GothamBlack
+	cHead.TextXAlignment = Enum.TextXAlignment.Left
+	cHead.TextSize = 11
+	cHead.TextColor3 = C_BRASS
+	cHead.Text = "COMMAND HIRED MAFIA SQUAD  —  SELECT TARGET RESTAURANT TO CONQUER"
+	cHead.Parent = cmdCard
+
+	local cRow = Instance.new("Frame")
+	cRow.Position = UDim2.new(0, 14, 0, 28)
+	cRow.Size = UDim2.new(1, -28, 0, 44)
+	cRow.BackgroundTransparency = 1
+	cRow.Parent = cmdCard
+	local cl = Instance.new("UIListLayout")
+	cl.FillDirection = Enum.FillDirection.Horizontal
+	cl.Padding = UDim.new(0, 6)
+	cl.Parent = cRow
+
+	local orders = {
+		{ Id = "ObsidianNoodleHouse", Label = "STORM NOODLE HOUSE" },
+		{ Id = "VelvetSteakhouse", Label = "STORM STEAKHOUSE" },
+		{ Id = "ImperialOysterBar", Label = "STORM OYSTER BAR" },
+		{ Id = "Follow", Label = "ESCORT ME" },
+	}
+	for _, ord in ipairs(orders) do
+		local isCur = active and ((ord.Id == "Follow" and targetRest == nil) or (targetRest == ord.Id))
+		local ob = makeBtn(cRow, ord.Label, if isCur then C_OWNED elseif active then C_OXBLOOD else C_DISABLED, UDim2.new(), UDim2.new(0.25, -5, 0, 40), function()
+			if dispatchAction then dispatchAction("OrderMercenaryAssault", ord.Id) end
+		end)
+		ob.TextSize = 9
+		ob.TextWrapped = true
+	end
+end
+
 local function renderBlackMarketPremium(state: { [string]: any }): ()
 	if not scrollFrame then return end
 	local ownedPasses = state.OwnedPasses or {}
@@ -1937,17 +2465,18 @@ local function renderBlackMarket(state: { [string]: any }): ()
 
 	local subTabs: { { Id: BlackMarketSubTab, Label: string, ActiveCol: Color3 } } = {
 		{ Id = "Weapons", Label = "WEAPONS", ActiveCol = C_OXBLOOD },
-		{ Id = "Ammo", Label = "AMMUNITION", ActiveCol = C_STEEL },
-		{ Id = "Bodyguards", Label = "BODYGUARDS", ActiveCol = C_OXBLOOD },
-		{ Id = "Premium", Label = "PREMIUM  (R$)", ActiveCol = C_ROBUX },
+		{ Id = "Ammo", Label = "AMMO", ActiveCol = C_STEEL },
+		{ Id = "Bodyguards", Label = "GUARDS", ActiveCol = C_OXBLOOD },
+		{ Id = "Mercenaries", Label = "MAFIA HIRE", ActiveCol = C_OXBLOOD },
+		{ Id = "Premium", Label = "R$ VIP", ActiveCol = C_ROBUX },
 	}
 	for _, st in ipairs(subTabs) do
 		local active = (currentBMSubTab == st.Id)
-		local btn = makeBtn(subBar, st.Label, if active then st.ActiveCol else C_BG_CARD_ALT, UDim2.new(), UDim2.new(0.25, -5, 0, 32), function()
+		local btn = makeBtn(subBar, st.Label, if active then st.ActiveCol else C_BG_CARD_ALT, UDim2.new(), UDim2.new(0.20, -5, 0, 32), function()
 			currentBMSubTab = st.Id
 			render()
 		end)
-		btn.TextSize = 11
+		btn.TextSize = 10
 		if active then
 			local stroke = btn:FindFirstChildOfClass("UIStroke")
 			if stroke then
@@ -1962,8 +2491,29 @@ local function renderBlackMarket(state: { [string]: any }): ()
 		renderBlackMarketAmmo(state)
 	elseif currentBMSubTab == "Bodyguards" then
 		renderBlackMarketBodyguards(state)
+	elseif currentBMSubTab == "Mercenaries" then
+		renderBlackMarketMercenaries(state)
 	else
 		renderBlackMarketPremium(state)
+	end
+end
+
+local function updateVisibleViewports(): ()
+	local sf = scrollFrame
+	if not sf or not modalFrame or not modalFrame.Visible then
+		return
+	end
+	local viewTop = sf.AbsolutePosition.Y - 120
+	local viewBot = sf.AbsolutePosition.Y + sf.AbsoluteSize.Y + 120
+	for _, card in ipairs(sf:GetChildren()) do
+		if card:IsA("GuiObject") then
+			local vp = card:FindFirstChild("Preview3D")
+			if vp and vp:IsA("ViewportFrame") then
+				local cTop = card.AbsolutePosition.Y
+				local cBot = cTop + card.AbsoluteSize.Y
+				vp.Visible = (cBot >= viewTop) and (cTop <= viewBot)
+			end
+		end
 	end
 end
 
@@ -1996,6 +2546,9 @@ render = function(): ()
 	else
 		renderUpgrades(latestState)
 	end
+	-- Cull offscreen 3D ViewportFrames so Roblox's GPU viewport atlas never drops top/visible icons!
+	updateVisibleViewports()
+	task.defer(updateVisibleViewports)
 end
 
 function EmpireMenuController.Init(parentGui: ScreenGui, onAction: ActionCallback): ()
@@ -2078,6 +2631,9 @@ function EmpireMenuController.Init(parentGui: ScreenGui, onAction: ActionCallbac
 	for _, t in ipairs(tabs) do
 		local tb = makeBtn(tabBar, t.Label, C_BG_CARD, UDim2.new(), UDim2.new(0.2, -5, 0, 30), function()
 			hideConfirmDialog()
+			if currentTab ~= t.Id and scrollFrame then
+				scrollFrame.CanvasPosition = Vector2.new(0, 0)
+			end
 			currentTab = t.Id
 			render()
 		end)
@@ -2108,6 +2664,8 @@ function EmpireMenuController.Init(parentGui: ScreenGui, onAction: ActionCallbac
 	layout.Padding = UDim.new(0, 8)
 	layout.Parent = scroll
 	scrollFrame = scroll
+	scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(updateVisibleViewports)
+	scroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateVisibleViewports)
 
 	-- Restrained Confirmation Dialog Overlay (for expensive Gold >= 500G & Robux purchases)
 	local overlay = Instance.new("Frame")
@@ -2186,6 +2744,9 @@ function EmpireMenuController.ToggleTab(tab: MenuTab): ()
 	if modalFrame.Visible and currentTab == tab then
 		modalFrame.Visible = false
 		return
+	end
+	if currentTab ~= tab and scrollFrame then
+		scrollFrame.CanvasPosition = Vector2.new(0, 0)
 	end
 	currentTab = tab
 	modalFrame.Visible = true

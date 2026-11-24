@@ -17,14 +17,27 @@ local HIT_URL = "rbxasset://sounds/hit.wav"
 local SNAP_URL = "rbxasset://sounds/snap.wav"
 local EXPLOSION_URL = "rbxasset://sounds/impact_explosion_03.mp3"
 
--- Verified Creator Store realistic gunshots, reload & punch fighting SFX
-local PISTOL_SFX_URL = "rbxassetid://127604219525464"
-local SHOTGUN_SFX_URL = "rbxassetid://3102797479"
-local SMG_SFX_URL = "rbxassetid://92011177452282"
+-- Upgraded Verified Creator Store Realistic Firearms Audio (distinct per weapon class!)
+local PISTOL_SFX_URL = "rbxassetid://17599184153"      -- P226 9mm Outdoor crisp handgun report
+local SUPPRESSED_SFX_URL = "rbxassetid://800000918"    -- PB Suppressed tactical muffled report
+local RIFLE_SFX_URL = "rbxassetid://77193661877789"    -- AK-74 urban outdoor rifle crack with reverb
+local SMG_SFX_URL = "rbxassetid://102442472539680"     -- 9A-91 rapid automatic tactical burst
+local SHOTGUN_SFX_URL = "rbxassetid://133201577670746" -- Remington 870 heavy shotgun blast
+local SNIPER_SFX_URL = "rbxassetid://5682471970"       -- High-caliber sniper rifle thunder
+
+-- Melee, Reload & Shell Mechanics
 local PUNCH_SFX_URL = "rbxassetid://87384287237291"
 local RELOAD_MAG_URL = "rbxassetid://117963160131194"
 local SHOTGUN_SHELL_URL = "rbxassetid://113268851418553"
 local SHOTGUN_PUMP_URL = "rbxassetid://139827026287805"
+
+-- Official ProSoundEffects + Verified Combat Hit Screams, Pain Grunts & Civilian Panic Screams
+local PLAYER_HURT_A_URL = "rbxassetid://9120417632"      -- ProSoundEffects: Fight Vocals / Getting Hit Grunt
+local PLAYER_HURT_B_URL = "rbxassetid://118159008749338" -- Damage Grunt 2
+local ENEMY_HIT_A_URL = "rbxassetid://9125653559"        -- ProSoundEffects: Male Scream / Short Yell / Death Cry
+local ENEMY_HIT_B_URL = "rbxassetid://121052703957549"   -- Combat Hurt Vocal 2
+local CIVILIAN_PANIC_A_URL = "rbxassetid://9114399475"   -- ProSoundEffects: Short Screams & Panic Yells
+local CIVILIAN_PANIC_B_URL = "rbxassetid://103266285456711" -- Scared Civilian Scream 1
 
 type PoolSpec = {
 	SoundId: string,
@@ -34,6 +47,9 @@ type PoolSpec = {
 	StartOffset: number,
 	PitchJitter: number,
 	Distort: number?,
+	LowGain: number?,
+	MidGain: number?,
+	HighGain: number?,
 }
 
 type PoolEntry = {
@@ -49,34 +65,69 @@ local POOL_SPECS: { [string]: PoolSpec } = {
 	PistolShot = {
 		SoundId = PISTOL_SFX_URL,
 		PoolSize = 6,
-		BaseVolume = 0.78,
-		BaseSpeed = 1.05,
-		StartOffset = 0.035, -- Trimmed measured leading silence for instant 0ms shot transient!
-		PitchJitter = 0.03,
+		BaseVolume = 0.86,
+		BaseSpeed = 1.02,
+		StartOffset = 0.01,
+		PitchJitter = 0.035,
+		LowGain = 3.5,
+		MidGain = 1.5,
 	},
-	ShotgunBlast = {
-		SoundId = SHOTGUN_SFX_URL,
-		PoolSize = 4,
-		BaseVolume = 0.88,
-		BaseSpeed = 0.90,
-		StartOffset = 0.055, -- Trimmed measured leading silence for instant 0ms blast!
-		PitchJitter = 0.025,
+	SuppressedShot = {
+		SoundId = SUPPRESSED_SFX_URL,
+		PoolSize = 5,
+		BaseVolume = 0.72,
+		BaseSpeed = 1.06,
+		StartOffset = 0.01,
+		PitchJitter = 0.04,
+		LowGain = 2.0,
+		HighGain = -3.0,
 	},
-	ShotgunBoomTail = {
-		SoundId = EXPLOSION_URL,
-		PoolSize = 4,
-		BaseVolume = 0.30,
-		BaseSpeed = 1.72,
-		StartOffset = 0.02,
-		PitchJitter = 0.03,
+	RifleShot = {
+		SoundId = RIFLE_SFX_URL,
+		PoolSize = 8,
+		BaseVolume = 0.84,
+		BaseSpeed = 1.02,
+		StartOffset = 0.01,
+		PitchJitter = 0.035,
+		LowGain = 4.0,
+		MidGain = 1.2,
 	},
 	SMGShot = {
 		SoundId = SMG_SFX_URL,
 		PoolSize = 8,
-		BaseVolume = 0.66,
-		BaseSpeed = 1.22,
-		StartOffset = 0.055, -- Trimmed measured leading silence for snappy automatic cadence!
-		PitchJitter = 0.035,
+		BaseVolume = 0.76,
+		BaseSpeed = 1.08,
+		StartOffset = 0.01,
+		PitchJitter = 0.04,
+		LowGain = 2.5,
+	},
+	ShotgunBlast = {
+		SoundId = SHOTGUN_SFX_URL,
+		PoolSize = 4,
+		BaseVolume = 0.94,
+		BaseSpeed = 0.94,
+		StartOffset = 0.01,
+		PitchJitter = 0.025,
+		LowGain = 5.5,
+		MidGain = 1.5,
+	},
+	ShotgunBoomTail = {
+		SoundId = EXPLOSION_URL,
+		PoolSize = 4,
+		BaseVolume = 0.28,
+		BaseSpeed = 1.68,
+		StartOffset = 0.02,
+		PitchJitter = 0.03,
+	},
+	SniperShot = {
+		SoundId = SNIPER_SFX_URL,
+		PoolSize = 4,
+		BaseVolume = 0.96,
+		BaseSpeed = 0.96,
+		StartOffset = 0.01,
+		PitchJitter = 0.02,
+		LowGain = 5.0,
+		HighGain = 1.5,
 	},
 	ReloadMag = {
 		SoundId = RELOAD_MAG_URL,
@@ -137,7 +188,7 @@ local POOL_SPECS: { [string]: PoolSpec } = {
 	MeleeSwing = {
 		SoundId = SWING_URL,
 		PoolSize = 3,
-		BaseVolume = 0.42,
+		BaseVolume = 0.44,
 		BaseSpeed = 1.55,
 		StartOffset = 0,
 		PitchJitter = 0.04,
@@ -145,7 +196,7 @@ local POOL_SPECS: { [string]: PoolSpec } = {
 	MeleeSnap = {
 		SoundId = SNAP_URL,
 		PoolSize = 3,
-		BaseVolume = 0.25,
+		BaseVolume = 0.26,
 		BaseSpeed = 1.30,
 		StartOffset = 0,
 		PitchJitter = 0.04,
@@ -153,7 +204,7 @@ local POOL_SPECS: { [string]: PoolSpec } = {
 	MeleePunch = {
 		SoundId = PUNCH_SFX_URL,
 		PoolSize = 4,
-		BaseVolume = 0.72,
+		BaseVolume = 0.74,
 		BaseSpeed = 1.05,
 		StartOffset = 0,
 		PitchJitter = 0.04,
@@ -167,11 +218,92 @@ local POOL_SPECS: { [string]: PoolSpec } = {
 		PitchJitter = 0.04,
 		Distort = 0.2,
 	},
+	-- Combat Hit Screams, Pain Grunts & Civilian Panic Screams
+	PlayerHurtA = {
+		SoundId = PLAYER_HURT_A_URL,
+		PoolSize = 3,
+		BaseVolume = 0.90,
+		BaseSpeed = 1.00,
+		StartOffset = 0,
+		PitchJitter = 0.06,
+	},
+	PlayerHurtB = {
+		SoundId = PLAYER_HURT_B_URL,
+		PoolSize = 3,
+		BaseVolume = 0.88,
+		BaseSpeed = 1.00,
+		StartOffset = 0,
+		PitchJitter = 0.06,
+	},
+	EnemyHitA = {
+		SoundId = ENEMY_HIT_A_URL,
+		PoolSize = 4,
+		BaseVolume = 0.82,
+		BaseSpeed = 1.04,
+		StartOffset = 0,
+		PitchJitter = 0.08,
+	},
+	EnemyHitB = {
+		SoundId = ENEMY_HIT_B_URL,
+		PoolSize = 4,
+		BaseVolume = 0.86,
+		BaseSpeed = 1.00,
+		StartOffset = 0,
+		PitchJitter = 0.08,
+	},
+	EnemyDeathScream = {
+		SoundId = ENEMY_HIT_A_URL,
+		PoolSize = 4,
+		BaseVolume = 0.96,
+		BaseSpeed = 0.88,
+		StartOffset = 0,
+		PitchJitter = 0.06,
+		LowGain = 2.0,
+	},
+	CivilianPanicA = {
+		SoundId = CIVILIAN_PANIC_A_URL,
+		PoolSize = 3,
+		BaseVolume = 0.72,
+		BaseSpeed = 1.02,
+		StartOffset = 0,
+		PitchJitter = 0.07,
+	},
+	CivilianPanicB = {
+		SoundId = CIVILIAN_PANIC_B_URL,
+		PoolSize = 3,
+		BaseVolume = 0.68,
+		BaseSpeed = 1.04,
+		StartOffset = 0,
+		PitchJitter = 0.07,
+	},
 }
 
 local audioPoolFolder: Folder? = nil
 local pools: { [string]: PoolEntry } = {}
 local isPreloaded = false
+
+-- Smart throttle timestamps so combat vocal screams stay realistic and never spam/clip
+local lastPlayerHurtAt = 0
+local lastEnemyHitAt = 0
+local lastEnemyDeathAt = 0
+local lastCivilianPanicAt = 0
+local playerHurtFlip = false
+local enemyHitFlip = false
+local civilianPanicFlip = false
+
+-- Shared Client Combat Threat Bus (alerts Central & Urban Civilian NPCs to panic and flee!)
+type CombatThreatListener = (worldPos: Vector3, threatKind: string) -> ()
+local threatListeners: { CombatThreatListener } = {}
+
+function AudioController.OnCombatThreat(cb: CombatThreatListener): ()
+	table.insert(threatListeners, cb)
+end
+
+function AudioController.NotifyCombatThreat(worldPos: Vector3, threatKind: string): ()
+	for _, cb in ipairs(threatListeners) do
+		cb(worldPos, threatKind)
+	end
+end
 
 local function ensurePoolInitialized(): ()
 	if audioPoolFolder and audioPoolFolder.Parent then
@@ -203,6 +335,13 @@ local function ensurePoolInitialized(): ()
 				local d = Instance.new("DistortionSoundEffect")
 				d.Level = spec.Distort
 				d.Parent = s
+			end
+			if spec.LowGain ~= nil or spec.MidGain ~= nil or spec.HighGain ~= nil then
+				local eq = Instance.new("EqualizerSoundEffect")
+				eq.LowGain = spec.LowGain or 0
+				eq.MidGain = spec.MidGain or 0
+				eq.HighGain = spec.HighGain or 0
+				eq.Parent = s
 			end
 			s.Parent = folder
 			table.insert(sounds, s)
@@ -296,13 +435,11 @@ function AudioController.PlayCook(): ()
 end
 
 function AudioController.PlayCoins(): ()
-	-- Bright ascending coin chime
 	playTone(PING_URL, 0.42, 1.35, 0)
 	playTone(PING_URL, 0.45, 1.68, 0.09)
 end
 
 function AudioController.PlayFanfare(): ()
-	-- Cheerful 4-note major chord arpeggio for milestones, VIP orders & Robux Pro Chef unlocks
 	playTone(PING_URL, 0.40, 1.00, 0.00)
 	playTone(PING_URL, 0.42, 1.26, 0.09)
 	playTone(PING_URL, 0.45, 1.50, 0.18)
@@ -314,7 +451,7 @@ function AudioController.PlayError(): ()
 	playTone(CLICK_URL, 0.35, 0.55, 0.09)
 end
 
--- Crisp Melee Fighting Swing & Punch Impact Sound Effects (preloaded & pooled)
+-- Crisp Melee Fighting Swing & Punch Impact Sound Effects
 function AudioController.PlayMeleeSwing(volScale: number?): ()
 	local v = volScale or 1
 	playPooled("MeleeSwing", v, 1)
@@ -329,9 +466,17 @@ function AudioController.PlayMeleeHit(volScale: number?): ()
 	playPooled("MeleeHitTail", v, 1)
 end
 
--- Immediate Zero-Latency Preloaded & Pooled Gunshot Sound Effects
+-- Upgraded Zero-Latency Preloaded & Pooled Realistic Firearms Audio
 function AudioController.PlayPistolShot(volScale: number?): ()
 	playPooled("PistolShot", volScale or 1, 1)
+end
+
+function AudioController.PlaySuppressedShot(volScale: number?): ()
+	playPooled("SuppressedShot", volScale or 1, 1)
+end
+
+function AudioController.PlayRifleShot(volScale: number?): ()
+	playPooled("RifleShot", volScale or 1, 1)
 end
 
 function AudioController.PlayShotgunBlast(volScale: number?): ()
@@ -344,21 +489,33 @@ function AudioController.PlaySMGShot(volScale: number?): ()
 	playPooled("SMGShot", volScale or 1, 1)
 end
 
-function AudioController.PlayWeaponFire(weaponId: string, volScale: number?): ()
+function AudioController.PlaySniperShot(volScale: number?): ()
+	local v = volScale or 1
+	playPooled("SniperShot", v, 1)
+	playPooled("ShotgunBoomTail", v * 0.72, 1.40)
+end
+
+function AudioController.PlayWeaponFire(weaponId: string, volScale: number?, isSuppressed: boolean?): ()
 	local v = volScale or 1
 	local spec = WeaponConfig.WEAPONS[weaponId]
+	local suppressed = (isSuppressed == true) or (spec ~= nil and spec.AlwaysSuppressed == true)
+
+	if suppressed then
+		playPooled("SuppressedShot", v * 1.15, if weaponId == "PhantomAssassinRifle" then 0.88 else 1.02)
+		return
+	end
+
 	if weaponId == "ShadowSniper" then
-		playPooled("ShotgunBlast", v * 1.05, 0.80)
-		playPooled("ShotgunBoomTail", v * 0.95, 1.35)
+		AudioController.PlaySniperShot(v)
 		return
 	elseif weaponId == "SilencedDeagle" then
-		playPooled("PistolShot", v * 0.92, 0.82)
+		AudioController.PlaySuppressedShot(v * 1.1)
 		return
 	elseif weaponId == "SyndicateCarbine" or weaponId == "CrimsonDragonAR" then
-		playPooled("SMGShot", v * 1.05, 0.84)
+		playPooled("RifleShot", v, if weaponId == "CrimsonDragonAR" then 0.94 else 1.02)
 		return
 	elseif weaponId == "GoldenEmperorPistol" then
-		playPooled("PistolShot", v * 1.0, 1.12)
+		playPooled("PistolShot", v * 1.05, 0.92)
 		return
 	end
 
@@ -370,6 +527,46 @@ function AudioController.PlayWeaponFire(weaponId: string, volScale: number?): ()
 	else
 		AudioController.PlayPistolShot(v)
 	end
+end
+
+-- Realistic Combat Hit Screams, Pain Grunts & Panicked Civilian Screams
+function AudioController.PlayPlayerHurtScream(volScale: number?): ()
+	local now = os.clock()
+	if (now - lastPlayerHurtAt) < 0.55 then
+		return
+	end
+	lastPlayerHurtAt = now
+	playerHurtFlip = not playerHurtFlip
+	playPooled(if playerHurtFlip then "PlayerHurtA" else "PlayerHurtB", volScale or 1, 1)
+end
+
+function AudioController.PlayEnemyHitScream(volScale: number?): ()
+	local now = os.clock()
+	if (now - lastEnemyHitAt) < 0.36 then
+		return
+	end
+	lastEnemyHitAt = now
+	enemyHitFlip = not enemyHitFlip
+	playPooled(if enemyHitFlip then "EnemyHitA" else "EnemyHitB", volScale or 1, 1)
+end
+
+function AudioController.PlayEnemyDeathScream(volScale: number?): ()
+	local now = os.clock()
+	if (now - lastEnemyDeathAt) < 0.26 then
+		return
+	end
+	lastEnemyDeathAt = now
+	playPooled("EnemyDeathScream", volScale or 1, 1)
+end
+
+function AudioController.PlayCivilianPanicScream(volScale: number?): ()
+	local now = os.clock()
+	if (now - lastCivilianPanicAt) < 1.65 then
+		return
+	end
+	lastCivilianPanicAt = now
+	civilianPanicFlip = not civilianPanicFlip
+	playPooled(if civilianPanicFlip then "CivilianPanicA" else "CivilianPanicB", volScale or 1, 1)
 end
 
 -- Reload, Shell Insert, Pump Action & Dry-Fire SFX
@@ -406,10 +603,16 @@ end
 function AudioController.PlayCombatSFX(kind: string, volScale: number?): ()
 	if kind == "PistolShot" or kind == "EnemyShot" then
 		AudioController.PlayPistolShot(volScale)
+	elseif kind == "SuppressedShot" then
+		AudioController.PlaySuppressedShot(volScale)
+	elseif kind == "RifleShot" then
+		AudioController.PlayRifleShot(volScale)
 	elseif kind == "ShotgunBlast" then
 		AudioController.PlayShotgunBlast(volScale)
 	elseif kind == "SMGShot" then
 		AudioController.PlaySMGShot(volScale)
+	elseif kind == "SniperShot" then
+		AudioController.PlaySniperShot(volScale)
 	elseif kind == "MeleeHit" then
 		AudioController.PlayMeleeHit(volScale)
 	elseif kind == "MeleeSwing" then
@@ -418,6 +621,14 @@ function AudioController.PlayCombatSFX(kind: string, volScale: number?): ()
 		AudioController.PlayShotgunPump()
 	elseif kind == "BodyDrop" then
 		AudioController.PlayBodyDrop(volScale)
+	elseif kind == "PlayerHurtScream" then
+		AudioController.PlayPlayerHurtScream(volScale)
+	elseif kind == "EnemyHitScream" then
+		AudioController.PlayEnemyHitScream(volScale)
+	elseif kind == "EnemyDeathScream" then
+		AudioController.PlayEnemyDeathScream(volScale)
+	elseif kind == "CivilianPanicScream" then
+		AudioController.PlayCivilianPanicScream(volScale)
 	end
 end
 

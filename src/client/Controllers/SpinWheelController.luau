@@ -38,7 +38,52 @@ local onStateUpdated: ((any) -> ())? = nil
 local TILE_W = 112
 local TILE_GAP = 8
 local TILE_STRIDE = TILE_W + TILE_GAP
+local TILE_H = 116
+local REEL_WINDOW_W = 580
+local REEL_WINDOW_H = 126
 local REEL_CYCLES = 6
+
+type ReelTileEntry = {
+	OffsetX: number,
+	Viewport: ViewportFrame?,
+}
+local reelTileEntries: { ReelTileEntry } = {}
+local headerPreviewVp: ViewportFrame? = nil
+
+local function updateVisibleReelViewports(stripX: number?): ()
+	local isOpen = modal ~= nil and modal.Visible
+	if headerPreviewVp then
+		headerPreviewVp.Visible = isOpen
+	end
+	local curX = if stripX ~= nil
+		then stripX
+		elseif reelStrip then reelStrip.Position.X.Offset
+		else 0
+	for _, entry in ipairs(reelTileEntries) do
+		local vp = entry.Viewport
+		if vp and vp.Parent then
+			if not isOpen then
+				vp.Visible = false
+			else
+				local leftEdge = curX + entry.OffsetX
+				local rightEdge = leftEdge + TILE_W
+				-- Only render ViewportFrames intersecting the 580px window (+half-tile buffer) to stay well under GPU atlas cap!
+				vp.Visible = (rightEdge >= -40) and (leftEdge <= REEL_WINDOW_W + 40)
+			end
+		end
+	end
+end
+
+local function isValidPreviewKind(kind: string): boolean
+	return kind == "Weapon"
+		or kind == "Ammo"
+		or kind == "Bodyguard"
+		or kind == "Equipment"
+		or kind == "Premium"
+		or kind == "Warehouse"
+		or kind == "Dish"
+		or kind == "Empire"
+end
 
 local function makeCorner(parent: Instance, r: number): ()
 	local c = Instance.new("UICorner")
@@ -60,23 +105,25 @@ local function populateReel(prizes: { any }): ()
 	for _, ch in ipairs(reelStrip:GetChildren()) do
 		ch:Destroy()
 	end
+	table.clear(reelTileEntries)
 
 	local count = #prizes
 	if count == 0 then return end
 	local totalTiles = count * REEL_CYCLES
-	reelStrip.Size = UDim2.fromOffset(totalTiles * TILE_STRIDE, 94)
+	reelStrip.Size = UDim2.fromOffset(totalTiles * TILE_STRIDE, REEL_WINDOW_H - 2)
 
 	for cycle = 0, REEL_CYCLES - 1 do
 		for i, p in ipairs(prizes) do
 			local idx = cycle * count + (i - 1)
+			local offsetX = idx * TILE_STRIDE
 			local tile = Instance.new("Frame")
 			tile.Name = "Tile_" .. tostring(idx)
-			tile.Position = UDim2.fromOffset(idx * TILE_STRIDE, 4)
-			tile.Size = UDim2.fromOffset(TILE_W, 86)
+			tile.Position = UDim2.fromOffset(offsetX, 5)
+			tile.Size = UDim2.fromOffset(TILE_W, TILE_H)
 			tile.BackgroundColor3 = C_CARD
 			tile.BorderSizePixel = 0
 			tile.Parent = reelStrip
-			makeCorner(tile, 5)
+			makeCorner(tile, 6)
 
 			local col = Color3.fromRGB(tonumber(p.ColorR) or 120, tonumber(p.ColorG) or 120, tonumber(p.ColorB) or 120)
 			makeStroke(tile, col, 1.3)
@@ -88,27 +135,62 @@ local function populateReel(prizes: { any }): ()
 			topStrip.Parent = tile
 
 			local rar = Instance.new("TextLabel")
-			rar.Position = UDim2.new(0, 6, 0, 10)
-			rar.Size = UDim2.new(1, -12, 0, 14)
+			rar.Position = UDim2.new(0, 6, 0, 7)
+			rar.Size = UDim2.new(1, -12, 0, 12)
 			rar.BackgroundTransparency = 1
 			rar.Font = Enum.Font.GothamBold
 			rar.Text = string.upper(tostring(p.Rarity or "COMMON"))
-			rar.TextSize = 9
+			rar.TextSize = 8
 			rar.TextColor3 = col:Lerp(C_BONE, 0.35)
 			rar.Parent = tile
 
+			-- Studio-lit 3D Icon Box centered in every Lucky Spin reel card!
+			local iconBox = Instance.new("Frame")
+			iconBox.Name = "IconBox"
+			iconBox.AnchorPoint = Vector2.new(0.5, 0)
+			iconBox.Position = UDim2.new(0.5, 0, 0, 22)
+			iconBox.Size = UDim2.fromOffset(60, 60)
+			iconBox.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
+			iconBox.BorderSizePixel = 0
+			iconBox.Parent = tile
+			makeCorner(iconBox, 6)
+			makeStroke(iconBox, col:Lerp(C_BORDER, 0.55), 1)
+
+			local pKind = tostring(p.PreviewKind or "Equipment")
+			local pId = tostring(p.PreviewId or "InstantEmpireCrate")
+			local vp: ViewportFrame? = nil
+			if isValidPreviewKind(pKind) then
+				local created = ModelPreviewHelper.CreatePreview(
+					iconBox,
+					pKind :: any,
+					pId,
+					UDim2.fromScale(1, 1),
+					UDim2.new(),
+					Color3.fromRGB(16, 18, 24)
+				)
+				created.Visible = false
+				vp = created
+			end
+
 			local nameLbl = Instance.new("TextLabel")
-			nameLbl.Position = UDim2.new(0, 6, 0, 28)
-			nameLbl.Size = UDim2.new(1, -12, 0, 48)
+			nameLbl.Position = UDim2.new(0, 4, 0, 86)
+			nameLbl.Size = UDim2.new(1, -8, 0, 26)
 			nameLbl.BackgroundTransparency = 1
 			nameLbl.Font = Enum.Font.GothamBlack
 			nameLbl.TextWrapped = true
 			nameLbl.Text = tostring(p.ShortLabel or p.Title or "PRIZE")
-			nameLbl.TextSize = 12
+			nameLbl.TextSize = 11
 			nameLbl.TextColor3 = C_BONE
 			nameLbl.Parent = tile
+
+			table.insert(reelTileEntries, {
+				OffsetX = offsetX,
+				Viewport = vp,
+			})
 		end
 	end
+
+	updateVisibleReelViewports(reelStrip.Position.X.Offset)
 end
 
 local function refreshSnapshotUI(snap: { [string]: any }?): ()
@@ -155,7 +237,7 @@ local function showResultBanner(res: { [string]: any }): ()
 	end
 	local pKind = tostring(res.PreviewKind or "Equipment")
 	local pId = tostring(res.PreviewId or "InstantEmpireCrate")
-	if pKind == "Weapon" or pKind == "Ammo" or pKind == "Bodyguard" or pKind == "Equipment" or pKind == "Premium" then
+	if isValidPreviewKind(pKind) then
 		ModelPreviewHelper.CreatePreview(
 			resultPreviewHost,
 			pKind :: any,
@@ -213,13 +295,14 @@ local function runSpinAnimation(): ()
 
 	local winSeg = math.clamp(tonumber(res.SegmentIndex) or 1, 1, count)
 	-- Land cleanly inside cycle 4 on the exact winning segment centered beneath the needle!
-	local viewportW = 580
+	local viewportW = REEL_WINDOW_W
 	local targetTileIdx = (REEL_CYCLES - 2) * count + (winSeg - 1)
 	local jitter = math.random(-22, 22)
 	local targetX = -(targetTileIdx * TILE_STRIDE + TILE_W * 0.5 - viewportW * 0.5 + jitter)
 
 	local startX = 0
 	reelStrip.Position = UDim2.fromOffset(startX, 0)
+	updateVisibleReelViewports(startX)
 
 	local duration = 3.25
 	local elapsed = 0
@@ -234,7 +317,9 @@ local function runSpinAnimation(): ()
 		local ease = 1 - inv * inv * inv * inv
 		local curX = startX + (targetX - startX) * ease
 		if reelStrip then
-			reelStrip.Position = UDim2.fromOffset(math.floor(curX + 0.5), 0)
+			local snappedX = math.floor(curX + 0.5)
+			reelStrip.Position = UDim2.fromOffset(snappedX, 0)
+			updateVisibleReelViewports(snappedX)
 		end
 
 		local notch = math.floor((math.abs(curX) + viewportW * 0.5) / TILE_STRIDE)
@@ -267,6 +352,7 @@ function SpinWheelController.Open(snap: { [string]: any }?): ()
 	end
 	if modal then
 		modal.Visible = true
+		updateVisibleReelViewports()
 		AudioController.PlayClick()
 	end
 end
@@ -300,8 +386,8 @@ function SpinWheelController.Init(parentGui: ScreenGui, stateCallback: (any) -> 
 	local frame = Instance.new("Frame")
 	frame.Name = "CentralMarketSpinModal"
 	frame.AnchorPoint = Vector2.new(0.5, 0.5)
-	frame.Position = UDim2.fromScale(0.5, 0.44)
-	frame.Size = UDim2.fromOffset(620, 384)
+	frame.Position = UDim2.fromScale(0.5, 0.45)
+	frame.Size = UDim2.fromOffset(620, 424)
 	frame.BackgroundColor3 = C_OBS
 	frame.BorderSizePixel = 0
 	frame.Visible = false
@@ -317,9 +403,29 @@ function SpinWheelController.Init(parentGui: ScreenGui, stateCallback: (any) -> 
 	accentBar.BorderSizePixel = 0
 	accentBar.Parent = frame
 
+	local headerIconHost = Instance.new("Frame")
+	headerIconHost.Name = "HeaderWheelIcon"
+	headerIconHost.Position = UDim2.new(0, 18, 0, 12)
+	headerIconHost.Size = UDim2.fromOffset(40, 40)
+	headerIconHost.BackgroundColor3 = C_CARD
+	headerIconHost.BorderSizePixel = 0
+	headerIconHost.Parent = frame
+	makeCorner(headerIconHost, 6)
+	makeStroke(headerIconHost, C_BRASS, 1)
+	local hVp = ModelPreviewHelper.CreatePreview(
+		headerIconHost,
+		"Empire",
+		"SPN",
+		UDim2.fromScale(1, 1),
+		UDim2.new(),
+		C_CARD
+	)
+	hVp.Visible = false
+	headerPreviewVp = hVp
+
 	local title = Instance.new("TextLabel")
-	title.Position = UDim2.new(0, 18, 0, 12)
-	title.Size = UDim2.new(1, -76, 0, 22)
+	title.Position = UDim2.new(0, 68, 0, 12)
+	title.Size = UDim2.new(1, -126, 0, 22)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.GothamBlack
 	title.TextXAlignment = Enum.TextXAlignment.Left
@@ -329,8 +435,8 @@ function SpinWheelController.Init(parentGui: ScreenGui, stateCallback: (any) -> 
 	title.Parent = frame
 
 	local evLbl = Instance.new("TextLabel")
-	evLbl.Position = UDim2.new(0, 18, 0, 36)
-	evLbl.Size = UDim2.new(1, -76, 0, 16)
+	evLbl.Position = UDim2.new(0, 68, 0, 36)
+	evLbl.Size = UDim2.new(1, -126, 0, 16)
 	evLbl.BackgroundTransparency = 1
 	evLbl.Font = Enum.Font.GothamBold
 	evLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -354,14 +460,15 @@ function SpinWheelController.Init(parentGui: ScreenGui, stateCallback: (any) -> 
 	closeBtn.MouseButton1Click:Connect(function()
 		if not isSpinning then
 			frame.Visible = false
+			updateVisibleReelViewports()
 		end
 	end)
 
 	-- Roulette Viewport Window with Center Brass/Crimson Pointer Needle
 	local reelWindow = Instance.new("Frame")
 	reelWindow.Name = "ReelWindow"
-	reelWindow.Position = UDim2.new(0, 20, 0, 64)
-	reelWindow.Size = UDim2.fromOffset(580, 96)
+	reelWindow.Position = UDim2.new(0, 20, 0, 66)
+	reelWindow.Size = UDim2.fromOffset(REEL_WINDOW_W, REEL_WINDOW_H)
 	reelWindow.BackgroundColor3 = Color3.fromRGB(9, 10, 14)
 	reelWindow.ClipsDescendants = true
 	reelWindow.Parent = frame
@@ -371,7 +478,7 @@ function SpinWheelController.Init(parentGui: ScreenGui, stateCallback: (any) -> 
 	local strip = Instance.new("Frame")
 	strip.Name = "ReelStrip"
 	strip.Position = UDim2.fromOffset(0, 0)
-	strip.Size = UDim2.fromOffset(580, 94)
+	strip.Size = UDim2.fromOffset(REEL_WINDOW_W, REEL_WINDOW_H - 2)
 	strip.BackgroundTransparency = 1
 	strip.Parent = reelWindow
 	reelStrip = strip
@@ -399,7 +506,7 @@ function SpinWheelController.Init(parentGui: ScreenGui, stateCallback: (any) -> 
 	local sBtn = Instance.new("TextButton")
 	sBtn.Name = "SpinActionBtn"
 	sBtn.AnchorPoint = Vector2.new(0.5, 0)
-	sBtn.Position = UDim2.new(0.5, 0, 0, 174)
+	sBtn.Position = UDim2.new(0.5, 0, 0, 206)
 	sBtn.Size = UDim2.fromOffset(270, 40)
 	sBtn.BackgroundColor3 = C_OXBLOOD
 	sBtn.Font = Enum.Font.GothamBlack
@@ -413,7 +520,7 @@ function SpinWheelController.Init(parentGui: ScreenGui, stateCallback: (any) -> 
 	spinBtn = sBtn
 
 	local stLbl = Instance.new("TextLabel")
-	stLbl.Position = UDim2.new(0, 20, 0, 222)
+	stLbl.Position = UDim2.new(0, 20, 0, 254)
 	stLbl.Size = UDim2.new(1, -40, 0, 18)
 	stLbl.BackgroundTransparency = 1
 	stLbl.Font = Enum.Font.Gotham
@@ -426,8 +533,8 @@ function SpinWheelController.Init(parentGui: ScreenGui, stateCallback: (any) -> 
 	-- Prize Reveal Result Card (with 3D ViewportFrame thumbnail!)
 	local rCard = Instance.new("Frame")
 	rCard.Name = "ResultCard"
-	rCard.Position = UDim2.new(0, 20, 0, 250)
-	rCard.Size = UDim2.new(1, -40, 0, 114)
+	rCard.Position = UDim2.new(0, 20, 0, 282)
+	rCard.Size = UDim2.new(1, -40, 0, 122)
 	rCard.BackgroundColor3 = C_CARD
 	rCard.Visible = false
 	rCard.Parent = frame
