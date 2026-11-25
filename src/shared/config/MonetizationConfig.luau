@@ -155,7 +155,7 @@ local Items: { [string]: MonetizationItem } = {
 		AssetId = 0, -- Replace 0 with your Developer Product ID from Roblox Creator Hub
 		RobuxPrice = 199,
 		Badge = "5M CONTRACT",
-		Description = "Hires 3 elite Kurogane Samurai Mafia enforcers (stronger than rival samurai) for 5 minutes to fight rival mafia & capture restaurants (or hire for 20,000 Gold)!",
+		Description = "Hires 3 elite Kurogane Samurai Mafia enforcers (stronger than rival samurai) for 5 minutes to fight rival mafia & capture restaurants (or hire for 100,000 Gold)!",
 		AccentColor = Color3.fromRGB(168, 42, 48),
 	},
 	NinjaMafiaContract = {
@@ -165,7 +165,7 @@ local Items: { [string]: MonetizationItem } = {
 		AssetId = 0, -- Replace 0 with your Developer Product ID from Roblox Creator Hub
 		RobuxPrice = 199,
 		Badge = "5M CONTRACT",
-		Description = "Hires 3 elite Kage Ninja Mafia assassins (stronger than rival mafia) for 5 minutes with shadow-step blade clashes (or hire for 20,000 Gold)!",
+		Description = "Hires 3 elite Kage Ninja Mafia assassins (stronger than rival mafia) for 5 minutes with shadow-step blade clashes (or hire for 100,000 Gold)!",
 		AccentColor = Color3.fromRGB(62, 68, 86),
 	},
 }
