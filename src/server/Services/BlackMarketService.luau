@@ -13,6 +13,7 @@ local BaseService = require("./BaseService")
 local MonetizationService = require("./MonetizationService")
 local SyndicateContractService = require("./SyndicateContractService")
 local SyndicateFamilyService = require("./SyndicateFamilyService")
+local CombatLockService = require("./CombatLockService")
 
 export type BlackMarketItemSpec = {
 	Id: string,
@@ -93,13 +94,14 @@ for _, weaponId in ipairs(WeaponConfig.WEAPON_ORDER) do
 	end
 end
 
--- Add Player Tactical Protection & Healing Items
+-- Add Player Tactical Protection & Healing Items (5x Gold Prices + Robux Option!)
 table.insert(BlackMarketService.ORDER, "KevlarVest")
 BlackMarketService.ITEMS.KevlarVest = {
 	Id = "KevlarVest",
 	DisplayName = "Kevlar Chef Armor",
 	Icon = "ARMOR",
-	Price = 420,
+	Price = 2100,
+	RobuxPrice = 29,
 	RequiredLevel = 1,
 	Category = "Armor",
 	Rarity = "Rare",
@@ -113,7 +115,8 @@ BlackMarketService.ITEMS.Medkit = {
 	Id = "Medkit",
 	DisplayName = "Flash-Spice Medkit",
 	Icon = "MED",
-	Price = 150,
+	Price = 750,
+	RobuxPrice = 19,
 	RequiredLevel = 1,
 	Category = "Consumable",
 	Rarity = "Common",
@@ -1529,7 +1532,7 @@ function BlackMarketService.BuyAmmo(player: Player, ammoTypeRaw: string, packInd
 	return true, string.format("Bought +%d %s (%d / %d reserve).", added, ammoSpec.ShortName, newVal, ammoSpec.MaxReserve)
 end
 
-function BlackMarketService.BuyItem(player: Player, itemId: string): (boolean, string)
+function BlackMarketService.BuyItem(player: Player, itemId: string, useRobux: boolean?, bypassGold: boolean?): (boolean, string)
 	local spec = BlackMarketService.ITEMS[itemId]
 	if not spec then
 		return false, "Unknown Black Market item!"
@@ -1537,7 +1540,7 @@ function BlackMarketService.BuyItem(player: Player, itemId: string): (boolean, s
 
 	local profile = PlayerDataService.GetProfile(player)
 
-	-- Optional Robux Weapons -> verify duplicate prevention & delegate securely to MonetizationService
+	-- Optional Robux GamePass Weapons -> verify duplicate prevention & delegate securely to MonetizationService
 	if spec.RobuxItemId then
 		if playerOwnsWeapon(player, itemId) then
 			grantOwnedGearToPlayer(player, false)
@@ -1555,12 +1558,25 @@ function BlackMarketService.BuyItem(player: Player, itemId: string): (boolean, s
 		return false, "Your Kevlar Armor is already full (100 / 100)!"
 	end
 
+	-- Dual-Currency Robux Option for Gold-based Weapons, Armor & Medkits!
+	if useRobux == true and not bypassGold and typeof(spec.RobuxPrice) == "number" and spec.RobuxPrice > 0 then
+		return MonetizationService.TryPromptDualPurchase(
+			player,
+			"BM_" .. spec.Id,
+			spec.RobuxPrice,
+			spec.DisplayName,
+			function()
+				return BlackMarketService.BuyItem(player, itemId, false, true)
+			end
+		)
+	end
+
 	local reqLv = spec.RequiredLevel or 1
-	if profile.Level < reqLv then
+	if not bypassGold and profile.Level < reqLv then
 		return false, string.format("Requires Player Lv.%d to unlock %s!", reqLv, spec.DisplayName)
 	end
 
-	if not PlayerDataService.SpendCoins(player, spec.Price) then
+	if not bypassGold and not PlayerDataService.SpendCoins(player, spec.Price) then
 		return false, string.format("Need %d Gold to buy %s!", spec.Price, spec.DisplayName)
 	end
 
@@ -1606,6 +1622,10 @@ function BlackMarketService.BuyItem(player: Player, itemId: string): (boolean, s
 end
 
 function BlackMarketService.TeleportToBlackMarket(player: Player): (boolean, string)
+	local canTp, tpReason = CombatLockService.CanTeleport(player)
+	if not canTp then
+		return false, tpReason
+	end
 	local char = player.Character
 	if not char then
 		return false, "Character unavailable"
@@ -1661,8 +1681,8 @@ function BlackMarketService.BuySmokeGrenades(player: Player): (boolean, string)
 	if (prof.SmokeGrenades or 0) >= 12 then
 		return false, "Smoke Grenades full (12/12)! Press [T] to deploy a tactical smoke screen."
 	end
-	if not PlayerDataService.SpendCoins(player, 180) then
-		return false, "Need 180 Gold to buy 3x Tactical Smoke Grenades!"
+	if not PlayerDataService.SpendCoins(player, 900) then
+		return false, "Need 900 Gold to buy 3x Tactical Smoke Grenades!"
 	end
 	local newCount = PlayerDataService.AddSmokeGrenades(player, 3)
 	return true, string.format("Bought 3x Tactical Smoke Grenades (%d/12). Press [T] to deploy smoke cover!", newCount)
@@ -1742,8 +1762,8 @@ function BlackMarketService.BuyFlashbangs(player: Player): (boolean, string)
 	if (prof.Flashbangs or 0) >= 12 then
 		return false, "Flashbangs full (12/12)! Press [6] to stun rival squads."
 	end
-	if not PlayerDataService.SpendCoins(player, 240) then
-		return false, "Need 240 Gold to buy 3x Tactical Flashbangs!"
+	if not PlayerDataService.SpendCoins(player, 1200) then
+		return false, "Need 1,200 Gold to buy 3x Tactical Flashbangs!"
 	end
 	local newCount = PlayerDataService.AddFlashbangs(player, 3)
 	return true, string.format("Bought 3x Tactical Flashbangs (%d/12). Press [6] to stun enemies for 4s!", newCount)
@@ -1911,8 +1931,8 @@ function BlackMarketService.BuyC4Charges(player: Player): (boolean, string)
 	if (prof.C4Charges or 0) >= 8 then
 		return false, "C4 Breach Charges full (8/8)! Press [7] to plant & detonate."
 	end
-	if not PlayerDataService.SpendCoins(player, 380) then
-		return false, "Need 380 Gold to buy 2x C4 Breach Charges!"
+	if not PlayerDataService.SpendCoins(player, 1900) then
+		return false, "Need 1,900 Gold to buy 2x C4 Breach Charges!"
 	end
 	local newCount = PlayerDataService.AddC4Charges(player, 2)
 	return true, string.format("Bought 2x C4 Breach Charges (%d/8). Press [7] to breach vaults & blast squads!", newCount)
@@ -2117,8 +2137,8 @@ function BlackMarketService.BuyShadowDash(player: Player): (boolean, string)
 	if PlayerDataService.HasShadowDash(player) then
 		return false, "Shadow Smoke Dash already unlocked! Press [8] to dash & gain 1.5x backstab crits."
 	end
-	if not PlayerDataService.SpendCoins(player, 1400) then
-		return false, "Need 1,400 Gold to unlock permanent Shadow Smoke Dash!"
+	if not PlayerDataService.SpendCoins(player, 7000) then
+		return false, "Need 7,000 Gold to unlock permanent Shadow Smoke Dash!"
 	end
 	PlayerDataService.UnlockShadowDash(player)
 	return true, "Unlocked SHADOW SMOKE DASH! Press [8] to blink through smoke & score 1.5x backstab crits!"

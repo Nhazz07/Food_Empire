@@ -16,11 +16,12 @@ export type CharacterScaleConfigType = {
 }
 
 local CharacterScaleConfig: CharacterScaleConfigType = {
-	Player = { Scale = 1.50, IsPlayerProfile = true },
+	-- Realistic human proportions: player is only subtly taller (~0.4-0.5 studs) than NPCs, never a giant!
+	Player = { Scale = 1.06, IsPlayerProfile = true },
 	NPC = {
-		Basic = { Scale = 0.75 },
-		Elite = { Scale = 0.87 },
-		Boss = { Scale = 1.10 },
+		Basic = { Scale = 0.96 },
+		Elite = { Scale = 1.02 },
+		Boss = { Scale = 1.15 },
 	},
 }
 

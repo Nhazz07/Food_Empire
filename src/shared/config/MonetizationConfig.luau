@@ -13,9 +13,18 @@ export type MonetizationItem = {
 	AccentColor: Color3,
 }
 
+export type DualRobuxOptionSpec = {
+	Key: string,
+	DisplayName: string,
+	RobuxPrice: number,
+	AssetId: number, -- Replace 0 with Developer Product ID in Creator Hub for live purchases
+}
+
 export type MonetizationConfigType = {
 	Order: { string },
 	Items: { [string]: MonetizationItem },
+	DualRobuxOptions: { [string]: DualRobuxOptionSpec },
+	GetHQUpgradeRobuxPrice: (nextLevel: number) -> number,
 }
 
 local Items: { [string]: MonetizationItem } = {
@@ -76,7 +85,7 @@ local Items: { [string]: MonetizationItem } = {
 		AssetId = 0, -- Replace 0 with your Game Pass ID from Roblox Creator Hub
 		RobuxPrice = 79,
 		Badge = "FAST RIDE",
-		Description = "Realistic Sport Delivery Motorbike (42 Speed, spinning wheels, corner lean & seated rider)! Unlock with 450 Gold OR 79 R$.",
+		Description = "Realistic Sport Delivery Motorbike (42 Speed, spinning wheels, corner lean & seated rider)! Unlock with 3,750 Gold OR 79 R$.",
 		AccentColor = Color3.fromRGB(42, 174, 184),
 	},
 	GoldenEmperorPistolPass = {
@@ -161,6 +170,35 @@ local Items: { [string]: MonetizationItem } = {
 	},
 }
 
+-- Dual-Currency Robux Alternatives for Gold Upgrades & Shop Items (Existing Robux Store prices above stay 100% unchanged!)
+local DualRobuxOptions: { [string]: DualRobuxOptionSpec } = {
+	UpgradeHQ_Low = { Key = "UpgradeHQ_Low", DisplayName = "Restaurant HQ Upgrade (Lv.2-3)", RobuxPrice = 49, AssetId = 0 },
+	UpgradeHQ_Mid = { Key = "UpgradeHQ_Mid", DisplayName = "Restaurant HQ Upgrade (Lv.4-5)", RobuxPrice = 79, AssetId = 0 },
+	UpgradeHQ_High = { Key = "UpgradeHQ_High", DisplayName = "Restaurant HQ Upgrade (Lv.6-8)", RobuxPrice = 119, AssetId = 0 },
+	UpgradeHQ_Max = { Key = "UpgradeHQ_Max", DisplayName = "Restaurant HQ Upgrade (Lv.9-10)", RobuxPrice = 169, AssetId = 0 },
+	UnlockWarehouse = { Key = "UnlockWarehouse", DisplayName = "Unlock Ingredient Warehouse", RobuxPrice = 39, AssetId = 0 },
+	UpgradeWarehouse = { Key = "UpgradeWarehouse", DisplayName = "Upgrade Ingredient Warehouse", RobuxPrice = 49, AssetId = 0 },
+	BuyDualStove = { Key = "BuyDualStove", DisplayName = "Dual-Stove Kitchen Line", RobuxPrice = 59, AssetId = 0 },
+	BuyVIPBooths = { Key = "BuyVIPBooths", DisplayName = "VIP Private Dining Booths", RobuxPrice = 79, AssetId = 0 },
+	HireCrew = { Key = "HireCrew", DisplayName = "Hire Kitchen Chef", RobuxPrice = 39, AssetId = 0 },
+	HireWaiter = { Key = "HireWaiter", DisplayName = "Hire Dining Waiter", RobuxPrice = 39, AssetId = 0 },
+	HireCourier = { Key = "HireCourier", DisplayName = "Hire Motorbike Courier", RobuxPrice = 49, AssetId = 0 },
+	BuyCentralParkBranch = { Key = "BuyCentralParkBranch", DisplayName = "Central Park Bistro Branch", RobuxPrice = 69, AssetId = 0 },
+	UpgradeDefenses = { Key = "UpgradeDefenses", DisplayName = "Base Defenses Upgrade", RobuxPrice = 59, AssetId = 0 },
+}
+
+local function getHQUpgradeRobuxPrice(nextLevel: number): number
+	if nextLevel <= 3 then
+		return DualRobuxOptions.UpgradeHQ_Low.RobuxPrice
+	elseif nextLevel <= 5 then
+		return DualRobuxOptions.UpgradeHQ_Mid.RobuxPrice
+	elseif nextLevel <= 8 then
+		return DualRobuxOptions.UpgradeHQ_High.RobuxPrice
+	else
+		return DualRobuxOptions.UpgradeHQ_Max.RobuxPrice
+	end
+end
+
 local MonetizationConfig: MonetizationConfigType = {
 	Order = {
 		"DeliveryMotorbike",
@@ -179,6 +217,8 @@ local MonetizationConfig: MonetizationConfigType = {
 		"NinjaMafiaContract",
 	},
 	Items = Items,
+	DualRobuxOptions = DualRobuxOptions,
+	GetHQUpgradeRobuxPrice = getHQUpgradeRobuxPrice,
 }
 
 return MonetizationConfig

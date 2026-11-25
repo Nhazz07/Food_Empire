@@ -305,9 +305,9 @@ local function updateWarehouseVisualsForPlayer(player: Player): ()
 						local textLbl = label:FindFirstChildOfClass("TextLabel")
 						if textLbl then
 							if isLocked then
-								textLbl.Text = string.format("LOCKED %s (Build: %d Coins)", spec.ShortLabel, spec.UnlockCost)
+								textLbl.Text = string.format("LOCKED %s WAREHOUSE (%dG)", string.upper(spec.ShortLabel), spec.UnlockCost)
 							else
-								textLbl.Text = string.format("%s %d/%d (Lv.%d)", spec.ShortLabel, total, cap, level)
+								textLbl.Text = string.format("%s WAREHOUSE %d/%d (Lv.%d)", string.upper(spec.ShortLabel), total, cap, level)
 							end
 						end
 					end
@@ -320,13 +320,13 @@ local function updateWarehouseVisualsForPlayer(player: Player): ()
 					if prompt and prompt:IsA("ProximityPrompt") then
 						if isLocked then
 							prompt.Enabled = true
-							prompt.ActionText = string.format("Build %s (%d Coins)", spec.ShortLabel, spec.UnlockCost)
-							prompt.ObjectText = "Locked Plot"
+							prompt.ActionText = string.format("Unlock %s (%dG)", spec.DisplayName, spec.UnlockCost)
+							prompt.ObjectText = "Locked Ingredient Warehouse"
 						else
 							local nextTier = WarehouseConfig.Tiers[level + 1]
 							if nextTier then
 								prompt.Enabled = true
-								prompt.ActionText = string.format("Upgrade Lv.%d (%d Coins)", nextTier.Level, nextTier.UpgradeCost)
+								prompt.ActionText = string.format("Upgrade Lv.%d (%dG)", nextTier.Level, nextTier.UpgradeCost)
 								prompt.ObjectText = string.format("%s (%d/%d)", spec.DisplayName, total, cap)
 							else
 								prompt.Enabled = true
@@ -408,7 +408,7 @@ function WarehouseService.ConsumeIngredients(player: Player, required: { [string
 	return true
 end
 
-function WarehouseService.TryUpgradeWarehouse(player: Player, category: WarehouseCategory): (boolean, string)
+function WarehouseService.TryUpgradeWarehouse(player: Player, category: WarehouseCategory, bypassGold: boolean?): (boolean, string)
 	local state = ensureState(player)
 	local currentLevel = state.Levels[category] or 0
 	local spec = WarehouseConfig.Specs[category]
@@ -419,16 +419,16 @@ function WarehouseService.TryUpgradeWarehouse(player: Player, category: Warehous
 	-- Unlock / Build locked warehouse (Lv.0 -> Lv.1)
 	if currentLevel <= 0 then
 		local unlockCost = spec.UnlockCost or 150
-		if spendCoinsHandler and unlockCost > 0 then
+		if not bypassGold and spendCoinsHandler and unlockCost > 0 then
 			local paid = spendCoinsHandler(player, unlockCost)
 			if not paid then
-				return false, string.format("Need %d Coins to build %s", unlockCost, spec.DisplayName)
+				return false, string.format("Need %d Gold to unlock %s!", unlockCost, spec.DisplayName)
 			end
 		end
 		state.Levels[category] = 1
 		notifyChanged(player)
-		print(string.format("[WarehouseService] %s built %s (Lv.1, Cap: 60)!", player.Name, spec.DisplayName))
-		return true, string.format("Built %s!", spec.DisplayName)
+		print(string.format("[WarehouseService] %s unlocked %s (Lv.1, Cap: 50)!", player.Name, spec.DisplayName))
+		return true, string.format("Unlocked %s! Matching kitchen dishes & %s stealing are now unlocked!", spec.DisplayName, spec.ShipmentName)
 	end
 
 	local nextTier = WarehouseConfig.Tiers[currentLevel + 1]
@@ -436,10 +436,10 @@ function WarehouseService.TryUpgradeWarehouse(player: Player, category: Warehous
 		return false, "Already at max level"
 	end
 
-	if spendCoinsHandler then
+	if not bypassGold and spendCoinsHandler then
 		local paid = spendCoinsHandler(player, nextTier.UpgradeCost)
 		if not paid then
-			return false, string.format("Need %d Coins", nextTier.UpgradeCost)
+			return false, string.format("Need %d Gold to upgrade %s!", nextTier.UpgradeCost, spec.DisplayName)
 		end
 	end
 
@@ -501,7 +501,9 @@ function WarehouseService.MoveWarehouseToNextPlot(player: Player, category: Ware
 	swapModel:SetAttribute("PlotIndex", targetIndex)
 
 	notifyChanged(player)
-	return true, string.format("Moved %s Warehouse to Plot #%d!", category, nextIndex)
+	local spec = WarehouseConfig.Specs[category]
+	local whName = if spec then spec.DisplayName else (category .. " Ingredient Warehouse")
+	return true, string.format("Moved %s to Plot #%d!", whName, nextIndex)
 end
 
 function WarehouseService.LoadPlayerState(

@@ -55,17 +55,17 @@ local CLAIM_BONUS_EXP = 12
 local ROUTES: { CornerRoute } = {
 	{
 		SectorId = "FishingPort",
-		DisplayName = "Obsidian Wharf",
+		DisplayName = "Mafia Seafood & Fish Shipment",
 		Category = "Fish",
 		OriginPos = Vector3.new(730, 2.2, 730),
 		VaultPos = Vector3.new(648, 1.52, 696),
 		MidPos = Vector3.new(490, 2.2, 490),
 		BayPos = Vector3.new(66, 2.2, 66),
-		InitialDelay = 4, -- First Fish shipment goes out almost right away!
+		InitialDelay = 4, -- First Seafood & Fish shipment goes out almost right away!
 	},
 	{
 		SectorId = "VegetableFarm",
-		DisplayName = "Iron Citadel",
+		DisplayName = "Mafia Vegetable Ingredient Shipment",
 		Category = "Vegetable",
 		OriginPos = Vector3.new(-730, 2.2, -730),
 		VaultPos = Vector3.new(-648, 1.52, -696),
@@ -75,7 +75,7 @@ local ROUTES: { CornerRoute } = {
 	},
 	{
 		SectorId = "FruitOrchard",
-		DisplayName = "Velvet Promenade",
+		DisplayName = "Mafia Fruit Ingredient Shipment",
 		Category = "Fruit",
 		OriginPos = Vector3.new(-730, 2.2, 730),
 		VaultPos = Vector3.new(-648, 1.52, 696),
@@ -85,7 +85,7 @@ local ROUTES: { CornerRoute } = {
 	},
 	{
 		SectorId = "Ranch",
-		DisplayName = "Viper Exchange",
+		DisplayName = "Mafia Meat Ingredient Shipment",
 		Category = "Meat",
 		OriginPos = Vector3.new(730, 2.2, -730),
 		VaultPos = Vector3.new(648, 1.52, -696),
@@ -138,9 +138,9 @@ local function updateCornerVisuals(st: ActiveShipmentState): ()
 		else 1
 
 	local statusText = if st.Phase == "EnRoute"
-		then "SHIPMENT GOING OUT -> CENTER!"
-		elseif st.Phase == "Arrived" then "SHIPMENT AT CENTRAL PLAZA!"
-		else string.format("NEUTRAL HUB  •  NEXT SHIPMENT: %ds", rem)
+		then string.format("%s -> CENTRAL PARK!", if spec then spec.ShipmentShortName else "MAFIA SHIPMENT")
+		elseif st.Phase == "Arrived" then "ARRIVED IN CENTRAL PARK — STEAL [E]!"
+		else string.format("MAFIA DEPOT  •  NEXT DISPATCH: %ds", rem)
 
 	local pillColor = if st.Phase == "EnRoute"
 		then Color3.fromRGB(246, 168, 32)
@@ -161,7 +161,7 @@ local function updateCornerVisuals(st: ActiveShipmentState): ()
 			if bb and bb:IsA("BillboardGui") then
 				local nameLbl = bb:FindFirstChild("SectorName")
 				if nameLbl and nameLbl:IsA("TextLabel") then
-					nameLbl.Text = string.upper(st.Route.DisplayName) .. " (NEUTRAL)"
+					nameLbl.Text = string.upper(if spec then spec.ShipmentName else st.Route.DisplayName)
 				end
 				local ownLbl = bb:FindFirstChild("SectorOwner")
 				if ownLbl and ownLbl:IsA("TextLabel") then
@@ -261,7 +261,7 @@ local function buildShipmentTruck(route: CornerRoute): Model
 	end
 
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(230, 36)
+	bb.Size = UDim2.fromOffset(290, 38)
 	bb.StudsOffset = Vector3.new(0, 7.2, 0)
 	bb.MaxDistance = 260
 	bb.Parent = chassis
@@ -270,8 +270,8 @@ local function buildShipmentTruck(route: CornerRoute): Model
 	lbl.BackgroundColor3 = Color3.fromRGB(22, 28, 42)
 	lbl.BackgroundTransparency = 0.08
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = string.format("%s %s SHIPMENT -> CENTER", spec.Icon, spec.ShortLabel)
-	lbl.TextSize = 13
+	lbl.Text = string.format("%s -> CENTRAL PARK", spec.ShipmentShortName)
+	lbl.TextSize = 12
 	lbl.TextColor3 = Color3.fromRGB(255, 232, 118)
 	lbl.Parent = bb
 	local c = Instance.new("UICorner")
@@ -296,7 +296,15 @@ local function claimShipmentForPlayer(st: ActiveShipmentState, player: Player, b
 	local spec = WarehouseConfig.Specs[cat]
 	if not WarehouseService.IsUnlocked(player, cat) then
 		if not byRaider then
-			sendToast(player, string.format("Build %s (%d Gold) in Storage (B) to claim %s Shipments!", spec.DisplayName, spec.UnlockCost, spec.ShortLabel))
+			sendToast(
+				player,
+				string.format(
+					"LOCKED: Unlock your %s (%dG) in Storage [B] before stealing the %s!",
+					spec.DisplayName,
+					spec.UnlockCost,
+					spec.ShipmentName
+				)
+			)
 		end
 		return false
 	end
@@ -310,14 +318,15 @@ local function claimShipmentForPlayer(st: ActiveShipmentState, player: Player, b
 			local added = WarehouseService.AddIngredient(player, ing, CLAIM_PER_ITEM * mult)
 			if added > 0 then
 				totalAdded += added
-				table.insert(parts, string.format("+%d %s", added, ing))
+				local ingLabel = WarehouseConfig.IngredientDisplayNames[ing] or ing
+				table.insert(parts, string.format("+%d %s", added, ingLabel))
 			end
 		end
 	end
 
 	if totalAdded <= 0 then
 		if not byRaider then
-			sendToast(player, string.format("%s is FULL! Upgrade it or cook dishes first!", spec.DisplayName))
+			sendToast(player, string.format("%s is FULL! Upgrade it in Storage [B] or cook dishes first!", spec.DisplayName))
 		end
 		return false
 	end
@@ -330,14 +339,15 @@ local function claimShipmentForPlayer(st: ActiveShipmentState, player: Player, b
 	if not byRaider then
 		player:SetAttribute("StolenShipmentUntil", os.clock() + 35)
 	end
-	local prefix = if byRaider then "Raider Chef claimed " else "Stolen "
+	local prefix = if byRaider then "Raider Chef stole " else "Stole "
 	sendToast(
 		player,
 		string.format(
-			"%s%s Shipment (%s, +%dG)! Central Park Rivals are hostile for 35s!",
+			"%s%s (%s) -> stored in %s (+%dG)! Central Park Mafia Rivals are hostile for 35s!",
 			prefix,
-			spec.ShortLabel,
+			spec.ShipmentName,
 			table.concat(parts, ", "),
+			spec.DisplayName,
 			CLAIM_BONUS_GOLD
 		)
 	)
@@ -384,22 +394,27 @@ local function spawnArrivedCrate(st: ActiveShipmentState): ()
 	light.Parent = box
 
 	local bb = Instance.new("BillboardGui")
-	bb.Size = UDim2.fromOffset(220, 42)
-	bb.StudsOffset = Vector3.new(0, 4.8, 0)
-	bb.MaxDistance = 220
+	bb.Size = UDim2.fromOffset(296, 52)
+	bb.StudsOffset = Vector3.new(0, 5.2, 0)
+	bb.MaxDistance = 230
 	bb.Parent = box
 	local lbl = Instance.new("TextLabel")
 	lbl.Size = UDim2.fromScale(1, 1)
-	lbl.BackgroundColor3 = Color3.fromRGB(20, 28, 42)
+	lbl.BackgroundColor3 = Color3.fromRGB(20, 26, 38)
 	lbl.BackgroundTransparency = 0.06
 	lbl.Font = Enum.Font.GothamBlack
-	lbl.Text = string.format("%s %s SHIPMENT READY! [E]", spec.Icon, spec.ShortLabel)
-	lbl.TextSize = 13
+	lbl.TextWrapped = true
+	lbl.Text = string.format("%s [E]\nSTEAL: %s", spec.ShipmentShortName, spec.IngredientSummary)
+	lbl.TextSize = 11
 	lbl.TextColor3 = Color3.fromRGB(134, 248, 168)
 	lbl.Parent = bb
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, 8)
 	c.Parent = lbl
+	local crateStroke = Instance.new("UIStroke")
+	crateStroke.Color = accent
+	crateStroke.Thickness = 1.6
+	crateStroke.Parent = lbl
 
 	local prompt = Instance.new("ProximityPrompt")
 	prompt.Name = "ClaimShipmentPrompt"
@@ -407,8 +422,8 @@ local function spawnArrivedCrate(st: ActiveShipmentState): ()
 	prompt.HoldDuration = 0.2
 	prompt.MaxActivationDistance = 16
 	prompt.RequiresLineOfSight = false
-	prompt.ActionText = string.format("Claim %s Shipment (+18 Stock)", spec.ShortLabel)
-	prompt.ObjectText = "Central Shipment Bay"
+	prompt.ActionText = string.format("Steal %s (+18 Stock)", spec.ShortLabel)
+	prompt.ObjectText = spec.ShipmentName .. " (Central Park)"
 	prompt.Parent = box
 
 	st.CratePromptConn = prompt.Triggered:Connect(function(player)
@@ -491,8 +506,10 @@ function ShipmentService.TryRivalInterceptAtPosition(worldPos: Vector3): boolean
 			st.NextDispatchAt = os.clock() + st.CycleDuration
 			updateCornerVisuals(st)
 			notifyChanged()
+			local spec = WarehouseConfig.Specs[st.Route.Category]
+			local shipTitle = if spec then spec.ShipmentName else (st.Route.Category .. " Shipment")
 			for _, p in ipairs(Players:GetPlayers()) do
-				sendToast(p, string.format("Rival Chef stole the %s Shipment in Central Plaza!", st.Route.Category))
+				sendToast(p, string.format("Rival Mafia claimed the %s in Central Park!", shipTitle))
 			end
 			return true
 		end
@@ -558,10 +575,22 @@ function ShipmentService.TryCrackTerritoryVault(player: Player, categoryArg: str
 	end
 
 	local cat = chosenRoute.Category
+	local spec = WarehouseConfig.Specs[cat]
+	if spec and not WarehouseService.IsUnlocked(player, cat) then
+		local lockMsg = string.format(
+			"LOCKED: Unlock your %s (%dG) in Storage [B] before stealing from the %s Vault!",
+			spec.DisplayName,
+			spec.UnlockCost,
+			spec.ShortLabel
+		)
+		sendToast(player, lockMsg)
+		return false, lockMsg
+	end
+
 	local cdUntil = vaultCooldownUntil[cat] or 0
 	if cdUntil > now then
 		local rem = math.max(1, math.ceil(cdUntil - now))
-		return false, string.format("%s Territory Supply Vault is locked down (%ds cooldown)!", cat, rem)
+		return false, string.format("Mafia %s Ingredient Vault is locked down (%ds cooldown)!", if spec then spec.ShortLabel else cat, rem)
 	end
 
 	vaultCooldownUntil[cat] = now + 22
@@ -572,12 +601,11 @@ function ShipmentService.TryCrackTerritoryVault(player: Player, categoryArg: str
 		player:SetAttribute("VaultKeycards", keycards - 1)
 	end
 
-	local goldReward = if usedKeycard then 440 else 320
-	local repReward = if usedKeycard then 65 else 55
-	local expReward = if usedKeycard then 85 else 75
+	local goldReward = if usedKeycard then 250 else 180
+	local repReward = if usedKeycard then 45 else 35
+	local expReward = if usedKeycard then 70 else 55
 	PlayerDataService.AddRewards(player, goldReward, expReward, repReward)
 
-	local spec = WarehouseConfig.Specs[cat]
 	local stockAdded = 0
 	if spec and WarehouseService.IsUnlocked(player, cat) then
 		for _, ing in ipairs(spec.Ingredients) do
@@ -597,13 +625,14 @@ function ShipmentService.TryCrackTerritoryVault(player: Player, categoryArg: str
 	end
 
 	player:SetAttribute("StolenShipmentUntil", now + 35)
+	local vaultTag = if spec then string.upper(spec.ShortLabel) else string.upper(cat)
 	local lbl = vaultStatusLabels[cat]
 	if lbl and lbl.Parent then
-		lbl.Text = string.format("SYNDICATE VAULT: %s  |  CRACKED (LOCKDOWN)", string.upper(cat))
+		lbl.Text = string.format("MAFIA %s VAULT  |  RAIDED (LOCKDOWN)", vaultTag)
 		lbl.TextColor3 = Color3.fromRGB(214, 118, 92)
 		task.delay(22, function()
 			if lbl.Parent then
-				lbl.Text = string.format("SYNDICATE SUPPLY VAULT: %s  |  +320G & RARE STOCK  [E]", string.upper(cat))
+				lbl.Text = string.format("MAFIA %s INGREDIENT VAULT  |  +320G & STOCK  [E]", vaultTag)
 				lbl.TextColor3 = Color3.fromRGB(236, 204, 128)
 			end
 		end)
@@ -611,12 +640,14 @@ function ShipmentService.TryCrackTerritoryVault(player: Player, categoryArg: str
 
 	local bonusTag = if usedKeycard then " [KEYCARD BONUS +120G]" else ""
 	local rareTag = if rareAddedName then (" | " .. rareAddedName) else ""
+	local whDisplay = if spec then spec.DisplayName else (cat .. " Ingredient Warehouse")
 	local msg = string.format(
-		"CRACKED %s SUPPLY VAULT! +%dG, +%d Rep, +%d Stock%s%s!",
-		string.upper(cat),
+		"RAIDED MAFIA %s VAULT! +%dG, +%d Rep, +%d Stock -> %s%s%s!",
+		vaultTag,
 		goldReward,
 		repReward,
 		stockAdded,
+		whDisplay,
 		rareTag,
 		bonusTag
 	)
@@ -674,8 +705,8 @@ local function buildTerritorySupplyVaults(): ()
 		lbl.BackgroundColor3 = Color3.fromRGB(14, 16, 22)
 		lbl.BackgroundTransparency = 0.08
 		lbl.Font = Enum.Font.GothamBlack
-		lbl.Text = string.format("SYNDICATE SUPPLY VAULT: %s  |  +320G & RARE STOCK  [E]", string.upper(cat))
-		lbl.TextSize = 11
+		lbl.Text = string.format("MAFIA %s INGREDIENT VAULT  |  +320G & STOCK  [E]", string.upper(if spec then spec.ShortLabel else cat))
+		lbl.TextSize = 10
 		lbl.TextColor3 = Color3.fromRGB(236, 204, 128)
 		lbl.Parent = bb
 		Instance.new("UICorner", lbl).CornerRadius = UDim.new(0, 6)
@@ -691,8 +722,8 @@ local function buildTerritorySupplyVaults(): ()
 		prompt.HoldDuration = 0.35
 		prompt.MaxActivationDistance = 18
 		prompt.RequiresLineOfSight = false
-		prompt.ActionText = string.format("Crack %s Supply Vault (+320G & Rare Stock)", cat)
-		prompt.ObjectText = "Syndicate Territory Vault"
+		prompt.ActionText = string.format("Steal %s Vault (+320G & Stock)", if spec then spec.ShortLabel else cat)
+		prompt.ObjectText = string.format("Mafia %s Ingredient Vault", if spec then spec.ShortLabel else cat)
 		prompt.Parent = body
 
 		prompt.Triggered:Connect(function(player: Player)
@@ -708,9 +739,13 @@ function ShipmentService.GetSnapshot(): { [string]: any }
 	local now = os.clock()
 	local out: { [string]: any } = {}
 	for sectorId, st in pairs(statesBySector) do
+		local spec = WarehouseConfig.Specs[st.Route.Category]
 		out[sectorId] = {
 			SectorId = sectorId,
 			DisplayName = st.Route.DisplayName,
+			ShipmentName = if spec then spec.ShipmentName else st.Route.DisplayName,
+			ShortLabel = if spec then spec.ShortLabel else st.Route.Category,
+			IngredientSummary = if spec then spec.IngredientSummary else "",
 			Category = st.Route.Category,
 			Phase = st.Phase,
 			SecondsUntilNext = if st.Phase == "Loading" then math.max(0, math.ceil(st.NextDispatchAt - now)) else 0,
@@ -721,11 +756,35 @@ function ShipmentService.GetSnapshot(): { [string]: any }
 	return out
 end
 
+local function rebrandCentralShipmentBays(): ()
+	local map = Workspace:FindFirstChild("FoodEmpireMap")
+	local central = if map then map:FindFirstChild("CentralDistrict") else nil
+	local plaza = if central then central:FindFirstChild("CentralPlaza") else nil
+	local bays = if plaza then plaza:FindFirstChild("CentralShipmentBays") else nil
+	if not bays then
+		return
+	end
+	for _, route in ipairs(ROUTES) do
+		local bay = bays:FindFirstChild("ShipmentBay_" .. route.Category)
+		local spec = WarehouseConfig.Specs[route.Category]
+		if bay and spec then
+			for _, desc in ipairs(bay:GetDescendants()) do
+				if desc:IsA("TextLabel") and desc.Name == "BayLabel" then
+					desc.Text = string.upper(spec.ShipmentName)
+					desc.TextScaled = true
+				end
+			end
+		end
+	end
+end
+
 function ShipmentService.Start(): ()
 	if isRunning then
 		return
 	end
 	isRunning = true
+
+	rebrandCentralShipmentBays()
 
 	local existing = Workspace:FindFirstChild("LiveShipments")
 	if existing and existing:IsA("Folder") then

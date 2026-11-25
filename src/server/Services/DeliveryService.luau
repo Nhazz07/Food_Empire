@@ -165,7 +165,7 @@ local function wireTerritoryPickupCrates(): ()
 								return
 							end
 							if not WarehouseService.IsUnlocked(player, category) then
-								sendToast(player, string.format("Build %s (%d Gold) first to store %s!", spec.DisplayName, spec.UnlockCost, spec.ShortLabel))
+								sendToast(player, string.format("LOCKED: Unlock your %s (%dG) in Storage [B] before stealing %s!", spec.DisplayName, spec.UnlockCost, spec.ShortLabel))
 								return
 							end
 							if carriedCategory[player] then
@@ -218,7 +218,7 @@ local function wireResourceNodeHarvesting(): ()
 								return
 							end
 							if not WarehouseService.IsUnlocked(player, category) then
-								sendToast(player, string.format("Build %s (%d Gold) in Storage (B) to store %s!", spec.DisplayName, spec.UnlockCost, spec.ShortLabel))
+								sendToast(player, string.format("LOCKED: Unlock your %s (%dG) in Storage [B] to store %s!", spec.DisplayName, spec.UnlockCost, spec.ShortLabel))
 								return
 							end
 							local now = os.clock()
@@ -246,7 +246,7 @@ local function wireResourceNodeHarvesting(): ()
 									end
 								end)
 								PlayerDataService.AddRewards(player, 3, 4, 1)
-								sendToast(player, string.format("%s Stored %s in %s!", spec.Icon, table.concat(storedParts, ", "), spec.DisplayName))
+								sendToast(player, string.format("Stored %s in %s!", table.concat(storedParts, ", "), spec.DisplayName))
 							else
 								sendToast(player, string.format("%s is FULL! Upgrade it or cook dishes in Kitchen (C)!", spec.DisplayName))
 							end

@@ -13,7 +13,7 @@ local CombatService = {}
 local ATTACK_COOLDOWN = 0.45
 local ATTACK_RANGE = 11.5
 local ATTACK_DAMAGE = 35
-local SAFE_ZONE_RADIUS = 118 -- Matches expanded 224x224 Castle Base walls
+local SAFE_ZONE_RADIUS = 172 -- Matches expanded 336x288 Grand Castle Base walls
 
 local RIVAL_KILL_COINS = 35
 local RIVAL_KILL_EXP = 20

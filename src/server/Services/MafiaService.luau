@@ -13,6 +13,7 @@ local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local ShipmentService = require("./ShipmentService")
 local BlackMarketService = require("./BlackMarketService")
+local CombatLockService = require("./CombatLockService")
 
 type MafiaAgent = {
 	Model: Model,
@@ -324,14 +325,22 @@ local function tryMafiaAmbush(agent: MafiaAgent): boolean
 	end
 
 	if bestHum and bestPos then
+		local victimModel = bestHum.Parent
+		local victimPlayer = if victimModel and victimModel:IsA("Model") then Players:GetPlayerFromCharacter(victimModel) else nil
 		if bestDist <= 12 and (now - agent.LastAttackAt) >= 1.15 then
 			agent.LastAttackAt = now
 			MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
+			if victimPlayer then
+				CombatLockService.MarkUnderAttack(victimPlayer, myPos, if agent.IsBoss then "Food Mafia Capo" else "Food Mafia Enforcer")
+			end
 			bestHum:TakeDamage(if agent.IsBoss then 26 else 18)
 			BlackMarketService.BroadcastSFX("MeleeHit", bestPos)
 		elseif bestDist > 12 and bestDist <= 60 and (now - agent.LastAttackAt) >= (if agent.IsBoss then 1.05 else 1.5) then
 			agent.LastAttackAt = now
 			MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
+			if victimPlayer then
+				CombatLockService.MarkUnderAttack(victimPlayer, myPos, if agent.IsBoss then "Food Mafia Capo" else "Food Mafia Enforcer")
+			end
 			local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
 			local tracerCol = if agent.IsBoss then Color3.fromRGB(255, 206, 54) else Color3.fromRGB(255, 62, 86)
 			BlackMarketService.SpawnBulletTracer(fromPos, bestPos, tracerCol)

@@ -31,7 +31,7 @@ type RaiderAgent = {
 local RaiderChefService = {}
 
 RaiderChefService.MAX_RAIDERS = 2
-RaiderChefService.COSTS = { [1] = 450, [2] = 850 }
+RaiderChefService.COSTS = { [1] = 2250, [2] = 4250 }
 
 local WALK_SPEED = 18
 local RESPAWN_DELAY = 15

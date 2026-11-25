@@ -4,6 +4,11 @@ local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local CollectionService = game:GetService("CollectionService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local WarehouseConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WarehouseConfig")
+)
 
 local WaypointController = {}
 
@@ -56,7 +61,7 @@ local function buildPointerArrow(): (Model, TextLabel)
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "GPSLabel"
-	bb.Size = UDim2.fromOffset(220, 30)
+	bb.Size = UDim2.fromOffset(290, 30)
 	bb.StudsOffset = Vector3.new(0, 2.0, 0)
 	bb.AlwaysOnTop = true
 	bb.Parent = shaft
@@ -171,13 +176,15 @@ local function resolveTargetPosition(playerPos: Vector3): (Vector3?, string?, bo
 		return nil, nil, false
 	end
 
-	-- Priority 1: Carrying a Manual Delivery Crate -> point directly to matching Warehouse in your Castle Base!
+	-- Priority 1: Carrying a Manual Delivery Crate -> point directly to matching Ingredient Warehouse in your Castle Base!
 	local carrying = player:GetAttribute("CarryingCrate")
 	local slot = state.BaseSlot
 	if typeof(carrying) == "string" and typeof(slot) == "string" then
+		local carrySpec = WarehouseConfig.Specs[carrying :: WarehouseConfig.WarehouseCategory]
+		local whName = if carrySpec then carrySpec.DisplayName else (carrying .. " Ingredient Warehouse")
 		for _, plot in ipairs(CollectionService:GetTagged("WarehousePlot")) do
 			if plot:IsA("Model") and plot:GetAttribute("BaseSlot") == slot and plot:GetAttribute("Category") == carrying then
-				return plot:GetPivot().Position, carrying .. " Warehouse", false
+				return plot:GetPivot().Position, whName, false
 			end
 		end
 		if BASE_POSITIONS[slot] then
@@ -197,7 +204,7 @@ local function resolveTargetPosition(playerPos: Vector3): (Vector3?, string?, bo
 		return BASE_POSITIONS[slot], "Restaurant Serve Counter", false
 	end
 
-	-- Priority 3: Guide straight to an Arrived or Incoming Shipment Bay in the Expanded Central District!
+	-- Priority 3: Guide straight to an Arrived or Incoming Central Park Mafia Shipment that the player has UNLOCKED!
 	local shipments = state.Shipments
 	local whLevels = state.Warehouse and state.Warehouse.Levels
 	if typeof(shipments) == "table" then
@@ -206,16 +213,21 @@ local function resolveTargetPosition(playerPos: Vector3): (Vector3?, string?, bo
 		local bestScore = -math.huge
 		for _, sh in pairs(shipments) do
 			if typeof(sh) == "table" and typeof(sh.BayX) == "number" and typeof(sh.BayZ) == "number" then
-				local unlocked = (whLevels and (whLevels[sh.Category] or 0) >= 1) or (sh.Category == "Fish")
+				local catStr = tostring(sh.Category)
+				local unlocked = if whLevels then ((whLevels[catStr] or 0) >= 1) else (catStr == "Fish")
 				local bayPos = Vector3.new(sh.BayX, 4, sh.BayZ)
 				local dist = (bayPos - playerPos).Magnitude
 				local score = (if sh.Phase == "Arrived" then 600 elseif sh.Phase == "EnRoute" then 350 else 50)
-					+ (if unlocked then 200 else 0)
+					+ (if unlocked then 400 else -1200)
 					- dist * 0.3
 				if score > bestScore then
 					bestScore = score
 					bestBay = bayPos
-					bestLabel = tostring(sh.Category) .. " Shipment"
+					local spec = WarehouseConfig.Specs[catStr :: WarehouseConfig.WarehouseCategory]
+					bestLabel = if typeof(sh.ShipmentName) == "string" and sh.ShipmentName ~= ""
+						then sh.ShipmentName
+						elseif spec then spec.ShipmentName
+						else ("Mafia " .. catStr .. " Shipment")
 				end
 			end
 		end
@@ -284,7 +296,7 @@ function WaypointController.Start(): ()
 
 		if arrowLabel then
 			arrowLabel.Visible = true
-			arrowLabel.Text = string.format("%s %s • %dm", if isCustom then "📍" else "➤", targetLabel or "Target", math.floor(dist))
+			arrowLabel.Text = string.format("%s %s • %dm", if isCustom then "[PIN]" else ">", targetLabel or "Target", math.floor(dist))
 			arrowLabel.TextColor3 = if isCustom then Color3.fromRGB(112, 246, 255) else Color3.fromRGB(255, 228, 118)
 		end
 

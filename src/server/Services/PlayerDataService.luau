@@ -226,6 +226,36 @@ function PlayerDataService.SpendCoins(player: Player, amount: number): boolean
 	return true
 end
 
+-- Deducts up to `amount` coins clamped strictly >= 0 (never negative); returns actual amount deducted.
+function PlayerDataService.DeductCoinsClamped(player: Player, amount: number): number
+	if amount <= 0 then
+		return 0
+	end
+	local profile = PlayerDataService.GetProfile(player)
+	local want = math.floor(amount)
+	local actual = math.min(math.max(0, profile.Coins), want)
+	if actual > 0 then
+		profile.Coins = math.max(0, profile.Coins - actual)
+		notifyChanged(player)
+	end
+	return actual
+end
+
+-- Deducts up to `amount` reputation clamped strictly >= 0 (never negative); returns actual amount lost.
+function PlayerDataService.DeductReputation(player: Player, amount: number): number
+	if amount <= 0 then
+		return 0
+	end
+	local profile = PlayerDataService.GetProfile(player)
+	local want = math.floor(amount)
+	local actual = math.min(math.max(0, profile.Reputation), want)
+	if actual > 0 then
+		profile.Reputation = math.max(0, profile.Reputation - actual)
+		notifyChanged(player)
+	end
+	return actual
+end
+
 function PlayerDataService.AddRewards(player: Player, coins: number, exp: number, reputation: number): ()
 	local profile = PlayerDataService.GetProfile(player)
 	if coins > 0 then
@@ -270,7 +300,7 @@ end
 
 function PlayerDataService.SetWaiterCount(player: Player, count: number): ()
 	local profile = PlayerDataService.GetProfile(player)
-	profile.WaiterCount = math.clamp(math.floor(count), 0, 3)
+	profile.WaiterCount = math.clamp(math.floor(count), 0, 5)
 	notifyChanged(player)
 end
 

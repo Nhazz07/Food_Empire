@@ -12,11 +12,11 @@ local MonetizationService = require("./MonetizationService")
 
 local ScooterService = {}
 
-ScooterService.MOTORBIKE_COIN_COST = 750
-ScooterService.SEDAN_COIN_COST = 1250
-ScooterService.VAN_COIN_COST = 1800
-ScooterService.COUPE_COIN_COST = 2600
-ScooterService.ARMOR_PLATE_COST = 700
+ScooterService.MOTORBIKE_COIN_COST = 3750
+ScooterService.SEDAN_COIN_COST = 6250
+ScooterService.VAN_COIN_COST = 9000
+ScooterService.COUPE_COIN_COST = 13000
+ScooterService.ARMOR_PLATE_COST = 3500
 
 ScooterService.PAINTS = {
 	Obsidian = { Label = "OBSIDIAN BLACK", Color = Color3.fromRGB(16, 18, 22) },

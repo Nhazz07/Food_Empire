@@ -62,13 +62,13 @@ type SupplyCourier = {
 local DeliveryRunnerService = {}
 
 DeliveryRunnerService.MAX_COURIERS = 2
-DeliveryRunnerService.COURIER_COSTS = { [1] = 300, [2] = 540 }
+DeliveryRunnerService.COURIER_COSTS = { [1] = 1500, [2] = 2700 }
 
 local COOLDOWN_SECONDS = 15
 local RUNNER_MAX_HP = 180
 local BIKE_COURIER_SPEED = 29.0
-local BASE_PAYOUT_GOLD = 165
-local BASE_PAYOUT_REP = 32
+local BASE_PAYOUT_GOLD = 95
+local BASE_PAYOUT_REP = 24
 local BASE_PAYOUT_EXP = 45
 local COURIER_STOCK_PER_TRIP = 5
 
@@ -355,7 +355,7 @@ function DeliveryRunnerService.SyncCouriersForPlayer(player: Player): ()
 	end
 end
 
-function DeliveryRunnerService.TryHireCourier(player: Player): (boolean, string)
+function DeliveryRunnerService.TryHireCourier(player: Player, bypassGold: boolean?): (boolean, string)
 	if not BaseService.GetPlayerBaseSlot(player) then
 		return false, "Claim your Restaurant Plaza first!"
 	end
@@ -364,7 +364,7 @@ function DeliveryRunnerService.TryHireCourier(player: Player): (boolean, string)
 	if not cost then
 		return false, string.format("Max Motorbike Couriers hired (%d / %d)!", DeliveryRunnerService.MAX_COURIERS, DeliveryRunnerService.MAX_COURIERS)
 	end
-	if not PlayerDataService.SpendCoins(player, cost) then
+	if not bypassGold and not PlayerDataService.SpendCoins(player, cost) then
 		return false, string.format("Need %d Gold to hire Motorbike Courier #%d!", cost, current + 1)
 	end
 
@@ -495,7 +495,13 @@ local function stepSupplyCourier(c: SupplyCourier, now: number): ()
 
 	local pos = c.Root.Position
 	local spec = WarehouseConfig.Specs[c.Category] or WarehouseConfig.Specs.Fish
-	local catName = string.upper(c.Category)
+	local catName = spec.Tag
+
+	if not WarehouseService.IsUnlocked(c.Owner, c.Category) then
+		c.Category = pickBestCategoryToRestock(c.Owner, c.SlotIndex)
+		spec = WarehouseConfig.Specs[c.Category] or WarehouseConfig.Specs.Fish
+		catName = spec.Tag
+	end
 
 	if c.Phase == "ToMarket" then
 		local bayPos = CENTRAL_MARKET_BAYS[c.Category] or CENTRAL_MARKET_BAYS.Fish

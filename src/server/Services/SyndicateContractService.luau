@@ -28,6 +28,7 @@ local MafiaVisualBuilder = require(
 local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local WarehouseService = require("./WarehouseService")
+local CombatLockService = require("./CombatLockService")
 
 export type RankSpec = {
 	Tier: number,
@@ -520,6 +521,12 @@ end
 
 -- Spawns a contested Gang War Contraband Supply Drop in Central District guarded by 2 Rival Enforcers!
 function SyndicateContractService.StartGangWarDrop(requestingPlayer: Player?): (boolean, string)
+	if requestingPlayer then
+		local canTp, lockMsg = CombatLockService.CanTeleport(requestingPlayer)
+		if not canTp then
+			return false, lockMsg
+		end
+	end
 	if activeGangWarModel and activeGangWarModel.Parent then
 		if requestingPlayer and requestingPlayer.Character then
 			requestingPlayer.Character:PivotTo(CFrame.lookAt(GANG_WAR_POS + Vector3.new(0, 4.5, -18), GANG_WAR_POS))

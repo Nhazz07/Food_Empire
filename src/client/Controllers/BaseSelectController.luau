@@ -101,7 +101,7 @@ function BaseSelectController.Init(parentGui: ScreenGui, onChooseBase: ChooseBas
 	sub.BackgroundTransparency = 1
 	sub.Font = Enum.Font.GothamBold
 	sub.TextWrapped = true
-	sub.Text = "Choose your 1 Castle Base below! Includes your Restaurant HQ & Starter 🐟 Fish Warehouse (unlock Veg, Fruit & Meat with Gold)."
+	sub.Text = "Choose your 1 Castle Base below! Includes your Restaurant HQ & starter Seafood & Fish Ingredient Warehouse (unlock Vegetable, Fruit & Meat Warehouses with Gold)."
 	sub.TextSize = 13
 	sub.TextColor3 = Color3.fromRGB(224, 232, 248)
 	sub.ZIndex = 22
@@ -167,7 +167,7 @@ function BaseSelectController.Init(parentGui: ScreenGui, onChooseBase: ChooseBas
 		statusLbl.Size = UDim2.new(1, -24, 0, 18)
 		statusLbl.BackgroundTransparency = 1
 		statusLbl.Font = Enum.Font.GothamBold
-		statusLbl.Text = "✅ Available • Starter 🐟 Fish Warehouse"
+		statusLbl.Text = "AVAILABLE  •  Starter Seafood & Fish Ingredient Warehouse"
 		statusLbl.TextSize = 11
 		statusLbl.TextColor3 = Color3.fromRGB(132, 242, 168)
 		statusLbl.ZIndex = 23

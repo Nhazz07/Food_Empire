@@ -16,6 +16,7 @@ local SectorService = require("./SectorService")
 local ShipmentService = require("./ShipmentService")
 local BlackMarketService = require("./BlackMarketService")
 local PlayerDataService = require("./PlayerDataService")
+local CombatLockService = require("./CombatLockService")
 
 local RivalAIService = {}
 
@@ -398,6 +399,10 @@ local function tryRivalCombat(agent: RivalAgent): boolean
 				local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
 				local gunDmg = if agent.IsBossEscort then math.floor(faction.GunDamage * 0.78) else faction.GunDamage
 				local shots = if isBossLeader then 2 else 1
+				local victimPlayer = if nearestModel then Players:GetPlayerFromCharacter(nearestModel) else nil
+				if victimPlayer then
+					CombatLockService.MarkUnderAttack(victimPlayer, myPos, faction.DisplayName)
+				end
 				for shotIdx = 1, shots do
 					local targetP = nearestPos + Vector3.new((math.random() - 0.5) * 1.4, (math.random() - 0.5) * 1.0, (math.random() - 0.5) * 1.4)
 					BlackMarketService.SpawnBulletTracer(fromPos, targetP, faction.TracerColor)
@@ -439,6 +444,10 @@ local function tryRivalCombat(agent: RivalAgent): boolean
 				MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
 				local mDmg = if agent.IsBossEscort then math.floor(faction.MeleeDamage * 0.8) else faction.MeleeDamage
 				if nearestModel then
+					local victimPlayer = Players:GetPlayerFromCharacter(nearestModel)
+					if victimPlayer then
+						CombatLockService.MarkUnderAttack(victimPlayer, myPos, faction.DisplayName)
+					end
 					local dir = nearestPos - myPos
 					if dir.Magnitude > 0.05 then
 						nearestModel:SetAttribute("LastHitDir", dir.Unit)

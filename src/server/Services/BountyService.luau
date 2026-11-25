@@ -10,6 +10,7 @@ local MafiaVisualBuilder = require(
 )
 local PlayerDataService = require("./PlayerDataService")
 local BlackMarketService = require("./BlackMarketService")
+local CombatLockService = require("./CombatLockService")
 
 type ActiveHitTarget = {
 	Owner: Player,
@@ -76,6 +77,10 @@ end
 function BountyService.AcceptHitContract(player: Player): (boolean, string)
 	local existing = activeHits[player]
 	if existing and existing.Model.Parent and existing.Humanoid.Health > 0 then
+		local canTp, lockMsg = CombatLockService.CanTeleport(player)
+		if not canTp then
+			return false, lockMsg
+		end
 		local char = player.Character
 		if char then
 			local dest = existing.Root.Position + Vector3.new(0, 2, 24)

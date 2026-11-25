@@ -61,7 +61,7 @@ local function sendAction(action: string, arg: any?): ()
 	end
 	if response.Message == "LOCKED_BIKE" then
 		AudioController.PlayClick()
-		HUDController.ShowToast("Unlock the Sport Motorbike for 750 Gold OR 79 R$!", false)
+		HUDController.ShowToast("Unlock the Sport Motorbike for 3,750 Gold OR 79 R$!", false)
 		EmpireMenuController.ToggleTab("Shop")
 		return
 	end
@@ -74,7 +74,7 @@ local function sendAction(action: string, arg: any?): ()
 		AudioController.PlayCoins()
 	elseif action == "CookRecipe" or action == "ServeCustomerOrder" or action == "SearBoostCook" then
 		AudioController.PlayCook()
-	elseif action == "BuyRobuxItem" or action == "BuyMotorbikeCoins" or action == "BuyDualStove" or action == "BuyVIPBooths" or action == "BuyMafiaSedan" or action == "ToggleMafiaSedan" or action == "BuyArmoredVan" or action == "ToggleArmoredVan" or action == "BuyGetawayCoupe" or action == "ToggleGetawayCoupe" or action == "BuyVehicleArmor" or action == "SetVehiclePaint" or action == "ClaimDailyVault" or action == "TriggerGodfatherPrestige" or action == "CreateFamily" or action == "JoinFamily" or action == "CommandAllAttack" or action == "CommandAllRecall" or action == "CrackTerritoryVault" or action == "ClaimEmperorTribute" or action == "BuyWeaponMod" or action == "SetGuardStance" or action == "OrderMercenaryAssault" or action == "HireMafiaRestaurantChef" or action == "BuyFrontBusiness" or action == "CollectBusinessSafe" or action == "StartPenthouseHeist" or action == "AcceptHitContract" or action == "PlacePlayerBounty" or action == "RaidBlackoutTruck" or action == "BuySmokeGrenades" or action == "ThrowSmokeGrenade" or action == "BuyFlashbangs" or action == "ThrowFlashbang" or action == "BuyC4Charges" or action == "DeployC4Charge" or action == "BuyShadowDash" or action == "TriggerShadowDash" or action == "EquipWeaponMasterySkin" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireWaiter" or action == "HireCourier" or action == "BuyCentralParkBranch" or action == "ToggleCentralParkStaff" or action == "DefendCentralParkBranch" or action == "StartSmugglerConvoy" or action == "StartGangWarDrop" or action == "TriggerBikeTurbo" or action == "ClaimSyndicateContract" or action == "HireRaider" or action == "BuyGuardGear" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
+	elseif action == "BuyRobuxItem" or action == "BuyWithRobuxOption" or action == "BuyMotorbikeCoins" or action == "BuyDualStove" or action == "BuyVIPBooths" or action == "BuyMafiaSedan" or action == "ToggleMafiaSedan" or action == "BuyArmoredVan" or action == "ToggleArmoredVan" or action == "BuyGetawayCoupe" or action == "ToggleGetawayCoupe" or action == "BuyVehicleArmor" or action == "SetVehiclePaint" or action == "ClaimDailyVault" or action == "TriggerGodfatherPrestige" or action == "CreateFamily" or action == "JoinFamily" or action == "CommandAllAttack" or action == "CommandAllRecall" or action == "CrackTerritoryVault" or action == "ClaimEmperorTribute" or action == "BuyWeaponMod" or action == "SetGuardStance" or action == "OrderMercenaryAssault" or action == "HireMafiaRestaurantChef" or action == "BuyFrontBusiness" or action == "CollectBusinessSafe" or action == "StartPenthouseHeist" or action == "AcceptHitContract" or action == "PlacePlayerBounty" or action == "RaidBlackoutTruck" or action == "BuySmokeGrenades" or action == "ThrowSmokeGrenade" or action == "BuyFlashbangs" or action == "ThrowFlashbang" or action == "BuyC4Charges" or action == "DeployC4Charge" or action == "BuyShadowDash" or action == "TriggerShadowDash" or action == "EquipWeaponMasterySkin" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireWaiter" or action == "HireCourier" or action == "BuyCentralParkBranch" or action == "ToggleCentralParkStaff" or action == "DefendCentralParkBranch" or action == "StartSmugglerConvoy" or action == "StartGangWarDrop" or action == "TriggerBikeTurbo" or action == "ClaimSyndicateContract" or action == "HireRaider" or action == "BuyGuardGear" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
 		AudioController.PlayFanfare()
 	elseif action ~= "GetState" and action ~= "SetSprint" then
 		AudioController.PlayClick()
@@ -84,7 +84,6 @@ end
 local function openAndVisitBlackMarket(): ()
 	WeaponController.ExitScope()
 	AudioController.PlayClick()
-	task.spawn(sendAction, "TeleportBlackMarket", nil)
 	EmpireMenuController.ToggleTab("BlackMarket")
 end
 

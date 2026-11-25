@@ -167,11 +167,11 @@ local function handleFishingResult(player: Player, token: any, accuracy: any): (
 		PlayerDataService.AddRewards(player, bonusGold, 25, 12)
 
 		if addedRare > 0 then
-			sendToast(player, string.format("🌟 %s CAUGHT! (+%dG) Cook %s in Kitchen (C)!", rareLabel, bonusGold, recipeHint))
+			sendToast(player, string.format("RARE CATCH! %s (+%dG) stored in Seafood & Fish Ingredient Warehouse! Cook %s in Kitchen [C]!", rareLabel, bonusGold, recipeHint))
 		elseif addedFish > 0 then
-			sendToast(player, string.format("🌟 %s! Fish Warehouse almost full — upgrade Fish Warehouse!", rareLabel))
+			sendToast(player, string.format("%s — Seafood & Fish Ingredient Warehouse almost full! Upgrade it in Storage [B]!", rareLabel))
 		else
-			sendToast(player, "📦 Fish Warehouse is FULL! Upgrade it to store rare catches!")
+			sendToast(player, "Seafood & Fish Ingredient Warehouse is FULL! Upgrade it in Storage [B] to store rare catches!")
 		end
 		print(string.format("[FishingService] %s reeled in a %s!", player.Name, rareLabel))
 	elseif accuracy == "Good" then
@@ -179,12 +179,12 @@ local function handleFishingResult(player: Player, token: any, accuracy: any): (
 		local s = WarehouseService.AddIngredient(player, "shrimp", 2)
 		PlayerDataService.AddRewards(player, 12, 8, 3)
 		if (f + s) > 0 then
-			sendToast(player, string.format("🎣 Nice Catch! +%d fish, +%d shrimp stored in Fish Warehouse (+12G)!", f, s))
+			sendToast(player, string.format("Nice Catch! +%d Fish, +%d Shrimp stored in Seafood & Fish Ingredient Warehouse (+12G)!", f, s))
 		else
-			sendToast(player, "📦 Fish Warehouse is FULL! Upgrade it or cook dishes in Kitchen (C)!")
+			sendToast(player, "Seafood & Fish Ingredient Warehouse is FULL! Upgrade it in Storage [B] or cook dishes in Kitchen [C]!")
 		end
 	else
-		sendToast(player, "🎣 The fish slipped off the hook — cast again!")
+		sendToast(player, "The fish slipped off the hook — cast again!")
 	end
 end
 

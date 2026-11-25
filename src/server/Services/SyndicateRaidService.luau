@@ -11,6 +11,7 @@ local MafiaVisualBuilder = require(
 local PlayerDataService = require("./PlayerDataService")
 local WarehouseService = require("./WarehouseService")
 local BlackMarketService = require("./BlackMarketService")
+local CombatLockService = require("./CombatLockService")
 
 type RaidStage = number
 
@@ -222,6 +223,10 @@ local function buildPenthouseCompound(): ()
 end
 
 function SyndicateRaidService.StartHeist(player: Player): (boolean, string)
+	local canTp, lockMsg = CombatLockService.CanTeleport(player)
+	if not canTp then
+		return false, lockMsg
+	end
 	local now = os.clock()
 	if activeStage > 0 then
 		local char = player.Character
@@ -313,6 +318,11 @@ function SyndicateRaidService.Start(): ()
 						if bestD > 20 then u.Humanoid:MoveTo(bestR.Position) end
 						if bestD <= 75 and (now - u.LastShotAt) >= 0.90 then
 							u.LastShotAt = now
+							local targetModel = bestR.Parent
+							local victimP = if targetModel and targetModel:IsA("Model") then Players:GetPlayerFromCharacter(targetModel) else nil
+							if victimP then
+								CombatLockService.MarkUnderAttack(victimP, myPos, if u.IsBoss then "The Crimson Don" else "Penthouse Guard")
+							end
 							bestH:TakeDamage(u.Damage)
 							BlackMarketService.SpawnBulletTracer(myPos + Vector3.new(0, 1.5, 0), bestR.Position, Color3.fromRGB(238, 62, 68))
 							BlackMarketService.BroadcastSFX("SMGShot", myPos)

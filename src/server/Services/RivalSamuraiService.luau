@@ -9,6 +9,7 @@ local MafiaVisualBuilder = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
 )
 local BlackMarketService = require("./BlackMarketService")
+local CombatLockService = require("./CombatLockService")
 
 type RivalBladeAgent = {
 	SlotId: string,
@@ -260,6 +261,9 @@ local function stepAgent(ag: RivalBladeAgent, now: number): ()
 			end
 			ag.LastAttackAt = now
 			MafiaVisualBuilder.TriggerAttackAnim(ag.Model)
+			if targetP then
+				CombatLockService.MarkUnderAttack(targetP, myPos, ag.Style .. " Mafia")
+			end
 			bestH:TakeDamage(ag.Damage)
 			local clashPoint = (myPos + bestR.Position) * 0.5 + Vector3.new(0, 1.5, 0)
 			local targetStyle = tostring(bestM:GetAttribute("MercenaryType") or bestM:GetAttribute("BladeStyle") or "Samurai")

@@ -1168,8 +1168,9 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 	local customRig, customTpl = MafiaVisualBuilder.TryBuildFromTemplate(guardCandidates, modelName, scale, spawnCF, forPreview, guardCombatStyle)
 	if customRig then
 		if customTpl and customTpl:GetAttribute("AttachDefaultWeapon") == true then
-			local wKind: "Crowbar" | "Pistol" | "Shotgun" | "SMG" | "Carbine" | "Sniper" | "BossRifle" | "TommyDrum" | "AssassinRifle" =
-				if classId == "HeavyGuard" then "Shotgun"
+			local wKind: "Crowbar" | "Pistol" | "Shotgun" | "SMG" | "Carbine" | "Sniper" | "BossRifle" | "TommyDrum" | "AssassinRifle" | "Katana" =
+				if classId == "NinjaGuard" then "Katana"
+				elseif classId == "HeavyGuard" then "Shotgun"
 				elseif classId == "SniperGuard" then "Sniper"
 				elseif classId == "BossBodyguard" then "BossRifle"
 				elseif classId == "BasicGuard" then (if ov.IsRanged then "SMG" else "Pistol")
@@ -1183,7 +1184,9 @@ function MafiaVisualBuilder.BuildBodyguardRig(
 		return customRig
 	end
 
-	if classId == "HeavyGuard" then
+	if classId == "NinjaGuard" then
+		return MafiaVisualBuilder.BuildSyndicateSpecialistRig(modelName, "NinjaMafia", scale, spawnCF, forPreview)
+	elseif classId == "HeavyGuard" then
 		local suit = ov.OutfitColor or P.Charcoal
 		local armor = ov.ArmorColor or Color3.fromRGB(42, 46, 54)
 		local helm = ov.HelmetColor or P.Obsidian

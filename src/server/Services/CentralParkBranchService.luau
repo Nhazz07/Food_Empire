@@ -25,10 +25,11 @@ local WarehouseService = require("./WarehouseService")
 local CrewService = require("./CrewService")
 local MonetizationService = require("./MonetizationService")
 local SyndicateContractService = require("./SyndicateContractService")
+local CombatLockService = require("./CombatLockService")
 
 local CentralParkBranchService = {}
 
-CentralParkBranchService.BRANCH_COST = 750
+CentralParkBranchService.BRANCH_COST = 3750
 local BRANCH_POS = Vector3.new(48, 1.35, 98)
 local BRANCH_LOOK_AT = Vector3.new(0, 1.35, 0)
 local SERVE_TICK_SECONDS = 8.5
@@ -389,7 +390,7 @@ local function buildCentralParkBistroMonument(): ()
 	branchModel = m
 end
 
-function CentralParkBranchService.TryBuyBranch(player: Player): (boolean, string)
+function CentralParkBranchService.TryBuyBranch(player: Player, bypassGold: boolean?): (boolean, string)
 	if not BaseService.GetPlayerBaseSlot(player) then
 		return false, "Claim your main Restaurant Base first!"
 	end
@@ -397,7 +398,7 @@ function CentralParkBranchService.TryBuyBranch(player: Player): (boolean, string
 	if prof.OwnsCentralParkBranch then
 		return true, "You already own the Central Park Bistro!"
 	end
-	if not PlayerDataService.SpendCoins(player, CentralParkBranchService.BRANCH_COST) then
+	if not bypassGold and not PlayerDataService.SpendCoins(player, CentralParkBranchService.BRANCH_COST) then
 		return false, string.format("Need %d Gold to purchase the Central Park Bistro!", CentralParkBranchService.BRANCH_COST)
 	end
 
@@ -436,6 +437,10 @@ function CentralParkBranchService.TryToggleStaff(player: Player): (boolean, stri
 end
 
 function CentralParkBranchService.TeleportToBranch(player: Player): (boolean, string)
+	local canTp, tpReason = CombatLockService.CanTeleport(player)
+	if not canTp then
+		return false, tpReason
+	end
 	local char = player.Character
 	if not char then
 		return false, "Character unavailable"

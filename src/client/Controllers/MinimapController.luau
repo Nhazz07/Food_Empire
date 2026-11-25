@@ -13,6 +13,9 @@ local SectorConfig = require(
 local TurfConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("TurfConfig")
 )
+local WarehouseConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WarehouseConfig")
+)
 local MinimapMapData = require("./MinimapMapData")
 local WaypointController = require("./WaypointController")
 local AudioController = require("./AudioController")
@@ -1490,14 +1493,16 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		bayBtn.Parent = oWorld
 		makeCorner(bayBtn, 2)
 		makeStroke(bayBtn, Color3.fromRGB(14, 18, 26), 1.0, Enum.ApplyStrokeMode.Border)
+		local spec = WarehouseConfig.Specs[cat :: WarehouseConfig.WarehouseCategory]
+		local bayTitle = if spec then (spec.ShipmentName .. " (Central Park)") else (cat .. " Shipment Bay")
 		bayBtn.MouseEnter:Connect(function()
-			showHoverTip(cat .. " Shipment Bay")
+			showHoverTip(bayTitle)
 		end)
 		bayBtn.MouseLeave:Connect(function()
 			showHoverTip(nil)
 		end)
 		bayBtn.MouseButton1Click:Connect(function()
-			setMapDestination(pos.X, pos.Z, cat .. " Shipment Bay")
+			setMapDestination(pos.X, pos.Z, bayTitle)
 		end)
 		shipmentBayMarkers[cat] = bayBtn
 	end

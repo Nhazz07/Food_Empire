@@ -21,6 +21,7 @@ local BodyguardConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("BodyguardConfig")
 )
 local PlayerDataService = require("./PlayerDataService")
+local CombatLockService = require("./CombatLockService")
 local WarehouseService = require("./WarehouseService")
 local BlackMarketService = require("./BlackMarketService")
 local BodyguardService = require("./BodyguardService")
@@ -40,8 +41,8 @@ export type SpinPrizeSpec = {
 
 local SpinEventService = {}
 
-SpinEventService.NORMAL_SPIN_COST = 350
-SpinEventService.EVENT_SPIN_COST = 200
+SpinEventService.NORMAL_SPIN_COST = 1750
+SpinEventService.EVENT_SPIN_COST = 1000
 SpinEventService.FREE_SPIN_COOLDOWN = 180 -- 1 free spin every 3 minutes
 local EVENT_CYCLE_IDLE = 115
 local EVENT_CYCLE_ACTIVE = 65
@@ -458,6 +459,10 @@ function SpinEventService.TrySpin(player: Player): (boolean, string, { [string]:
 end
 
 function SpinEventService.TeleportToWheel(player: Player): (boolean, string)
+	local canTp, tpReason = CombatLockService.CanTeleport(player)
+	if not canTp then
+		return false, tpReason
+	end
 	local char = player.Character
 	if not char then
 		return false, "Character unavailable"

@@ -10,6 +10,7 @@ local MafiaVisualBuilder = require(
 )
 local PlayerDataService = require("./PlayerDataService")
 local BlackMarketService = require("./BlackMarketService")
+local CombatLockService = require("./CombatLockService")
 
 export type MafiaRestaurantSpec = {
 	Id: string,
@@ -78,8 +79,8 @@ MafiaRestaurantService.SPECS = {
 		EnforcerHP = 540,
 		BossHP = 1150,
 		GunDamage = 20,
-		ChefHireCost = 420,
-		CycleGold = 95,
+		ChefHireCost = 2100,
+		CycleGold = 55,
 		CycleRep = 18,
 		BountyGold = 240,
 	},
@@ -95,8 +96,8 @@ MafiaRestaurantService.SPECS = {
 		EnforcerHP = 620,
 		BossHP = 1350,
 		GunDamage = 24,
-		ChefHireCost = 520,
-		CycleGold = 128,
+		ChefHireCost = 2600,
+		CycleGold = 75,
 		CycleRep = 24,
 		BountyGold = 310,
 	},
@@ -112,8 +113,8 @@ MafiaRestaurantService.SPECS = {
 		EnforcerHP = 720,
 		BossHP = 1600,
 		GunDamage = 28,
-		ChefHireCost = 650,
-		CycleGold = 168,
+		ChefHireCost = 3250,
+		CycleGold = 100,
 		CycleRep = 32,
 		BountyGold = 420,
 	},
@@ -532,6 +533,10 @@ function MafiaRestaurantService.TryHireChef(player: Player, restId: string): (bo
 end
 
 function MafiaRestaurantService.TeleportToRestaurant(player: Player, restId: string): (boolean, string)
+	local canTp, lockMsg = CombatLockService.CanTeleport(player)
+	if not canTp then
+		return false, lockMsg
+	end
 	local rt = runtimes[restId]
 	if not rt then
 		return false, "Unknown City Restaurant!"
@@ -691,12 +696,16 @@ local function stepApexUnit(rt: RestaurantRuntime, u: GarrisonUnit, now: number)
 		if bestDist > closeThreshold then
 			u.Humanoid:MoveTo(bestRoot.Position)
 		end
+		local targetModel = bestRoot.Parent
+		local victimPlayer = if targetModel and targetModel:IsA("Model") then Players:GetPlayerFromCharacter(targetModel) else nil
 		if bestDist <= 14 and isBladeSquad and rt.Spec.BladeStyle and (now - u.LastShotAt) >= 0.85 then
 			u.LastShotAt = now
 			MafiaVisualBuilder.TriggerAttackAnim(u.Model)
+			if victimPlayer then
+				CombatLockService.MarkUnderAttack(victimPlayer, myPos, rt.Spec.FactionName)
+			end
 			bestHum:TakeDamage(u.Damage)
 			local clashPoint = (myPos + bestRoot.Position) * 0.5 + Vector3.new(0, 1.5, 0)
-			local targetModel = bestRoot.Parent
 			local targetStyle = if targetModel then tostring(targetModel:GetAttribute("MercenaryType") or targetModel:GetAttribute("BladeStyle") or "Samurai") else "Samurai"
 			BlackMarketService.SpawnBladeClashVFX(clashPoint, rt.Spec.BladeStyle, targetStyle)
 			local slashCol = if rt.Spec.BladeStyle == "Ninja" then Color3.fromRGB(168, 184, 214) else Color3.fromRGB(204, 48, 56)
@@ -705,6 +714,9 @@ local function stepApexUnit(rt: RestaurantRuntime, u: GarrisonUnit, now: number)
 		elseif bestDist <= 68 and (now - u.LastShotAt) >= 0.95 then
 			u.LastShotAt = now
 			MafiaVisualBuilder.TriggerAttackAnim(u.Model)
+			if victimPlayer then
+				CombatLockService.MarkUnderAttack(victimPlayer, myPos, rt.Spec.FactionName)
+			end
 			bestHum:TakeDamage(u.Damage)
 			BlackMarketService.SpawnBulletTracer(myPos + Vector3.new(0, 1.5, 0), bestRoot.Position, Color3.fromRGB(224, 72, 64))
 			BlackMarketService.BroadcastSFX("SMGShot", myPos)

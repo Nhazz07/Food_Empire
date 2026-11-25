@@ -174,9 +174,9 @@ function WeatherService.TryRaidBlackoutTruck(player: Player): (boolean, string)
 		return false, "You already raided this Blackout Bullion Truck!"
 	end
 	truckRaidedBy[player] = true
-	PlayerDataService.AddRewards(player, 480, 145, 65)
+	PlayerDataService.AddRewards(player, 260, 120, 45)
 	player:SetAttribute("StolenShipmentUntil", os.clock() + 30)
-	return true, "BLACKOUT BULLION HEIST COMPLETE! +480 Gold & +65 Rep!"
+	return true, "BLACKOUT BULLION HEIST COMPLETE! +260 Gold & +45 Rep!"
 end
 
 function WeatherService.CycleWeather(): (boolean, string)

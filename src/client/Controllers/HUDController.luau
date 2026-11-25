@@ -11,6 +11,9 @@ local SectorConfig = require(
 local TurfConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("TurfConfig")
 )
+local RestaurantSecurityConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("RestaurantSecurityConfig")
+)
 local CurrencyIconHelper = require("./CurrencyIconHelper")
 
 export type OpenMenuCallback = (tabName: "Kitchen" | "Warehouses" | "Upgrades" | "Shop" | "BlackMarket") -> ()
@@ -26,10 +29,10 @@ local FONT_BODY = Enum.Font.GothamBold
 local FONT_REG = Enum.Font.Gotham
 
 local SECTOR_TAGS: { [string]: string } = {
-	FishingPort = "PORT",
-	VegetableFarm = "FARM",
-	Ranch = "RNCH",
-	FruitOrchard = "ORCH",
+	FishingPort = "FISH",
+	VegetableFarm = "VEG",
+	Ranch = "MEAT",
+	FruitOrchard = "FRUIT",
 }
 
 -- Luxury "Noir Syndicate Bistro" Palette
@@ -80,6 +83,20 @@ local activeBlockTitle: TextLabel? = nil
 local activeBlockOwnerPill: TextLabel? = nil
 local activeBlockFill: Frame? = nil
 local activeBlockSub: TextLabel? = nil
+
+-- Top-Right Customer Patience Queue Card (below UrbanTurfCard)
+type PatienceRowUI = {
+	Row: Frame,
+	NameLbl: TextLabel,
+	TimeLbl: TextLabel,
+	BarFill: Frame,
+}
+local patienceCard: Frame? = nil
+local patienceCardStroke: UIStroke? = nil
+local patienceHeaderLabel: TextLabel? = nil
+local patienceRows: { PatienceRowUI } = {}
+local latestPatienceList: { { [string]: any } } = {}
+local patienceReceivedAt = 0
 
 -- Bottom-Center Integrated Combat, Vitals & Squad Widgets
 local vitalsDockFrame: Frame? = nil
@@ -663,7 +680,7 @@ function HUDController.Init(
 	terrHeader.Size = UDim2.new(1, -38, 0, 16)
 	terrHeader.BackgroundTransparency = 1
 	terrHeader.Font = FONT_TITLE
-	terrHeader.Text = "CORNER SHIPMENTS"
+	terrHeader.Text = "MAFIA SHIPMENTS"
 	terrHeader.TextSize = 10
 	terrHeader.TextXAlignment = Enum.TextXAlignment.Left
 	terrHeader.TextColor3 = C_GOLD
@@ -826,7 +843,7 @@ function HUDController.Init(
 	goalTxt.TextYAlignment = Enum.TextYAlignment.Top
 	goalTxt.TextSize = 10
 	goalTxt.TextColor3 = C_BONE
-	goalTxt.Text = "Claim a Corner Shipment at Central Plaza [E] to supply your starter Warehouse."
+	goalTxt.Text = "Steal a Mafia Seafood & Fish Shipment at Central Park [E] to supply your Seafood Warehouse."
 	goalTxt.Parent = objSec
 	objectiveLabel = goalTxt
 
@@ -1191,6 +1208,66 @@ function HUDController.Init(
 				playerArmorLabel.Text = string.format("%d / 100 ARMOR", armor)
 			end
 		end
+
+		-- Smooth real-time Seated Customer Patience countdown bars
+		if patienceCard and patienceHeaderLabel then
+			local cfg = RestaurantSecurityConfig.CustomerPatience
+			local elapsed = math.max(0, os.clock() - patienceReceivedAt)
+			local activeCount = 0
+			local minRem = math.huge
+			local shown = 0
+			for _, item in ipairs(latestPatienceList) do
+				local rem0 = tonumber(item.RemainingSeconds) or 0
+				local total = math.max(1, tonumber(item.TotalSeconds) or cfg.MaxSeconds)
+				local rem = math.max(0, rem0 - elapsed)
+				if rem > 0.05 then
+					activeCount += 1
+					if rem < minRem then
+						minRem = rem
+					end
+					if shown < #patienceRows then
+						shown += 1
+						local r = patienceRows[shown]
+						r.Row.Visible = true
+						local cname = tostring(item.CustomerName or "Guest")
+						local dish = tostring(item.DishName or "Order")
+						r.NameLbl.Text = cname .. " • " .. dish
+						local frac = math.clamp(rem / total, 0, 1)
+						r.BarFill.Size = UDim2.fromScale(frac, 1)
+						local isCook = item.IsBeingCooked == true
+						if rem <= cfg.CriticalThresholdSeconds then
+							r.BarFill.BackgroundColor3 = Color3.fromRGB(204, 48, 56)
+							r.TimeLbl.TextColor3 = Color3.fromRGB(246, 118, 124)
+							r.TimeLbl.Text = string.format("%ds!", math.ceil(rem))
+						elseif rem <= cfg.WarningThresholdSeconds then
+							r.BarFill.BackgroundColor3 = Color3.fromRGB(214, 152, 42)
+							r.TimeLbl.TextColor3 = C_GOLD
+							r.TimeLbl.Text = if isCook then string.format("COOK %ds", math.ceil(rem)) else string.format("%ds", math.ceil(rem))
+						else
+							r.BarFill.BackgroundColor3 = C_EMERALD_BRIGHT
+							r.TimeLbl.TextColor3 = Color3.fromRGB(168, 232, 188)
+							r.TimeLbl.Text = if isCook then string.format("COOK %ds", math.ceil(rem)) else string.format("%ds", math.ceil(rem))
+						end
+					end
+				end
+			end
+			for idx = shown + 1, #patienceRows do
+				patienceRows[idx].Row.Visible = false
+			end
+			if activeCount > 0 then
+				patienceCard.Visible = true
+				patienceCard.Size = UDim2.fromOffset(216, 26 + shown * 27)
+				patienceHeaderLabel.Text = string.format("WAITING GUESTS (%d)", activeCount)
+				if patienceCardStroke then
+					patienceCardStroke.Color = if minRem <= cfg.CriticalThresholdSeconds
+						then Color3.fromRGB(204, 56, 66)
+						elseif minRem <= cfg.WarningThresholdSeconds then C_GOLD
+						else C_GOLD_DIM
+				end
+			else
+				patienceCard.Visible = false
+			end
+		end
 	end)
 
 	-- =========================================================================
@@ -1330,6 +1407,94 @@ function HUDController.Init(
 	tAlert.TextTruncate = Enum.TextTruncate.AtEnd
 	tAlert.Parent = turfCard
 	turfAlertLabel = tAlert
+
+	-- =========================================================================
+	-- 6B. TOP-RIGHT: SEATED CUSTOMER PATIENCE CARD (BELOW URBAN TURF CARD)
+	-- =========================================================================
+	local pCard = Instance.new("Frame")
+	pCard.Name = "CustomerPatienceCard"
+	pCard.AnchorPoint = Vector2.new(1, 0)
+	pCard.Position = UDim2.new(1, -14, 0, 154)
+	pCard.Size = UDim2.fromOffset(216, 108)
+	pCard.BackgroundColor3 = C_OBS
+	pCard.BackgroundTransparency = 0.06
+	pCard.Visible = false
+	pCard.Parent = gui
+	makeCorner(pCard, 8)
+	patienceCardStroke = makeBorderStroke(pCard, C_GOLD_DIM, 1.1)
+	patienceCard = pCard
+
+	local pHead = Instance.new("TextLabel")
+	pHead.Position = UDim2.new(0, 10, 0, 6)
+	pHead.Size = UDim2.new(1, -20, 0, 14)
+	pHead.BackgroundTransparency = 1
+	pHead.Font = FONT_TITLE
+	pHead.Text = "WAITING GUESTS (0)"
+	pHead.TextSize = 10
+	pHead.TextXAlignment = Enum.TextXAlignment.Left
+	pHead.TextColor3 = C_GOLD
+	pHead.Parent = pCard
+	patienceHeaderLabel = pHead
+
+	table.clear(patienceRows)
+	for rIdx = 1, 3 do
+		local row = Instance.new("Frame")
+		row.Name = "PatienceRow_" .. tostring(rIdx)
+		row.Position = UDim2.new(0, 8, 0, 23 + (rIdx - 1) * 27)
+		row.Size = UDim2.new(1, -16, 0, 23)
+		row.BackgroundColor3 = C_INNER
+		row.BackgroundTransparency = 0.12
+		row.Visible = false
+		row.Parent = pCard
+		makeCorner(row, 4)
+
+		local nLbl = Instance.new("TextLabel")
+		nLbl.Position = UDim2.new(0, 6, 0, 1)
+		nLbl.Size = UDim2.new(1, -56, 0, 13)
+		nLbl.BackgroundTransparency = 1
+		nLbl.Font = FONT_BODY
+		nLbl.Text = ""
+		nLbl.TextSize = 9
+		nLbl.TextXAlignment = Enum.TextXAlignment.Left
+		nLbl.TextColor3 = C_BONE
+		nLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		nLbl.Parent = row
+
+		local tmLbl = Instance.new("TextLabel")
+		tmLbl.AnchorPoint = Vector2.new(1, 0)
+		tmLbl.Position = UDim2.new(1, -6, 0, 1)
+		tmLbl.Size = UDim2.fromOffset(48, 13)
+		tmLbl.BackgroundTransparency = 1
+		tmLbl.Font = FONT_TITLE
+		tmLbl.Text = "18s"
+		tmLbl.TextSize = 9
+		tmLbl.TextXAlignment = Enum.TextXAlignment.Right
+		tmLbl.TextColor3 = Color3.fromRGB(168, 232, 188)
+		tmLbl.Parent = row
+
+		local barBg = Instance.new("Frame")
+		barBg.Position = UDim2.new(0, 6, 0, 16)
+		barBg.Size = UDim2.new(1, -12, 0, 4)
+		barBg.BackgroundColor3 = C_OBS_DEEP
+		barBg.BorderSizePixel = 0
+		barBg.ClipsDescendants = true
+		barBg.Parent = row
+		makeCorner(barBg, 2)
+
+		local barFill = Instance.new("Frame")
+		barFill.Size = UDim2.fromScale(1, 1)
+		barFill.BackgroundColor3 = C_EMERALD_BRIGHT
+		barFill.BorderSizePixel = 0
+		barFill.Parent = barBg
+		makeCorner(barFill, 2)
+
+		table.insert(patienceRows, {
+			Row = row,
+			NameLbl = nLbl,
+			TimeLbl = tmLbl,
+			BarFill = barFill,
+		})
+	end
 
 	-- =========================================================================
 	-- 7. CONTEXTUAL BLOCK CAPTURE BANNER (SHOWN ONLY INSIDE A CAPTURE PLAZA)
@@ -1562,6 +1727,13 @@ function HUDController.Update(state: { [string]: any }): ()
 
 	local kitchen = state.Kitchen
 	local waiting = state.WaitingCustomer
+	if typeof(state.SeatedPatience) == "table" then
+		latestPatienceList = state.SeatedPatience
+		patienceReceivedAt = os.clock()
+	else
+		latestPatienceList = {}
+		patienceReceivedAt = os.clock()
+	end
 	if sellBadgeBtn and sellTextLabel and kitchen then
 		local ready = kitchen.ReadyTotal or 0
 		if ready > 0 then
@@ -1615,8 +1787,11 @@ function HUDController.Update(state: { [string]: any }): ()
 		end
 	end
 
-	-- Compact 2x2 Corner Shipments pills
+	-- Compact 2x2 Central Park Mafia Ingredient Shipment pills (shows LOCKED if matching Warehouse not yet unlocked!)
 	local shipments = state.Shipments
+	local whLevels = if typeof(state.Warehouse) == "table" and typeof(state.Warehouse.Levels) == "table"
+		then state.Warehouse.Levels
+		else nil
 	if typeof(shipments) == "table" then
 		for sectorId, dot in pairs(sectorDots) do
 			local sh = shipments[sectorId]
@@ -1625,7 +1800,16 @@ function HUDController.Update(state: { [string]: any }): ()
 			local tag = SECTOR_TAGS[sectorId] or "SEC"
 			if typeof(sh) == "table" then
 				local st = if pill then pill:FindFirstChildOfClass("UIStroke") else nil
-				if sh.Phase == "EnRoute" then
+				local isUnlocked = (whLevels == nil) or ((whLevels[sh.Category] or 0) >= 1)
+				if not isUnlocked then
+					dot.BackgroundColor3 = C_OXBLOOD
+					if pill then pill.BackgroundColor3 = Color3.fromRGB(34, 18, 22) end
+					if st then st.Color = Color3.fromRGB(118, 42, 50) end
+					if lbl then
+						lbl.Text = tag .. " • LOCKED"
+						lbl.TextColor3 = Color3.fromRGB(224, 146, 150)
+					end
+				elseif sh.Phase == "EnRoute" then
 					dot.BackgroundColor3 = C_GOLD
 					if pill then pill.BackgroundColor3 = Color3.fromRGB(44, 36, 22) end
 					if st then st.Color = C_GOLD_DIM end
@@ -1638,7 +1822,7 @@ function HUDController.Update(state: { [string]: any }): ()
 					if pill then pill.BackgroundColor3 = Color3.fromRGB(22, 42, 32) end
 					if st then st.Color = C_EMERALD end
 					if lbl then
-						lbl.Text = tag .. " • READY!"
+						lbl.Text = tag .. " • STEAL!"
 						lbl.TextColor3 = Color3.fromRGB(168, 232, 188)
 					end
 				else
@@ -1689,13 +1873,13 @@ function HUDController.Update(state: { [string]: any }): ()
 			objectiveLabel.Text = "STEP 2: Press [SERVE] (or hire a Waiter in Empire [U]) to sell cooked dishes!"
 		elseif rep < 15 and crewCount == 0 then
 			if totalStock < 2 then
-				objectiveLabel.Text = "STEP 1: Claim a Corner Shipment at Central Plaza [E] or spin the Lucky Wheel."
+				objectiveLabel.Text = "STEP 1: Steal a Mafia Seafood & Fish Shipment at Central Park [E] or spin the Lucky Wheel."
 			else
 				objectiveLabel.Text = "STEP 2: Open Kitchen [C] to cook your 1st dish, then press [SERVE]!"
 			end
 		elseif courierCount == 0 or crewCount == 0 or waiterCount == 0 then
 			objectiveLabel.Text = string.format(
-				"Hire Couriers (%d/2), Chefs (%d), & Waiters (%d/3) in Empire [U].",
+				"Hire Couriers (%d/2), Chefs (%d), & Waiters (%d/5) in Empire [U].",
 				courierCount,
 				crewCount,
 				waiterCount
@@ -1703,7 +1887,7 @@ function HUDController.Update(state: { [string]: any }): ()
 		elseif typeof(branch) == "table" and not branch.Owned then
 			objectiveLabel.Text = "Buy Central Park Bistro (750G in Empire [U]) & call your staff!"
 		elseif unlockedWh < 4 then
-			objectiveLabel.Text = string.format("Open Storage [B] and unlock all 4 Warehouses (%d/4).", unlockedWh)
+			objectiveLabel.Text = string.format("Open Storage [B] to unlock Ingredient Warehouses (%d/4) for more dishes & Mafia shipments.", unlockedWh)
 		elseif restLv < 2 then
 			objectiveLabel.Text = "Upgrade Restaurant HQ [U], escort Convoys & complete Contracts!"
 		else

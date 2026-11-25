@@ -29,6 +29,7 @@ local MonetizationService = {}
 
 local ownedPasses: { [Player]: { [string]: boolean } } = {}
 local processedReceipts: { [string]: boolean } = {}
+local pendingDualGrants: { [Player]: { [number]: () -> (boolean, string) } } = {}
 local proVisuals: { [Player]: { Model } } = {}
 local proStatusLabels: { [Player]: TextLabel } = {}
 local proSparkles: { [Player]: ParticleEmitter } = {}
@@ -317,7 +318,7 @@ function MonetizationService.SyncProStaffVisuals(player: Player): ()
 			hq,
 			"MasterProChef_NPC",
 			"MASTER PRO CHEF",
-			baseCF * CFrame.new(-17, 1.6, -15),
+			baseCF * CFrame.new(-20, 1.6, -24.5),
 			Color3.fromRGB(255, 250, 236),
 			Color3.fromRGB(238, 166, 28),
 			true
@@ -338,7 +339,7 @@ function MonetizationService.SyncProStaffVisuals(player: Player): ()
 			hq,
 			"EliteSousChef_1",
 			"ELITE SOUS-CHEF",
-			baseCF * CFrame.new(-25, 1.6, -12),
+			baseCF * CFrame.new(-28, 1.6, -24.5),
 			Color3.fromRGB(248, 244, 255),
 			Color3.fromRGB(142, 72, 224),
 			false
@@ -347,7 +348,7 @@ function MonetizationService.SyncProStaffVisuals(player: Player): ()
 			hq,
 			"EliteSousChef_2",
 			"ELITE SOUS-CHEF",
-			baseCF * CFrame.new(-9, 1.6, -12),
+			baseCF * CFrame.new(-12, 1.6, -24.5),
 			Color3.fromRGB(248, 244, 255),
 			Color3.fromRGB(142, 72, 224),
 			false
@@ -477,6 +478,48 @@ local function grantItemReward(player: Player, itemId: string, studioPreview: bo
 	end
 end
 
+-- Unified Dual-Currency Robux Checkout (supports HQ upgrades, Warehouses, Bodyguards, Weapons & Empire items!)
+function MonetizationService.TryPromptDualPurchase(
+	player: Player,
+	productKey: string,
+	robuxPrice: number,
+	displayName: string,
+	grantFn: () -> (boolean, string)
+): (boolean, string)
+	local dualSpec = MonetizationConfig.DualRobuxOptions[productKey]
+	local assetId = if dualSpec then dualSpec.AssetId else 0
+	if assetId > 0 then
+		local map = pendingDualGrants[player]
+		if not map then
+			map = {}
+			pendingDualGrants[player] = map
+		end
+		map[assetId] = grantFn
+		local ok, err = pcall(function()
+			MarketplaceService:PromptProductPurchase(player, assetId)
+		end)
+		if ok then
+			return true, string.format("Opening Robux Checkout (R$ %d) for %s...", robuxPrice, displayName)
+		end
+		return false, "Could not open Robux checkout: " .. tostring(err)
+	end
+
+	-- Studio development preview mode when AssetId == 0 so both Gold & Robux options can be tested immediately!
+	if RunService:IsStudio() then
+		local gOk, gMsg = grantFn()
+		if gOk then
+			local msg = string.format("[Robux Preview • R$ %d] %s", robuxPrice, gMsg)
+			if purchaseChangedHandler then
+				purchaseChangedHandler(player, msg)
+			end
+			return true, msg
+		end
+		return false, gMsg
+	end
+
+	return false, string.format("Creator must assign Developer Product ID for %s (R$ %d) in MonetizationConfig!", displayName, robuxPrice)
+end
+
 function MonetizationService.TryPromptPurchase(player: Player, itemId: string): (boolean, string)
 	local spec = MonetizationConfig.Items[itemId]
 	if not spec then
@@ -565,6 +608,21 @@ function MonetizationService.Start(): ()
 		end
 		local player = Players:GetPlayerByUserId(receiptInfo.PlayerId)
 		if not player then
+			return Enum.ProductPurchaseDecision.NotProcessedYet
+		end
+		-- Check Dual-Currency pending grant callbacks first!
+		local pMap = pendingDualGrants[player]
+		if pMap and pMap[receiptInfo.ProductId] then
+			local fn = pMap[receiptInfo.ProductId]
+			pMap[receiptInfo.ProductId] = nil
+			local gOk, gMsg = fn()
+			if gOk then
+				processedReceipts[receiptKey] = true
+				if purchaseChangedHandler then
+					purchaseChangedHandler(player, gMsg)
+				end
+				return Enum.ProductPurchaseDecision.PurchaseGranted
+			end
 			return Enum.ProductPurchaseDecision.NotProcessedYet
 		end
 		local itemId = findItemByAssetId(receiptInfo.ProductId, "DevProduct")

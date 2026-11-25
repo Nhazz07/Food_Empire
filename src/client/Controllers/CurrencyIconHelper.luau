@@ -271,7 +271,7 @@ end
 
 function CurrencyIconHelper.CreateCategoryIcon(
 	parent: Instance,
-	kind: "Food" | "Fruit" | "Gun" | "Ninja" | "Empire" | "Ammo" | "Guard" | "Robux",
+	kind: "Food" | "Fruit" | "Storage" | "Gun" | "Ninja" | "Empire" | "Ammo" | "Guard" | "Robux",
 	sizePx: number,
 	pos: UDim2?,
 	zIndex: number?
@@ -294,166 +294,185 @@ function CurrencyIconHelper.CreateCategoryIcon(
 	root.Parent = parent
 
 	local ink = Color3.fromRGB(14, 16, 24)
-	local st = math.clamp(sizePx * 0.045, 1.1, 1.8)
+	local st = math.clamp(sizePx * 0.048, 1.2, 1.9)
 
 	if kind == "Food" then
-		-- REAL GOURMET CHEESEBURGER (Sesame Brioche Bun + Lettuce + Tomato + Dripping Cheddar + Seared Patty!)
+		-- CRISP PLATED GOURMET BURGER (Clean White Ceramic Plate + Brioche Sesame Bun + Lettuce + Tomato + Cheddar + Patty!)
+		-- Porcelain plate base for crisp contrast on dark & warm backgrounds
+		makeShape(root, UDim2.fromScale(0.50, 0.87), UDim2.fromScale(0.94, 0.16), Color3.fromRGB(238, 242, 248), math.ceil(sizePx * 0.12), z, 0, ink, st * 0.9)
 		-- Bottom toasted bun
-		local botBun = makeShape(root, UDim2.fromScale(0.50, 0.80), UDim2.fromScale(0.80, 0.22), Color3.fromRGB(224, 148, 56), math.ceil(sizePx * 0.14), z + 1, 0, ink, st)
-		addVertGrad(botBun, Color3.fromRGB(244, 178, 86), Color3.fromRGB(186, 108, 32))
+		local botBun = makeShape(root, UDim2.fromScale(0.50, 0.77), UDim2.fromScale(0.76, 0.18), Color3.fromRGB(224, 148, 56), math.ceil(sizePx * 0.12), z + 1, 0, ink, st)
+		addVertGrad(botBun, Color3.fromRGB(246, 182, 88), Color3.fromRGB(186, 108, 32))
 		-- Thick seared beef patty
-		local patty = makeShape(root, UDim2.fromScale(0.50, 0.66), UDim2.fromScale(0.86, 0.22), Color3.fromRGB(118, 56, 30), math.ceil(sizePx * 0.14), z + 2, 0, ink, st)
-		addVertGrad(patty, Color3.fromRGB(148, 74, 42), Color3.fromRGB(78, 34, 18))
-		-- Melted golden cheddar slice + dripping corner triangle
-		makeShape(root, UDim2.fromScale(0.50, 0.56), UDim2.fromScale(0.84, 0.12), Color3.fromRGB(255, 204, 34), 3, z + 3, 0, ink, st * 0.7)
-		makeShape(root, UDim2.fromScale(0.68, 0.63), UDim2.fromScale(0.18, 0.18), Color3.fromRGB(255, 194, 24), 2, z + 3, 45, ink, st * 0.6)
-		makeShape(root, UDim2.fromScale(0.32, 0.61), UDim2.fromScale(0.14, 0.14), Color3.fromRGB(255, 204, 34), 2, z + 3, 45, ink, st * 0.6)
+		local patty = makeShape(root, UDim2.fromScale(0.50, 0.64), UDim2.fromScale(0.84, 0.19), Color3.fromRGB(122, 58, 32), math.ceil(sizePx * 0.12), z + 2, 0, ink, st)
+		addVertGrad(patty, Color3.fromRGB(154, 78, 44), Color3.fromRGB(82, 36, 18))
+		-- Melted golden cheddar slice + dripping corner
+		makeShape(root, UDim2.fromScale(0.50, 0.54), UDim2.fromScale(0.82, 0.11), Color3.fromRGB(255, 210, 40), 3, z + 3, 0, ink, st * 0.7)
+		makeShape(root, UDim2.fromScale(0.68, 0.61), UDim2.fromScale(0.16, 0.16), Color3.fromRGB(255, 198, 26), 2, z + 3, 45, ink, st * 0.6)
 		-- Juicy ruby tomato slice
-		makeShape(root, UDim2.fromScale(0.50, 0.49), UDim2.fromScale(0.78, 0.12), Color3.fromRGB(238, 46, 46), 4, z + 4, 0, ink, st * 0.7)
-		-- Crisp wavy emerald lettuce puffs
+		makeShape(root, UDim2.fromScale(0.50, 0.46), UDim2.fromScale(0.76, 0.11), Color3.fromRGB(242, 48, 52), 4, z + 4, 0, ink, st * 0.7)
+		-- Crisp emerald lettuce puffs
 		for i = 0, 3 do
-			makeShape(root, UDim2.fromScale(0.20 + i * 0.20, 0.45), UDim2.fromScale(0.26, 0.15), Color3.fromRGB(72, 204, 68), math.ceil(sizePx * 0.12), z + 5, if i % 2 == 0 then -8 else 8, ink, st * 0.6)
+			makeShape(root, UDim2.fromScale(0.22 + i * 0.185, 0.42), UDim2.fromScale(0.24, 0.14), Color3.fromRGB(76, 214, 74), math.ceil(sizePx * 0.12), z + 5, if i % 2 == 0 then -8 else 8, ink, st * 0.6)
 		end
 		-- Golden dome brioche top bun
-		local topBun = makeShape(root, UDim2.fromScale(0.50, 0.28), UDim2.fromScale(0.82, 0.36), Color3.fromRGB(246, 168, 58), math.ceil(sizePx * 0.35), z + 6, 0, ink, st)
-		addVertGrad(topBun, Color3.fromRGB(255, 204, 96), Color3.fromRGB(214, 126, 32))
-		-- Glossy sheen + 4 crisp golden sesame seeds
-		makeShape(root, UDim2.fromScale(0.32, 0.18), UDim2.fromScale(0.20, 0.08), Color3.fromRGB(255, 246, 204), 8, z + 7, -20)
-		makeShape(root, UDim2.fromScale(0.46, 0.22), UDim2.fromScale(0.10, 0.06), Color3.fromRGB(255, 246, 208), 4, z + 7, -14)
-		makeShape(root, UDim2.fromScale(0.64, 0.21), UDim2.fromScale(0.10, 0.06), Color3.fromRGB(255, 246, 208), 4, z + 7, 16)
-		makeShape(root, UDim2.fromScale(0.34, 0.30), UDim2.fromScale(0.10, 0.06), Color3.fromRGB(255, 246, 208), 4, z + 7, 12)
-		makeShape(root, UDim2.fromScale(0.58, 0.31), UDim2.fromScale(0.10, 0.06), Color3.fromRGB(255, 246, 208), 4, z + 7, -16)
+		local topBun = makeShape(root, UDim2.fromScale(0.50, 0.25), UDim2.fromScale(0.80, 0.34), Color3.fromRGB(248, 174, 62), math.ceil(sizePx * 0.34), z + 6, 0, ink, st)
+		addVertGrad(topBun, Color3.fromRGB(255, 212, 108), Color3.fromRGB(218, 130, 34))
+		-- Glossy sheen + sesame seeds
+		makeShape(root, UDim2.fromScale(0.32, 0.16), UDim2.fromScale(0.20, 0.08), Color3.fromRGB(255, 250, 218), 8, z + 7, -18)
+		makeShape(root, UDim2.fromScale(0.48, 0.20), UDim2.fromScale(0.10, 0.06), Color3.fromRGB(255, 250, 218), 4, z + 7, -12)
+		makeShape(root, UDim2.fromScale(0.64, 0.20), UDim2.fromScale(0.10, 0.06), Color3.fromRGB(255, 250, 218), 4, z + 7, 14)
+
+	elseif kind == "Storage" then
+		-- UNMISTAKABLE WAREHOUSE SUPPLY CRATE (Golden-Oak Timber Box + Cross-Brace + Brushed Steel Corner Brackets + Sky Cargo Tag!)
+		local woodMain = Color3.fromRGB(216, 152, 74)
+		local woodTrim = Color3.fromRGB(168, 106, 44)
+		local steel = Color3.fromRGB(206, 218, 234)
+		-- Main wooden crate body
+		local crate = makeShape(root, UDim2.fromScale(0.50, 0.54), UDim2.fromScale(0.82, 0.78), woodMain, math.ceil(sizePx * 0.12), z + 1, 0, ink, st)
+		addVertGrad(crate, Color3.fromRGB(238, 178, 96), Color3.fromRGB(178, 114, 48))
+		-- Inner recessed plank panel + horizontal plank grooves
+		makeShape(root, UDim2.fromScale(0.50, 0.54), UDim2.fromScale(0.62, 0.58), Color3.fromRGB(192, 128, 56), 2, z + 2, 0, woodTrim, st * 0.8)
+		makeShape(root, UDim2.fromScale(0.50, 0.44), UDim2.fromScale(0.60, 0.05), woodTrim, 1, z + 3)
+		makeShape(root, UDim2.fromScale(0.50, 0.64), UDim2.fromScale(0.60, 0.05), woodTrim, 1, z + 3)
+		-- Bold diagonal reinforcement timber brace
+		local brace = makeShape(root, UDim2.fromScale(0.50, 0.54), UDim2.fromScale(0.76, 0.14), woodMain, 2, z + 4, -42, ink, st * 0.7)
+		addVertGrad(brace, Color3.fromRGB(246, 192, 112), Color3.fromRGB(186, 120, 50))
+		-- 4 Gleaming Steel Corner Brackets
+		for _, cx in ipairs({ 0.16, 0.84 }) do
+			for _, cy in ipairs({ 0.22, 0.86 }) do
+				makeShape(root, UDim2.fromScale(cx, cy), UDim2.fromScale(0.18, 0.18), steel, 2, z + 5, 0, ink, st * 0.7)
+			end
+		end
+		-- Top Crate Lid Bevel + Bright Cyan Warehouse Inventory Seal Tag
+		makeShape(root, UDim2.fromScale(0.50, 0.16), UDim2.fromScale(0.88, 0.14), Color3.fromRGB(244, 188, 108), 3, z + 6, 0, ink, st * 0.8)
+		local tag = makeShape(root, UDim2.fromScale(0.72, 0.36), UDim2.fromScale(0.28, 0.22), Color3.fromRGB(56, 194, 248), 3, z + 7, 0, ink, st * 0.7)
+		addVertGrad(tag, Color3.fromRGB(122, 224, 255), Color3.fromRGB(24, 146, 214))
 
 	elseif kind == "Fruit" then
 		-- REAL GLOSSY RED APPLE + EMERALD LEAF + CURVED GOLDEN BANANA!
-		-- Curved bright banana peeking neatly behind right side
 		makeShape(root, UDim2.fromScale(0.74, 0.56), UDim2.fromScale(0.28, 0.62), Color3.fromRGB(254, 224, 48), math.ceil(sizePx * 0.32), z + 1, 28, ink, st)
 		makeShape(root, UDim2.fromScale(0.84, 0.28), UDim2.fromScale(0.12, 0.12), Color3.fromRGB(108, 78, 32), 4, z + 2, 24)
-		-- Plump double-lobed glossy red apple
 		local lobeL = makeShape(root, UDim2.fromScale(0.34, 0.60), UDim2.fromScale(0.48, 0.60), Color3.fromRGB(234, 34, 46), math.ceil(sizePx * 0.34), z + 3, -6, ink, st)
 		addVertGrad(lobeL, Color3.fromRGB(255, 78, 78), Color3.fromRGB(178, 18, 34))
 		local lobeR = makeShape(root, UDim2.fromScale(0.54, 0.60), UDim2.fromScale(0.48, 0.60), Color3.fromRGB(224, 28, 42), math.ceil(sizePx * 0.34), z + 3, 6, ink, st)
 		addVertGrad(lobeR, Color3.fromRGB(255, 72, 72), Color3.fromRGB(168, 16, 30))
-		-- Seamless apple center blend + bright glossy top-left specular highlight
 		local core = makeShape(root, UDim2.fromScale(0.44, 0.61), UDim2.fromScale(0.42, 0.52), Color3.fromRGB(236, 36, 48), math.ceil(sizePx * 0.25), z + 4)
 		addVertGrad(core, Color3.fromRGB(255, 78, 76), Color3.fromRGB(182, 20, 36))
 		makeShape(root, UDim2.fromScale(0.28, 0.46), UDim2.fromScale(0.14, 0.24), Color3.fromRGB(255, 224, 224), math.ceil(sizePx * 0.14), z + 5, -18)
-		-- Curved wooden brown stem + angled vibrant emerald leaf!
 		makeShape(root, UDim2.fromScale(0.44, 0.25), UDim2.fromScale(0.10, 0.24), Color3.fromRGB(126, 74, 34), 3, z + 6, 14, ink, st * 0.7)
 		local leaf = makeShape(root, UDim2.fromScale(0.62, 0.22), UDim2.fromScale(0.32, 0.18), Color3.fromRGB(58, 204, 66), math.ceil(sizePx * 0.18), z + 7, -26, ink, st * 0.8)
 		addVertGrad(leaf, Color3.fromRGB(118, 242, 98), Color3.fromRGB(34, 154, 48))
 
 	elseif kind == "Gun" then
-		-- REAL TACTICAL ASSAULT RIFLE (Angled side silhouette: Stock, Receiver, Curved Mag, Optic, Handguard & Muzzle!)
+		-- HIGH-CONTRAST CHROME & CRIMSON TACTICAL RIFLE (Razor-sharp bright steel silhouette that POPS on dark backgrounds!)
 		local gunPivot = Instance.new("Frame")
 		gunPivot.AnchorPoint = Vector2.new(0.5, 0.5)
 		gunPivot.Position = UDim2.fromScale(0.50, 0.52)
 		gunPivot.Size = UDim2.fromScale(1.0, 1.0)
-		gunPivot.Rotation = -16
+		gunPivot.Rotation = -22
 		gunPivot.BackgroundTransparency = 1
 		gunPivot.Active = false
 		gunPivot.ZIndex = z + 1
 		gunPivot.Parent = root
 
-		local gunMetal = Color3.fromRGB(64, 72, 88)
-		local darkGun = Color3.fromRGB(30, 34, 44)
-		local steelHi = Color3.fromRGB(196, 206, 224)
-		local redAccent = Color3.fromRGB(232, 42, 62)
+		local brightSteel = Color3.fromRGB(224, 232, 246)
+		local midSteel = Color3.fromRGB(152, 166, 190)
+		local gripCol = Color3.fromRGB(98, 110, 132)
+		local redAccent = Color3.fromRGB(246, 52, 74)
+		local goldGlint = Color3.fromRGB(255, 214, 82)
 
-		-- Buttstock + buffer tube
-		makeShape(gunPivot, UDim2.fromScale(0.14, 0.54), UDim2.fromScale(0.22, 0.22), darkGun, 3, z + 2, 0, ink, st)
-		makeShape(gunPivot, UDim2.fromScale(0.26, 0.48), UDim2.fromScale(0.14, 0.10), gunMetal, 2, z + 2, 0, ink, st * 0.8)
-		-- Angled pistol grip & trigger guard
-		makeShape(gunPivot, UDim2.fromScale(0.35, 0.67), UDim2.fromScale(0.11, 0.24), darkGun, 3, z + 2, 20, ink, st)
-		-- Curved tactical banana magazine!
-		makeShape(gunPivot, UDim2.fromScale(0.55, 0.68), UDim2.fromScale(0.12, 0.28), redAccent, 3, z + 2, -16, ink, st)
-		-- Upper & Lower Receiver with chrome bolt ejection port
-		local rec = makeShape(gunPivot, UDim2.fromScale(0.48, 0.48), UDim2.fromScale(0.36, 0.18), gunMetal, 3, z + 4, 0, ink, st)
-		addVertGrad(rec, Color3.fromRGB(104, 116, 138), Color3.fromRGB(46, 52, 66))
-		makeShape(gunPivot, UDim2.fromScale(0.52, 0.46), UDim2.fromScale(0.12, 0.06), steelHi, 1, z + 5)
-		-- Top Red-Dot Holographic Sight with cyan lens
-		makeShape(gunPivot, UDim2.fromScale(0.46, 0.34), UDim2.fromScale(0.18, 0.12), darkGun, 2, z + 5, 0, ink, st * 0.8)
-		makeShape(gunPivot, UDim2.fromScale(0.52, 0.34), UDim2.fromScale(0.05, 0.08), Color3.fromRGB(64, 214, 255), 1, z + 6)
-		-- Vented Handguard + Sleek Steel Barrel + Front Sight + Ported Muzzle Brake!
-		makeShape(gunPivot, UDim2.fromScale(0.70, 0.48), UDim2.fromScale(0.22, 0.14), darkGun, 2, z + 4, 0, ink, st)
-		makeShape(gunPivot, UDim2.fromScale(0.84, 0.48), UDim2.fromScale(0.18, 0.07), steelHi, 2, z + 3, 0, ink, st * 0.8)
-		makeShape(gunPivot, UDim2.fromScale(0.79, 0.39), UDim2.fromScale(0.05, 0.10), darkGun, 1, z + 5)
-		makeShape(gunPivot, UDim2.fromScale(0.92, 0.48), UDim2.fromScale(0.10, 0.11), redAccent, 2, z + 5, 0, ink, st * 0.8)
+		-- Buttstock + buffer tube (bright mid-steel so it never vanishes on dark buttons!)
+		makeShape(gunPivot, UDim2.fromScale(0.13, 0.54), UDim2.fromScale(0.22, 0.24), midSteel, 3, z + 2, 0, ink, st)
+		makeShape(gunPivot, UDim2.fromScale(0.26, 0.48), UDim2.fromScale(0.14, 0.12), brightSteel, 2, z + 2, 0, ink, st * 0.8)
+		-- Angled pistol grip
+		makeShape(gunPivot, UDim2.fromScale(0.35, 0.68), UDim2.fromScale(0.12, 0.25), gripCol, 3, z + 2, 18, ink, st)
+		-- Vibrant crimson curved tactical magazine!
+		local mag = makeShape(gunPivot, UDim2.fromScale(0.55, 0.69), UDim2.fromScale(0.14, 0.30), redAccent, 3, z + 2, -16, ink, st)
+		addVertGrad(mag, Color3.fromRGB(255, 92, 110), Color3.fromRGB(196, 24, 46))
+		-- Gleaming Chrome/Steel Receiver + Gold Bolt Carrier!
+		local rec = makeShape(gunPivot, UDim2.fromScale(0.49, 0.48), UDim2.fromScale(0.38, 0.20), brightSteel, 3, z + 4, 0, ink, st)
+		addVertGrad(rec, Color3.fromRGB(248, 252, 255), Color3.fromRGB(156, 170, 194))
+		makeShape(gunPivot, UDim2.fromScale(0.52, 0.47), UDim2.fromScale(0.14, 0.07), goldGlint, 2, z + 5)
+		-- Top Tactical Optic with glowing cyan lens
+		makeShape(gunPivot, UDim2.fromScale(0.47, 0.33), UDim2.fromScale(0.20, 0.13), midSteel, 2, z + 5, 0, ink, st * 0.8)
+		makeShape(gunPivot, UDim2.fromScale(0.54, 0.33), UDim2.fromScale(0.06, 0.09), Color3.fromRGB(84, 224, 255), 2, z + 6)
+		-- Handguard + Bright Chrome Barrel + Crimson Compensator!
+		makeShape(gunPivot, UDim2.fromScale(0.71, 0.48), UDim2.fromScale(0.22, 0.16), midSteel, 2, z + 4, 0, ink, st)
+		makeShape(gunPivot, UDim2.fromScale(0.84, 0.48), UDim2.fromScale(0.18, 0.09), brightSteel, 2, z + 3, 0, ink, st * 0.8)
+		makeShape(gunPivot, UDim2.fromScale(0.93, 0.48), UDim2.fromScale(0.12, 0.13), redAccent, 2, z + 5, 0, ink, st * 0.8)
 
 	elseif kind == "Ninja" then
-		-- REAL SHINOBI NINJA (Crossed Twin Katanas + Black Cowl + Crimson Headband + Steel Clan Plate + Fierce Eyes!)
-		local crimson = Color3.fromRGB(224, 30, 52)
-		local cowl = Color3.fromRGB(24, 28, 38)
-		local gold = Color3.fromRGB(246, 198, 52)
-		local steel = Color3.fromRGB(204, 214, 228)
+		-- HIGH-CONTRAST SHINOBI NINJA (Crossed Steel Katanas + Slate-Black Cowl + Crimson Headband + Gleaming Forehead Plate!)
+		local crimson = Color3.fromRGB(238, 42, 64)
+		local cowl = Color3.fromRGB(58, 66, 86)
+		local gold = Color3.fromRGB(252, 206, 62)
+		local steel = Color3.fromRGB(224, 234, 248)
 
-		-- Crossed Twin Katana Hilts + Gold Tsubas behind shoulders (X-silhouette!)
-		makeShape(root, UDim2.fromScale(0.18, 0.24), UDim2.fromScale(0.12, 0.36), crimson, 3, z + 1, -38, ink, st)
-		makeShape(root, UDim2.fromScale(0.26, 0.32), UDim2.fromScale(0.22, 0.07), gold, 2, z + 2, -38, ink, st * 0.7)
-		makeShape(root, UDim2.fromScale(0.82, 0.24), UDim2.fromScale(0.12, 0.36), crimson, 3, z + 1, 38, ink, st)
-		makeShape(root, UDim2.fromScale(0.74, 0.32), UDim2.fromScale(0.22, 0.07), gold, 2, z + 2, 38, ink, st * 0.7)
-		-- Fluttering crimson headband tails on right
-		makeShape(root, UDim2.fromScale(0.86, 0.50), UDim2.fromScale(0.22, 0.10), crimson, 3, z + 2, 26, ink, st * 0.7)
-		makeShape(root, UDim2.fromScale(0.82, 0.60), UDim2.fromScale(0.20, 0.09), crimson, 3, z + 2, 42, ink, st * 0.7)
-		-- Rounded matte-black Shinobi Cowl Head
+		-- Crossed Twin Katana Hilts + Gold Tsubas behind shoulders
+		makeShape(root, UDim2.fromScale(0.18, 0.24), UDim2.fromScale(0.13, 0.38), crimson, 3, z + 1, -38, ink, st)
+		makeShape(root, UDim2.fromScale(0.26, 0.32), UDim2.fromScale(0.24, 0.08), gold, 2, z + 2, -38, ink, st * 0.7)
+		makeShape(root, UDim2.fromScale(0.82, 0.24), UDim2.fromScale(0.13, 0.38), crimson, 3, z + 1, 38, ink, st)
+		makeShape(root, UDim2.fromScale(0.74, 0.32), UDim2.fromScale(0.24, 0.08), gold, 2, z + 2, 38, ink, st * 0.7)
+		-- Fluttering crimson headband tails
+		makeShape(root, UDim2.fromScale(0.86, 0.50), UDim2.fromScale(0.22, 0.11), crimson, 3, z + 2, 26, ink, st * 0.7)
+		makeShape(root, UDim2.fromScale(0.82, 0.60), UDim2.fromScale(0.20, 0.10), crimson, 3, z + 2, 42, ink, st * 0.7)
+		-- Contrast-lit Shinobi Cowl Head
 		local head = makeShape(root, UDim2.fromScale(0.50, 0.54), UDim2.fromScale(0.68, 0.72), cowl, math.ceil(sizePx * 0.36), z + 3, 0, ink, st)
-		addVertGrad(head, Color3.fromRGB(48, 54, 72), Color3.fromRGB(16, 18, 26))
-		-- Crimson Hachimaki Headband + Riveted Steel Forehead Plate!
+		addVertGrad(head, Color3.fromRGB(92, 102, 128), Color3.fromRGB(36, 42, 58))
+		-- Crimson Hachimaki Headband + Riveted Chrome Forehead Plate
 		makeShape(root, UDim2.fromScale(0.50, 0.36), UDim2.fromScale(0.72, 0.16), crimson, 4, z + 4, 0, ink, st * 0.8)
-		local plate = makeShape(root, UDim2.fromScale(0.50, 0.36), UDim2.fromScale(0.42, 0.14), steel, 3, z + 5, 0, ink, st * 0.8)
-		addVertGrad(plate, Color3.fromRGB(242, 248, 255), Color3.fromRGB(142, 154, 174))
-		-- Exposed Eye Slit + Fierce Narrowed Warrior Eyes!
-		makeShape(root, UDim2.fromScale(0.50, 0.54), UDim2.fromScale(0.52, 0.18), Color3.fromRGB(238, 198, 162), 6, z + 5, 0, ink, st * 0.7)
+		local plate = makeShape(root, UDim2.fromScale(0.50, 0.36), UDim2.fromScale(0.44, 0.15), steel, 3, z + 5, 0, ink, st * 0.8)
+		addVertGrad(plate, Color3.fromRGB(252, 254, 255), Color3.fromRGB(162, 174, 198))
+		-- Exposed Eye Slit + Fierce Narrowed Warrior Eyes
+		makeShape(root, UDim2.fromScale(0.50, 0.54), UDim2.fromScale(0.54, 0.19), Color3.fromRGB(244, 204, 168), 6, z + 5, 0, ink, st * 0.7)
 		makeShape(root, UDim2.fromScale(0.38, 0.54), UDim2.fromScale(0.16, 0.09), Color3.fromRGB(255, 255, 255), 3, z + 6, 12, ink, st * 0.5)
 		makeShape(root, UDim2.fromScale(0.62, 0.54), UDim2.fromScale(0.16, 0.09), Color3.fromRGB(255, 255, 255), 3, z + 6, -12, ink, st * 0.5)
-		makeShape(root, UDim2.fromScale(0.40, 0.54), UDim2.fromScale(0.07, 0.07), crimson, 4, z + 7)
-		makeShape(root, UDim2.fromScale(0.60, 0.54), UDim2.fromScale(0.07, 0.07), crimson, 4, z + 7)
-		-- Crimson Shinobi Scarf Collar at chin
+		makeShape(root, UDim2.fromScale(0.40, 0.54), UDim2.fromScale(0.08, 0.08), crimson, 4, z + 7)
+		makeShape(root, UDim2.fromScale(0.60, 0.54), UDim2.fromScale(0.08, 0.08), crimson, 4, z + 7)
+		-- Crimson Shinobi Scarf Collar
 		makeShape(root, UDim2.fromScale(0.50, 0.86), UDim2.fromScale(0.64, 0.16), crimson, 6, z + 6, 0, ink, st * 0.8)
 
 	elseif kind == "Empire" then
-		-- 24K IMPERIAL ROYAL GOLD CROWN (Crimson Velvet Dome + 3 Gold Peaks + Jewels!)
-		local gold = Color3.fromRGB(255, 206, 46)
-		local ruby = Color3.fromRGB(232, 32, 58)
-		local sapphire = Color3.fromRGB(48, 152, 252)
-		makeShape(root, UDim2.fromScale(0.50, 0.54), UDim2.fromScale(0.64, 0.44), Color3.fromRGB(172, 22, 44), math.ceil(sizePx * 0.24), z + 1, 0, ink, st)
-		-- 3 Gold Crown Spires
+		-- 24K IMPERIAL ROYAL GOLD CROWN (Crimson Velvet Dome + 3 Gleaming Gold Spires + Jewels!)
+		local gold = Color3.fromRGB(255, 212, 54)
+		local ruby = Color3.fromRGB(238, 36, 62)
+		local sapphire = Color3.fromRGB(58, 168, 255)
+		makeShape(root, UDim2.fromScale(0.50, 0.54), UDim2.fromScale(0.66, 0.44), Color3.fromRGB(184, 24, 48), math.ceil(sizePx * 0.24), z + 1, 0, ink, st)
 		makeShape(root, UDim2.fromScale(0.24, 0.46), UDim2.fromScale(0.22, 0.44), gold, 3, z + 2, -16, ink, st)
 		makeShape(root, UDim2.fromScale(0.76, 0.46), UDim2.fromScale(0.22, 0.44), gold, 3, z + 2, 16, ink, st)
 		local midPeak = makeShape(root, UDim2.fromScale(0.50, 0.40), UDim2.fromScale(0.26, 0.54), gold, 3, z + 3, 0, ink, st)
-		addVertGrad(midPeak, Color3.fromRGB(255, 244, 152), Color3.fromRGB(224, 146, 18))
-		-- Gold Orbs at Spire Tips
-		makeShape(root, UDim2.fromScale(0.18, 0.24), UDim2.fromScale(0.16, 0.16), Color3.fromRGB(255, 242, 156), 12, z + 4, 0, ink, st * 0.8)
-		makeShape(root, UDim2.fromScale(0.50, 0.14), UDim2.fromScale(0.18, 0.18), Color3.fromRGB(255, 242, 156), 12, z + 4, 0, ink, st * 0.8)
-		makeShape(root, UDim2.fromScale(0.82, 0.24), UDim2.fromScale(0.16, 0.16), Color3.fromRGB(255, 242, 156), 12, z + 4, 0, ink, st * 0.8)
-		-- Crown Base Band + Ruby & Sapphire Jewels
-		local band = makeShape(root, UDim2.fromScale(0.50, 0.72), UDim2.fromScale(0.80, 0.26), gold, 6, z + 5, 0, ink, st)
-		addVertGrad(band, Color3.fromRGB(255, 232, 114), Color3.fromRGB(204, 128, 16))
-		makeShape(root, UDim2.fromScale(0.50, 0.72), UDim2.fromScale(0.16, 0.16), ruby, 3, z + 6, 45, ink, st * 0.6)
-		makeShape(root, UDim2.fromScale(0.26, 0.72), UDim2.fromScale(0.12, 0.12), sapphire, 3, z + 6, 45, ink, st * 0.6)
-		makeShape(root, UDim2.fromScale(0.74, 0.72), UDim2.fromScale(0.12, 0.12), sapphire, 3, z + 6, 45, ink, st * 0.6)
+		addVertGrad(midPeak, Color3.fromRGB(255, 248, 174), Color3.fromRGB(224, 146, 18))
+		makeShape(root, UDim2.fromScale(0.18, 0.23), UDim2.fromScale(0.16, 0.16), Color3.fromRGB(255, 246, 172), 12, z + 4, 0, ink, st * 0.8)
+		makeShape(root, UDim2.fromScale(0.50, 0.14), UDim2.fromScale(0.18, 0.18), Color3.fromRGB(255, 246, 172), 12, z + 4, 0, ink, st * 0.8)
+		makeShape(root, UDim2.fromScale(0.82, 0.23), UDim2.fromScale(0.16, 0.16), Color3.fromRGB(255, 246, 172), 12, z + 4, 0, ink, st * 0.8)
+		local band = makeShape(root, UDim2.fromScale(0.50, 0.72), UDim2.fromScale(0.82, 0.27), gold, 6, z + 5, 0, ink, st)
+		addVertGrad(band, Color3.fromRGB(255, 238, 134), Color3.fromRGB(204, 128, 16))
+		makeShape(root, UDim2.fromScale(0.50, 0.72), UDim2.fromScale(0.17, 0.17), ruby, 3, z + 6, 45, ink, st * 0.6)
+		makeShape(root, UDim2.fromScale(0.25, 0.72), UDim2.fromScale(0.13, 0.13), sapphire, 3, z + 6, 45, ink, st * 0.6)
+		makeShape(root, UDim2.fromScale(0.75, 0.72), UDim2.fromScale(0.13, 0.13), sapphire, 3, z + 6, 45, ink, st * 0.6)
 
 	elseif kind == "Ammo" then
 		-- 3 GLEAMING BRASS RIFLE CARTRIDGES WITH COPPER BULLET TIPS!
 		for i = -1, 1 do
 			local cx = 0.50 + i * 0.24
 			local yOff = if i == 0 then -0.05 else 0.04
-			local tip = makeShape(root, UDim2.fromScale(cx, 0.28 + yOff), UDim2.fromScale(0.17, 0.28), Color3.fromRGB(218, 118, 54), math.ceil(sizePx * 0.16), z + 2, 0, ink, st * 0.8)
-			addVertGrad(tip, Color3.fromRGB(248, 168, 98), Color3.fromRGB(168, 76, 32), 0)
-			local casing = makeShape(root, UDim2.fromScale(cx, 0.62 + yOff), UDim2.fromScale(0.20, 0.48), Color3.fromRGB(246, 198, 58), 3, z + 3, 0, ink, st)
-			addVertGrad(casing, Color3.fromRGB(255, 236, 138), Color3.fromRGB(194, 132, 24), 0)
+			local tip = makeShape(root, UDim2.fromScale(cx, 0.28 + yOff), UDim2.fromScale(0.18, 0.28), Color3.fromRGB(232, 128, 62), math.ceil(sizePx * 0.16), z + 2, 0, ink, st * 0.8)
+			addVertGrad(tip, Color3.fromRGB(255, 184, 114), Color3.fromRGB(178, 82, 34), 0)
+			local casing = makeShape(root, UDim2.fromScale(cx, 0.62 + yOff), UDim2.fromScale(0.21, 0.48), Color3.fromRGB(252, 206, 68), 3, z + 3, 0, ink, st)
+			addVertGrad(casing, Color3.fromRGB(255, 242, 152), Color3.fromRGB(204, 138, 28), 0)
 		end
 
 	else
-		-- TACTICAL ARMORED BODYGUARD ("Guard": Ballistic Helmet + Dark Shades + White Collar + Crimson Tie!)
-		makeShape(root, UDim2.fromScale(0.50, 0.78), UDim2.fromScale(0.78, 0.34), Color3.fromRGB(28, 34, 48), 8, z + 1, 0, ink, st)
-		makeShape(root, UDim2.fromScale(0.50, 0.78), UDim2.fromScale(0.24, 0.28), Color3.fromRGB(246, 246, 248), 3, z + 2)
-		makeShape(root, UDim2.fromScale(0.50, 0.80), UDim2.fromScale(0.10, 0.24), Color3.fromRGB(220, 32, 52), 2, z + 3)
-		makeShape(root, UDim2.fromScale(0.50, 0.46), UDim2.fromScale(0.48, 0.46), Color3.fromRGB(238, 196, 160), math.ceil(sizePx * 0.24), z + 3, 0, ink, st)
-		local helm = makeShape(root, UDim2.fromScale(0.50, 0.28), UDim2.fromScale(0.58, 0.34), Color3.fromRGB(52, 62, 82), math.ceil(sizePx * 0.28), z + 4, 0, ink, st)
-		addVertGrad(helm, Color3.fromRGB(96, 112, 142), Color3.fromRGB(32, 38, 52))
-		makeShape(root, UDim2.fromScale(0.50, 0.46), UDim2.fromScale(0.46, 0.14), Color3.fromRGB(16, 20, 30), 4, z + 5, 0, ink, st * 0.7)
-		makeShape(root, UDim2.fromScale(0.40, 0.45), UDim2.fromScale(0.10, 0.04), Color3.fromRGB(132, 208, 255), 2, z + 6, -18)
+		-- HIGH-CONTRAST TACTICAL BODYGUARD SHIELD & HELMET EMBLEM ("Guard": Gleaming Steel Helmet + Dark Visor + Crisp Suit & Crimson Tie!)
+		makeShape(root, UDim2.fromScale(0.50, 0.78), UDim2.fromScale(0.80, 0.34), Color3.fromRGB(62, 74, 98), 8, z + 1, 0, ink, st)
+		makeShape(root, UDim2.fromScale(0.50, 0.78), UDim2.fromScale(0.26, 0.28), Color3.fromRGB(248, 248, 252), 3, z + 2)
+		makeShape(root, UDim2.fromScale(0.50, 0.80), UDim2.fromScale(0.11, 0.24), Color3.fromRGB(238, 42, 62), 2, z + 3)
+		makeShape(root, UDim2.fromScale(0.50, 0.46), UDim2.fromScale(0.48, 0.46), Color3.fromRGB(244, 202, 166), math.ceil(sizePx * 0.24), z + 3, 0, ink, st)
+		local helm = makeShape(root, UDim2.fromScale(0.50, 0.28), UDim2.fromScale(0.60, 0.36), Color3.fromRGB(118, 136, 168), math.ceil(sizePx * 0.28), z + 4, 0, ink, st)
+		addVertGrad(helm, Color3.fromRGB(168, 186, 218), Color3.fromRGB(68, 80, 108))
+		makeShape(root, UDim2.fromScale(0.50, 0.46), UDim2.fromScale(0.48, 0.15), Color3.fromRGB(20, 26, 38), 4, z + 5, 0, ink, st * 0.7)
+		makeShape(root, UDim2.fromScale(0.39, 0.45), UDim2.fromScale(0.12, 0.05), Color3.fromRGB(132, 218, 255), 2, z + 6, -16)
 	end
 
 	return root

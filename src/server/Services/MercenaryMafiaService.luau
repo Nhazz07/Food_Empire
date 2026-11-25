@@ -40,7 +40,7 @@ type MercenaryContract = {
 
 local MercenaryMafiaService = {}
 
-MercenaryMafiaService.GOLD_COST = 20000
+MercenaryMafiaService.GOLD_COST = 100000
 MercenaryMafiaService.CONTRACT_SECONDS = 300 -- Exact 5-minute mercenary mafia contract!
 
 local contracts: { [Player]: MercenaryContract } = {}

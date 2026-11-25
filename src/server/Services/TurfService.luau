@@ -15,6 +15,7 @@ local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local BlackMarketService = require("./BlackMarketService")
 local MonetizationService = require("./MonetizationService")
+local CombatLockService = require("./CombatLockService")
 
 export type BlockStatus = "Controlled" | "Contested" | "Capturing"
 
@@ -646,6 +647,10 @@ local function stepAgentAI(agent: TurfAgent, now: number): ()
 		if enemyDist <= meleeRange and (now - agent.LastAttackAt) >= meleeCd then
 			agent.LastAttackAt = now
 			MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
+			local victimPlayer = Players:GetPlayerFromCharacter(enemyModel)
+			if victimPlayer then
+				CombatLockService.MarkUnderAttack(victimPlayer, agent.Root.Position, if isBladeMafia then (tostring(agent.BladeStyle) .. " Mafia") else "Turf Rival")
+			end
 			local dmg = if agent.IsBoss then 26 elseif isBladeMafia then 18 else 14
 			enemyHum:TakeDamage(dmg)
 			if isBladeMafia and agent.BladeStyle then
@@ -661,6 +666,10 @@ local function stepAgentAI(agent: TurfAgent, now: number): ()
 		elseif enemyDist > meleeRange and enemyDist <= shootRange and (now - agent.LastAttackAt) >= rangedCd then
 			agent.LastAttackAt = now
 			MafiaVisualBuilder.TriggerAttackAnim(agent.Model)
+			local victimPlayer = Players:GetPlayerFromCharacter(enemyModel)
+			if victimPlayer then
+				CombatLockService.MarkUnderAttack(victimPlayer, agent.Root.Position, if isBladeMafia then (tostring(agent.BladeStyle) .. " Mafia") else "Turf Rival")
+			end
 			local fromPos = agent.Root.Position + Vector3.new(0, 1.4, 0)
 			local tracerCol = if isNinja then Color3.fromRGB(178, 192, 218) elseif isBladeMafia then Color3.fromRGB(214, 62, 68) else TurfConfig.ResolveFactionColor(agent.FactionId)
 			BlackMarketService.SpawnBulletTracer(fromPos, enemyRoot.Position, tracerCol)

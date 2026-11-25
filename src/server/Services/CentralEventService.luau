@@ -23,7 +23,7 @@ export type RushEventSpec = {
 local CentralEventService = {}
 
 local EVENT_DURATION = 75
-local MARKET_BUNDLE_COST = 40
+local MARKET_BUNDLE_COST = 200
 
 local EVENTS: { RushEventSpec } = {
 	{ Id = "GoldenFeast", Title = "GOLDEN FEAST: 2x Coins on All Food!", CoinsMult = 2.0, RepMult = 1.0 },

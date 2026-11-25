@@ -21,8 +21,8 @@ export type WaiterChangedCallback = (player: Player) -> ()
 
 local CrewService = {}
 
-CrewService.MAX_WAITERS = 3
-CrewService.WAITER_COSTS = { [1] = 200, [2] = 360, [3] = 540 }
+CrewService.MAX_WAITERS = 5
+CrewService.WAITER_COSTS = { [1] = 1000, [2] = 1800, [3] = 2700, [4] = 3800, [5] = 5250 }
 
 local CREW_SPEED_BONUS_PER_MEMBER = 0.15
 local AUTO_COOK_INTERVAL = 4.2
@@ -41,14 +41,14 @@ local playerRemovingConn: RBXScriptConnection? = nil
 local unsubscribeProfile: (() -> ())? = nil
 local unsubscribeBase: (() -> ())? = nil
 
--- Realistic Commercial Kitchen Line Stations (facing -Z directly over Stove 1, Stove 2, Prep & Pass!)
+-- Spacious Rear Commercial Kitchen Line Stations (spaced well apart along back line so dining floor stays open!)
 local CREW_STATIONS: { { Pos: Vector3, Action: string, Label: string } } = {
-	{ Pos = Vector3.new(-20.0, 0.85, -13.0), Action = "TossingPan", Label = "TOSSING PAN" },
-	{ Pos = Vector3.new(-15.0, 0.85, -13.0), Action = "Searing",    Label = "SEARING" },
-	{ Pos = Vector3.new(-9.6,  0.85, -13.0), Action = "Chopping",   Label = "PREP & CHOP" },
-	{ Pos = Vector3.new(-4.8,  0.85, -13.0), Action = "Plating",    Label = "PLATING DISH" },
-	{ Pos = Vector3.new(-24.2, 0.85, -13.0), Action = "Searing",    Label = "GRILLING" },
-	{ Pos = Vector3.new(-0.6,  0.85, -13.0), Action = "Plating",    Label = "GARNISHING" },
+	{ Pos = Vector3.new(-28.0, 0.85, -21.5), Action = "TossingPan", Label = "TOSSING PAN" },
+	{ Pos = Vector3.new(-22.5, 0.85, -21.5), Action = "Searing",    Label = "SEARING" },
+	{ Pos = Vector3.new(-17.0, 0.85, -21.5), Action = "Chopping",   Label = "PREP & CHOP" },
+	{ Pos = Vector3.new(-11.5, 0.85, -21.5), Action = "Plating",    Label = "PLATING" },
+	{ Pos = Vector3.new(-6.0,  0.85, -21.5), Action = "Searing",    Label = "GRILLING" },
+	{ Pos = Vector3.new(-32.5, 0.85, -16.5), Action = "Plating",    Label = "GARNISHING" },
 }
 
 local CHEF_CYCLE_ACTIONS: { { Action: string, Label: string } } = {
@@ -185,9 +185,9 @@ local function spawnCrewChef(parent: Instance, index: number, worldCF: CFrame, a
 
 	local bb = Instance.new("BillboardGui")
 	bb.Name = "ChefBadge"
-	bb.Size = UDim2.fromOffset(168, 26)
-	bb.StudsOffset = Vector3.new(0, 2.8, 0)
-	bb.MaxDistance = 78
+	bb.Size = UDim2.fromOffset(142, 22)
+	bb.StudsOffset = Vector3.new(0, 2.6, 0)
+	bb.MaxDistance = 42
 	bb.Parent = rig.Head
 
 	local lbl = Instance.new("TextLabel")
@@ -248,7 +248,7 @@ function CrewService.SyncCrewVisuals(player: Player): ()
 	crewModels[player] = spawned
 end
 
-function CrewService.TryHireCrew(player: Player): (boolean, string)
+function CrewService.TryHireCrew(player: Player, bypassGold: boolean?): (boolean, string)
 	local current = CrewService.GetCrewCount(player)
 	local maxCrew = CrewService.GetMaxCrew(player)
 	if current >= maxCrew then
@@ -256,8 +256,8 @@ function CrewService.TryHireCrew(player: Player): (boolean, string)
 	end
 
 	local cost = CrewService.GetNextHireCost(player)
-	if not PlayerDataService.SpendCoins(player, cost) then
-		return false, string.format("Need %d Coins", cost)
+	if not bypassGold and not PlayerDataService.SpendCoins(player, cost) then
+		return false, string.format("Need %d Gold", cost)
 	end
 
 	PlayerDataService.SetCrewCount(player, current + 1)
@@ -266,7 +266,7 @@ function CrewService.TryHireCrew(player: Player): (boolean, string)
 	return true, string.format("Hired Kitchen Chef #%d! Fetches from Warehouse & cooks dishes.", current + 1)
 end
 
-function CrewService.TryHireWaiter(player: Player): (boolean, string)
+function CrewService.TryHireWaiter(player: Player, bypassGold: boolean?): (boolean, string)
 	if not BaseService.GetPlayerBaseSlot(player) then
 		return false, "Claim your Restaurant Plaza first!"
 	end
@@ -275,7 +275,7 @@ function CrewService.TryHireWaiter(player: Player): (boolean, string)
 	if not cost then
 		return false, string.format("Max Waiters hired (%d / %d)!", CrewService.MAX_WAITERS, CrewService.MAX_WAITERS)
 	end
-	if not PlayerDataService.SpendCoins(player, cost) then
+	if not bypassGold and not PlayerDataService.SpendCoins(player, cost) then
 		return false, string.format("Need %d Gold to hire Waiter #%d!", cost, current + 1)
 	end
 

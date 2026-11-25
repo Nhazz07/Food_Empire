@@ -58,7 +58,7 @@ BodyguardService.STANCE_ORDER = { "Follow", "GuardBistro", "PatrolBase", "Aggres
 BodyguardService.STANCE_LABELS = {
 	Follow = "FOLLOW ME",
 	GuardBistro = "GUARD CENTRAL PARK BISTRO",
-	PatrolBase = "PATROL BASE & WAREHOUSES",
+	PatrolBase = "DEFEND RESTAURANT HQ",
 	Aggressive = "FREE-FIRE AGGRESSIVE",
 }
 
@@ -247,6 +247,17 @@ local function getOwnerAnchorPos(owner: Player, slotIndex: number): Vector3
 		local slot = BaseService.GetPlayerBaseSlot(owner)
 		if slot then
 			local base = BaseService.GetBaseModel(slot)
+			local hq = if base then base:FindFirstChild("RestaurantHQ") else nil
+			if hq and hq:IsA("Model") and hq.PrimaryPart then
+				local defensePosts = {
+					Vector3.new(-10.5, 3.6, 31.0),
+					Vector3.new(10.5, 3.6, 31.0),
+					Vector3.new(-26.0, 3.6, 25.0),
+					Vector3.new(26.0, 3.6, 25.0),
+				}
+				local postOff = defensePosts[slotIndex] or defensePosts[1]
+				return (hq.PrimaryPart.CFrame * CFrame.new(postOff)).Position
+			end
 			local sp = if base then base:FindFirstChild("BaseSpawn") else nil
 			if sp and sp:IsA("BasePart") then
 				return sp.Position + Vector3.new(off.X * 1.5, 3.8, off.Z * 1.5)
@@ -427,8 +438,8 @@ function BodyguardService.SyncGuardsForPlayer(player: Player): ()
 	for slotIdx = 1, math.min(#activeClasses, BodyguardConfig.MAX_ACTIVE_GUARDS) do
 		local classId = activeClasses[slotIdx] :: BodyguardConfig.GuardClassId
 		local spec = BodyguardConfig.CLASSES[classId] or BodyguardConfig.CLASSES.BasicGuard
-		-- Security check: never spawn a Robux-exclusive bodyguard unless the player actually owns its Game Pass
-		if spec.RobuxItemId and not MonetizationService.HasPass(player, spec.RobuxItemId) then
+		-- Security check: never spawn a Robux-only guard unless the player owns its Game Pass or unlocked it legitimately with Gold!
+		if spec.RobuxItemId and not MonetizationService.HasPass(player, spec.RobuxItemId) and prof.UnlockedGuardClasses[spec.Id] ~= true then
 			continue
 		end
 		local existsForSlot = false
@@ -466,8 +477,8 @@ function BodyguardService.SyncGuardsForPlayer(player: Player): ()
 	end
 end
 
--- Recruit any of the 7 Bodyguard Classes (or deploy an already-owned class into your squad)!
-function BodyguardService.TryRecruitClass(player: Player, classId: string, targetSlot: number?): (boolean, string)
+-- Recruit any Bodyguard Class (supports Gold unlock, optional Robux Pass unlock, and restaurant defense deployment!)
+function BodyguardService.TryRecruitClass(player: Player, classId: string, targetSlot: number?, useRobux: boolean?, autoDefendHQ: boolean?): (boolean, string)
 	if not BaseService.GetPlayerBaseSlot(player) then
 		return false, "Claim your Restaurant Plaza first!"
 	end
@@ -479,12 +490,26 @@ function BodyguardService.TryRecruitClass(player: Player, classId: string, targe
 	local prof = PlayerDataService.GetProfile(player)
 	local hasPass = spec.RobuxItemId ~= nil and MonetizationService.HasPass(player, spec.RobuxItemId)
 
-	-- Strict Robux Gate: Robux-exclusive classes (like BossBodyguard) MUST own the Game Pass — never free via Cost == 0!
-	if spec.RobuxItemId and not hasPass then
+	-- Explicit Robux Purchase Request OR Robux-exclusive (Cost <= 0) pass check
+	if spec.RobuxItemId and not hasPass and (useRobux == true or spec.Cost <= 0) then
 		return MonetizationService.TryPromptPurchase(player, spec.RobuxItemId)
 	end
 
 	local alreadyUnlocked = hasPass or (prof.UnlockedGuardClasses[spec.Id] == true)
+
+	-- Dual-Currency Robux Option for Gold-based Bodyguards (unlocks immediately via Robux without Gold or level gate!)
+	if useRobux == true and not alreadyUnlocked and typeof(spec.RobuxPrice) == "number" and spec.RobuxPrice > 0 then
+		return MonetizationService.TryPromptDualPurchase(
+			player,
+			"Guard_" .. spec.Id,
+			spec.RobuxPrice,
+			spec.DisplayName,
+			function()
+				prof.UnlockedGuardClasses[spec.Id] = true
+				return BodyguardService.TryRecruitClass(player, classId, targetSlot, false, autoDefendHQ)
+			end
+		)
+	end
 
 	if not alreadyUnlocked and prof.Level < spec.RequiredLevel then
 		return false, string.format("Requires Player Lv.%d to recruit %s!", spec.RequiredLevel, spec.DisplayName)
@@ -495,6 +520,10 @@ function BodyguardService.TryRecruitClass(player: Player, classId: string, targe
 		if spec.Cost <= 0 or not PlayerDataService.SpendCoins(player, spec.Cost) then
 			return false, string.format("Need %d Gold to recruit %s!", spec.Cost, spec.DisplayName)
 		end
+	end
+
+	if autoDefendHQ == true then
+		PlayerDataService.SetGuardStance(player, "PatrolBase")
 	end
 
 	local finalSlotIdx: number
