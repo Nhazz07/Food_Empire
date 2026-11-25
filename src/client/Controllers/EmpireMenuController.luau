@@ -1255,32 +1255,121 @@ local function renderUpgrades(state: { [string]: any }): ()
 	local nextTier = RecipeConfig.RestaurantTiers[restLv + 1]
 	local expInfo = state.Expansion
 	local expName = if typeof(expInfo) == "table" and typeof(expInfo.DisplayName) == "string" then expInfo.DisplayName else "Starter Bistro"
-	local expDesc = if typeof(expInfo) == "table" and typeof(expInfo.NextSummary) == "string" and expInfo.NextSummary ~= ""
-		then string.format(
-			"%s (%dF • %d Seats • %d Kitchen Cap). NEXT: %s",
-			expName,
-			tonumber(expInfo.Floors) or 1,
-			tonumber(expInfo.MaxCustomers) or 4,
-			tonumber(expInfo.KitchenReadyCapacity) or 5,
-			expInfo.NextSummary
-		)
-		else string.format(
-			"%s (%dF • %d Seats • %d Kitchen Cap). Max physical expansion reached; higher tiers scale Gold payout & speed!",
-			expName,
-			if typeof(expInfo) == "table" then (tonumber(expInfo.Floors) or 1) else 1,
-			if typeof(expInfo) == "table" then (tonumber(expInfo.MaxCustomers) or 4) else 4,
-			if typeof(expInfo) == "table" then (tonumber(expInfo.KitchenReadyCapacity) or 5) else 5
-		)
-	addUpgradeRow(
-		"HQ",
-		string.format("RESTAURANT HQ  |  LV.%d / %d (%s)", restLv, RecipeConfig.MaxRestaurantLevel, string.upper(expName)),
-		expDesc,
-		if nextTier then string.format("UPG %sG", formatCommaInt(nextTier.UpgradeCost)) else "MAX LEVEL",
-		if nextTier then C_OXBLOOD else C_DISABLED,
-		function() if dispatchAction then dispatchAction("UpgradeRestaurant", nil) end end,
-		if nextTier then MonetizationConfig.GetHQUpgradeRobuxPrice(nextTier.Level) else nil,
-		if nextTier then function() if dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "UpgradeRestaurant" }) end end else nil
-	)
+	local frontWoodName = if typeof(expInfo) == "table" and typeof(expInfo.FrontPavilionName) == "string" and expInfo.FrontPavilionName ~= ""
+		then expInfo.FrontPavilionName
+		else "Cedar Wood Pavilion"
+	local curPlrLv = tonumber(profile.Level) or 1
+	local curFoodSold = if typeof(expInfo) == "table" and typeof(expInfo.TotalDishesServed) == "number"
+		then expInfo.TotalDishesServed
+		else (tonumber(profile.TotalDishesServed) or 0)
+	local reqPlrLv = if nextTier then (nextTier.RequiredPlayerLevel or 1) else 20
+	local reqFoodSold = if nextTier then (nextTier.RequiredDishesServed or 0) else 2250
+	local canUpgReq = if nextTier
+		then (if typeof(expInfo) == "table" and typeof(expInfo.CanUpgradeHQRequirements) == "boolean"
+			then expInfo.CanUpgradeHQRequirements
+			else (curPlrLv >= reqPlrLv and curFoodSold >= reqFoodSold))
+		else false
+	local curCoins = tonumber(profile.Coins) or 0
+
+	-- Featured Restaurant HQ + Front Wood Restaurant Card (Lv.1 -> Lv.15 with Live Requirements!)
+	do
+		local hqAccent = if not nextTier then C_GOLD_HI elseif canUpgReq then C_BRASS else C_STEEL
+		local hqCard = makeCard(scrollFrame :: ScrollingFrame, if nextTier then 112 else 94, hqAccent)
+		local hqVp = ModelPreviewHelper.CreatePreview(hqCard, "Empire", "HQ", UDim2.fromOffset(72, 72), UDim2.new(0, 12, 0.5, -36), Color3.fromRGB(16, 22, 36), hqAccent)
+		makeCorner(hqVp, 9)
+
+		local hqTitle = Instance.new("TextLabel")
+		hqTitle.Position = UDim2.new(0, 94, 0, 8)
+		hqTitle.Size = UDim2.new(1, -268, 0, 20)
+		hqTitle.BackgroundTransparency = 1
+		hqTitle.Font = Enum.Font.GothamBlack
+		hqTitle.TextXAlignment = Enum.TextXAlignment.Left
+		hqTitle.TextTruncate = Enum.TextTruncate.AtEnd
+		hqTitle.TextSize = 13
+		hqTitle.TextColor3 = C_GOLD_HI
+		hqTitle.Text = string.format("RESTAURANT HQ & WOOD PAVILION  |  LV.%d / %d", restLv, RecipeConfig.MaxRestaurantLevel)
+		hqTitle.Parent = hqCard
+		addTextOutline(hqTitle, 1.5)
+
+		local reqLbl = Instance.new("TextLabel")
+		reqLbl.Position = UDim2.new(0, 94, 0, 29)
+		reqLbl.Size = UDim2.new(1, -268, 0, 17)
+		reqLbl.BackgroundTransparency = 1
+		reqLbl.Font = Enum.Font.GothamBlack
+		reqLbl.TextXAlignment = Enum.TextXAlignment.Left
+		reqLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		reqLbl.TextSize = 10
+		if nextTier then
+			reqLbl.TextColor3 = if canUpgReq then Color3.fromRGB(74, 222, 128) else Color3.fromRGB(251, 191, 36)
+			reqLbl.Text = string.format(
+				"REQ FOR LV.%d:  PLAYER LV.%d (YOU: LV.%d)   •   FOOD SOLD: %d / %d   %s",
+				nextTier.Level,
+				reqPlrLv,
+				curPlrLv,
+				curFoodSold,
+				reqFoodSold,
+				if canUpgReq then "[READY!]" else "[LOCKED]"
+			)
+		else
+			reqLbl.TextColor3 = C_GOLD_HI
+			reqLbl.Text = string.format("SUPREME FOOD EMPIRE MAXED  •  FOOD SOLD: %s", formatCommaInt(curFoodSold))
+		end
+		reqLbl.Parent = hqCard
+
+		local hqDesc = Instance.new("TextLabel")
+		hqDesc.Position = UDim2.new(0, 94, 0, 48)
+		hqDesc.Size = UDim2.new(1, -268, 0, 56)
+		hqDesc.BackgroundTransparency = 1
+		hqDesc.Font = Enum.Font.GothamMedium
+		hqDesc.TextXAlignment = Enum.TextXAlignment.Left
+		hqDesc.TextYAlignment = Enum.TextYAlignment.Top
+		hqDesc.TextWrapped = true
+		hqDesc.TextSize = 10
+		hqDesc.TextColor3 = C_TEXT_MUTED
+		local curFloors = if typeof(expInfo) == "table" then (tonumber(expInfo.Floors) or 1) else 1
+		local curCust = if typeof(expInfo) == "table" then (tonumber(expInfo.MaxCustomers) or 4) else 4
+		local nextCust = if typeof(expInfo) == "table" and typeof(expInfo.NextMaxCustomers) == "number" then expInfo.NextMaxCustomers else (curCust + 2)
+		hqDesc.Text = if nextTier and typeof(expInfo) == "table" and typeof(expInfo.NextSummary) == "string" and expInfo.NextSummary ~= ""
+			then string.format(
+				"Now: %s + %s (%dF • %d Max Customers).\nNEXT LV.%d (%d Customers): %s",
+				expName,
+				frontWoodName,
+				curFloors,
+				curCust,
+				nextTier.Level,
+				nextCust,
+				expInfo.NextSummary
+			)
+			else string.format(
+				"%s + %s (%dF • %d Max Customers • 4.5x Dish Payout & 4.0x Cook Speed). Strongest Food Empire in the City!",
+				expName,
+				frontWoodName,
+				curFloors,
+				curCust
+			)
+		hqDesc.Parent = hqCard
+
+		if nextTier then
+			local rPrice = MonetizationConfig.GetHQUpgradeRobuxPrice(nextTier.Level)
+			local goldLabel = if not canUpgReq
+				then string.format("LOCKED (%d/%d FOOD)", math.min(curFoodSold, reqFoodSold), reqFoodSold)
+				else string.format("UPG %sG", formatCommaInt(nextTier.UpgradeCost))
+			local goldBg = if canUpgReq and curCoins >= nextTier.UpgradeCost then C_OXBLOOD else C_DISABLED
+			local gBtn = makeBtn(hqCard, goldLabel, goldBg, UDim2.new(1, -162, 0, 14), UDim2.fromOffset(150, 38), function()
+				if dispatchAction then dispatchAction("UpgradeRestaurant", nil) end
+			end)
+			gBtn.TextSize = 10
+
+			local robuxLabel = if canUpgReq then string.format("R$ %d", rPrice) else string.format("R$ %d • LOCKED", rPrice)
+			local robuxBg = if canUpgReq then C_ROBUX else C_DISABLED
+			local rBtn = makeBtn(hqCard, robuxLabel, robuxBg, UDim2.new(1, -162, 0, 60), UDim2.fromOffset(150, 38), function()
+				if dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "UpgradeRestaurant" }) end
+			end)
+			rBtn.TextSize = 10
+		else
+			makeBtn(hqCard, "MAX LV.15", C_OWNED, UDim2.new(1, -162, 0.5, -19), UDim2.fromOffset(150, 38), function() end)
+		end
+	end
 
 	local hasDualStove = profile.HasDualStove == true
 	addUpgradeRow(
@@ -1570,7 +1659,7 @@ local function renderUpgrades(state: { [string]: any }): ()
 		local card = makeCard(scrollFrame :: ScrollingFrame, 102, if deployedSlot then C_OWNED else accentCol)
 
 		-- Crisp 3D Bodyguard Character Preview (distinct model for Basic, Tactical, Heavy, Ninja, Elite, Commander!)
-		ModelPreviewHelper.CreatePreview(card, "Guard", spec.Id, UDim2.fromOffset(68, 68), UDim2.new(0, 12, 0.5, -34), Color3.fromRGB(20, 23, 31), accentCol)
+		ModelPreviewHelper.CreatePreview(card, "Bodyguard", spec.Id, UDim2.fromOffset(72, 72), UDim2.new(0, 11, 0.5, -36), Color3.fromRGB(16, 22, 36), accentCol)
 
 		local gName = Instance.new("TextLabel")
 		gName.Position = UDim2.new(0, 90, 0, 8)
@@ -1955,7 +2044,7 @@ local function renderUpgrades(state: { [string]: any }): ()
 				local owned = biz.Owned == true
 				local safeG = tonumber(biz.SafeGold) or 0
 				addUpgradeRow(
-					"BIZ",
+					"BIZ_" .. bid,
 					if owned then string.format("%s  |  SAFE: %d / %dG", string.upper(tostring(biz.DisplayName)), safeG, tonumber(biz.MaxSafeGold) or 700) else string.format("FRONT BUSINESS: %s", string.upper(tostring(biz.DisplayName))),
 					tostring(biz.PerkLabel or "Passive Wall Safe Gold & Empire Perk."),
 					if owned then (if safeG > 0 then string.format("COLLECT +%dG", safeG) else "FILLING...") else string.format("BUY  %dG", tonumber(biz.Cost) or 800),
@@ -2927,7 +3016,7 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 	ml.Padding = UDim.new(0, 6)
 	ml.Parent = modeRow
 
-	local cModeBtn = makeBtn(modeRow, "RECRUIT CLASSES  (7)", if currentGuardView == "Classes" then C_OXBLOOD else C_BG_CARD_ALT, UDim2.new(), UDim2.new(0.5, -3, 0, 30), function()
+	local cModeBtn = makeBtn(modeRow, string.format("RECRUIT CLASSES  (%d)", #BodyguardConfig.CLASS_ORDER), if currentGuardView == "Classes" then C_OXBLOOD else C_BG_CARD_ALT, UDim2.new(), UDim2.new(0.5, -3, 0, 30), function()
 		currentGuardView = "Classes"
 		render()
 	end)
@@ -3571,7 +3660,7 @@ local function updateVisibleViewports(): ()
 				local cTop = desc.AbsolutePosition.Y
 				local cBot = cTop + desc.AbsoluteSize.Y
 				local inView = (cBot >= viewTop) and (cTop <= viewBot)
-				local wantVis = inView and visibleCount < 8
+				local wantVis = inView and visibleCount < 18
 				if wantVis then
 					visibleCount += 1
 				end
@@ -4157,7 +4246,7 @@ local function computeTabSignature(tab: MenuTab, state: { [string]: any }): stri
 			if v then unlCnt += 1 end
 		end
 		return string.format(
-			"%s|U:%d|%d|%d|%d|%s|%s|%s|%d|%s|%d",
+			"%s|U:%d|%d|%d|%d|%s|%s|%s|%d|%s|%d|%d",
 			base,
 			tonumber(prof.DefenseLevel) or 1,
 			tonumber(prof.CrewCount) or 0,
@@ -4168,7 +4257,8 @@ local function computeTabSignature(tab: MenuTab, state: { [string]: any }): stri
 			sqStr,
 			unlCnt,
 			tostring(bg.Stance or ""),
-			selectedGuardSlot
+			selectedGuardSlot,
+			tonumber(prof.TotalDishesServed) or 0
 		)
 	end
 end

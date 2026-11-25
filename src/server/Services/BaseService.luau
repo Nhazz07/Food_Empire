@@ -842,6 +842,7 @@ local function releaseSlot(player: Player): ()
 			if hq and hq:IsA("Model") then
 				RestaurantExpansionBuilder.BuildTierForHQ(baseModel, hq, slot, 1)
 			end
+			RestaurantExpansionBuilder.BuildFrontWoodPavilion(baseModel, slot, 1)
 		end
 	end
 
@@ -1015,140 +1016,6 @@ local function expandBaseEstate(slot: BaseSlot): ()
 	end
 end
 
--- Replaces bare wooden skeleton Pergolas in FrontDiningPlaza with clean architectural
--- boutique pavilion roofs (pitched dark slate canopy + frosted skylight + brushed brass trim)!
-local function upgradePergolaRoofs(slot: BaseSlot): ()
-	local baseModel = BaseService.GetBaseModel(slot)
-	if not baseModel then
-		return
-	end
-	local bp = baseModel:FindFirstChild("BasePivot")
-	local plaza = baseModel:FindFirstChild("FrontDiningPlaza")
-	if not bp or not bp:IsA("BasePart") or not plaza then
-		return
-	end
-	local bCF = bp.CFrame
-
-	local oldRoofs = plaza:FindFirstChild("PergolaPavilionRoofs")
-	if oldRoofs then
-		oldRoofs:Destroy()
-	end
-	local roofFolder = Instance.new("Folder")
-	roofFolder.Name = "PergolaPavilionRoofs"
-
-	local theme = RESTAURANT_THEMES[slot] or RESTAURANT_THEMES.East
-	local slateCol = Color3.fromRGB(40, 44, 54)
-	local timberCol = theme.WoodTrimColor
-	local brassCol = theme.BrassAccent
-	local skylightCol = Color3.fromRGB(186, 212, 232)
-	local soffitCol = Color3.fromRGB(122, 86, 54)
-
-	-- Measure exact Left & Right Pergola wood frame bounds in BasePivot space
-	for _, side in ipairs({ -1, 1 }) do
-		local minX, maxX = math.huge, -math.huge
-		local minZ, maxZ = math.huge, -math.huge
-		local topY = -math.huge
-		local found = 0
-
-		for _, d in ipairs(plaza:GetDescendants()) do
-			if d:IsA("BasePart") and d.Name ~= "BackServiceAlley" then
-				local rel = bCF:ToObjectSpace(d.CFrame)
-				local p = rel.Position
-				if (side < 0 and p.X < -22) or (side > 0 and p.X > 22) then
-					if p.Z > 22 and p.Z < 92 and p.Y >= 8.0 then
-						found += 1
-						local hx, hy, hz = d.Size.X * 0.5, d.Size.Y * 0.5, d.Size.Z * 0.5
-						minX = math.min(minX, p.X - hx)
-						maxX = math.max(maxX, p.X + hx)
-						minZ = math.min(minZ, p.Z - hz)
-						maxZ = math.max(maxZ, p.Z + hz)
-						topY = math.max(topY, p.Y + hy)
-					end
-				end
-			end
-		end
-
-		if found == 0 then
-			-- Clean fallback matching exact FrontDiningPlaza marble table cluster coordinates
-			minX = if side < 0 then -80 else 36
-			maxX = if side < 0 then -36 else 80
-			minZ = 33
-			maxZ = 73
-			topY = 11.4
-		end
-
-		local cx = (minX + maxX) * 0.5
-		local cz = (minZ + maxZ) * 0.5
-		local w = math.clamp(maxX - minX + 3.2, 34, 58)
-		local dLen = math.clamp(maxZ - minZ + 3.2, 32, 52)
-		local tag = if side < 0 then "LeftPavilion_" else "RightPavilion_"
-
-		local function rPart(name: string, sz: Vector3, relCF: CFrame, col: Color3, mat: Enum.Material, transp: number?, collide: boolean?): Part
-			local part = Instance.new("Part")
-			part.Name = tag .. name
-			part.Size = sz
-			part.CFrame = bCF * relCF
-			part.Color = col
-			part.Material = mat
-			part.Anchored = true
-			part.CanCollide = if collide == nil then true else collide
-			part.CanTouch = false
-			part.TopSurface = Enum.SurfaceType.Smooth
-			part.BottomSurface = Enum.SurfaceType.Smooth
-			if transp then part.Transparency = transp end
-			part.Parent = roofFolder
-			return part
-		end
-
-		-- 1. Warm Acoustic Timber Soffit Perimeter & Clean Outer Fascia Border (hides skeleton frame edges!)
-		rPart("FasciaF", Vector3.new(w + 1.2, 1.35, 0.9), CFrame.new(cx, topY + 0.55, cz + dLen * 0.5), timberCol, Enum.Material.Wood, nil, false)
-		rPart("FasciaB", Vector3.new(w + 1.2, 1.35, 0.9), CFrame.new(cx, topY + 0.55, cz - dLen * 0.5), timberCol, Enum.Material.Wood, nil, false)
-		rPart("FasciaL", Vector3.new(0.9, 1.35, dLen + 1.2), CFrame.new(cx - w * 0.5, topY + 0.55, cz), timberCol, Enum.Material.Wood, nil, false)
-		rPart("FasciaR", Vector3.new(0.9, 1.35, dLen + 1.2), CFrame.new(cx + w * 0.5, topY + 0.55, cz), timberCol, Enum.Material.Wood, nil, false)
-
-		-- Crisp Brushed-Brass Eave Accent Trim
-		rPart("BrassTrimF", Vector3.new(w + 1.6, 0.35, 1.15), CFrame.new(cx, topY + 1.22, cz + dLen * 0.5), brassCol, Enum.Material.Metal, nil, false)
-		rPart("BrassTrimB", Vector3.new(w + 1.6, 0.35, 1.15), CFrame.new(cx, topY + 1.22, cz - dLen * 0.5), brassCol, Enum.Material.Metal, nil, false)
-		rPart("BrassTrimL", Vector3.new(1.15, 0.35, dLen + 1.6), CFrame.new(cx - w * 0.5, topY + 1.22, cz), brassCol, Enum.Material.Metal, nil, false)
-		rPart("BrassTrimR", Vector3.new(1.15, 0.35, dLen + 1.6), CFrame.new(cx + w * 0.5, topY + 1.22, cz), brassCol, Enum.Material.Metal, nil, false)
-
-		-- 2. Solid Pitched Architectural Slate Roof Panels (Left & Right Slopes with Center Skylight Ridge!)
-		local slopeW = w * 0.44
-		local pitchRad = math.rad(11)
-		local roofMidY = topY + 2.35
-		rPart("RoofSlopeL", Vector3.new(slopeW, 0.65, dLen + 1.4), CFrame.new(cx - w * 0.28, roofMidY, cz) * CFrame.Angles(0, 0, pitchRad), slateCol, Enum.Material.Slate, nil, true)
-		rPart("RoofSlopeR", Vector3.new(slopeW, 0.65, dLen + 1.4), CFrame.new(cx + w * 0.28, roofMidY, cz) * CFrame.Angles(0, 0, -pitchRad), slateCol, Enum.Material.Slate, nil, true)
-		-- Warm wood ceiling soffit panels underneath the slate slopes
-		rPart("CeilingSoffitL", Vector3.new(slopeW - 0.8, 0.28, dLen - 0.4), CFrame.new(cx - w * 0.28, roofMidY - 0.42, cz) * CFrame.Angles(0, 0, pitchRad), soffitCol, Enum.Material.WoodPlanks, nil, false)
-		rPart("CeilingSoffitR", Vector3.new(slopeW - 0.8, 0.28, dLen - 0.4), CFrame.new(cx + w * 0.28, roofMidY - 0.42, cz) * CFrame.Angles(0, 0, -pitchRad), soffitCol, Enum.Material.WoodPlanks, nil, false)
-
-		-- 3. Center Frosted Architectural Glass Skylight Lantern & Brass Ridge Cap
-		rPart("SkylightGlass", Vector3.new(w * 0.18, 0.35, dLen + 0.4), CFrame.new(cx, topY + 4.25, cz), skylightCol, Enum.Material.Glass, 0.38, true)
-		local ridge = rPart("RidgeCap", Vector3.new(1.2, 0.65, dLen + 2.2), CFrame.new(cx, topY + 4.65, cz), brassCol, Enum.Material.Metal, nil, false)
-		local pl = Instance.new("PointLight")
-		pl.Color = Color3.fromRGB(255, 226, 170)
-		pl.Range = 46
-		pl.Brightness = 1.25
-		pl.Shadows = false
-		pl.Parent = ridge
-
-		-- 4. Clean Gable End Triangles / Clerestory Beams (closes front & back roof peaks cleanly!)
-		rPart("GableBeamF", Vector3.new(w * 0.88, 2.2, 0.55), CFrame.new(cx, topY + 2.25, cz + dLen * 0.49), timberCol, Enum.Material.Wood, nil, false)
-		rPart("GableBeamB", Vector3.new(w * 0.88, 2.2, 0.55), CFrame.new(cx, topY + 2.25, cz - dLen * 0.49), timberCol, Enum.Material.Wood, nil, false)
-		rPart("GableUpperF", Vector3.new(w * 0.44, 1.4, 0.55), CFrame.new(cx, topY + 3.65, cz + dLen * 0.49), timberCol, Enum.Material.Wood, nil, false)
-		rPart("GableUpperB", Vector3.new(w * 0.44, 1.4, 0.55), CFrame.new(cx, topY + 3.65, cz - dLen * 0.49), timberCol, Enum.Material.Wood, nil, false)
-
-		-- 5. Stone Plinth Column Bases at all 4 Pavilion Corners
-		for _, sx in ipairs({ -w * 0.46, w * 0.46 }) do
-			for _, sz in ipairs({ -dLen * 0.46, dLen * 0.46 }) do
-				rPart("CornerPlinth", Vector3.new(2.4, 2.2, 2.4), CFrame.new(cx + sx, 1.4, cz + sz), Color3.fromRGB(82, 80, 76), Enum.Material.Brick, nil, false)
-			end
-		end
-	end
-
-	roofFolder.Parent = plaza
-end
-
 function BaseService.Start(): ()
 	if isRunning then
 		return
@@ -1157,12 +1024,12 @@ function BaseService.Start(): ()
 
 	for _, slot in ipairs(SLOT_ORDER) do
 		expandBaseEstate(slot)
-		upgradePergolaRoofs(slot)
 		applyDistinctRestaurantTheme(slot)
 		local bm = BaseService.GetBaseModel(slot)
 		local hq = if bm then bm:FindFirstChild("RestaurantHQ") else nil
 		if bm and hq and hq:IsA("Model") then
 			RestaurantExpansionBuilder.BuildTierForHQ(bm, hq, slot, 1)
+			RestaurantExpansionBuilder.BuildFrontWoodPavilion(bm, slot, 1)
 		end
 		updateGateOwnerSign(slot, nil)
 	end

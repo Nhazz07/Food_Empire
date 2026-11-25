@@ -271,7 +271,7 @@ local ALL_DINING_SPOTS: { DiningSpot } = {
 	{ Space = "HQ", Zone = "VIP", TableOffset = Vector3.new(-25.5, 4.00, -6.5), PlateOffset = Vector3.new(-25.5, 4.02, -5.15), SeatOffset = Vector3.new(-25.5, 2.95, -3.55), WaiterOffset = Vector3.new(-19.5, 3.6, -5.8), IsVIP = true },
 }
 
--- Append reusable Level 2-5 Physical Expansion dining spots (East Dining Wing + 2nd-Floor Mezzanine & VIP Banquet)!
+-- Append reusable Level 2-15 Physical Expansion dining spots (East/West Wings + 2nd/3rd Floors & VIP Banquet)!
 for _, extraSpot in ipairs(RestaurantExpansionConfig.EXTRA_DINING_SPOTS) do
 	table.insert(ALL_DINING_SPOTS, {
 		Space = extraSpot.Space,
@@ -286,6 +286,21 @@ for _, extraSpot in ipairs(RestaurantExpansionConfig.EXTRA_DINING_SPOTS) do
 	})
 end
 
+-- Append progressive Lv.2-15 Front Wood Restaurant with Roof (FrontDiningPlaza) outdoor dining spots!
+for _, patioSpot in ipairs(RestaurantExpansionConfig.FRONT_PAVILION_SPOTS) do
+	table.insert(ALL_DINING_SPOTS, {
+		Space = patioSpot.Space,
+		Zone = patioSpot.Zone,
+		Floor = patioSpot.Floor,
+		MinLevel = patioSpot.MinLevel,
+		TableOffset = patioSpot.TableOffset,
+		PlateOffset = patioSpot.PlateOffset,
+		SeatOffset = patioSpot.SeatOffset,
+		WaiterOffset = patioSpot.WaiterOffset,
+		IsVIP = patioSpot.IsVIP,
+	})
+end
+
 local function resolveSpotWorldPositions(spot: DiningSpot, bCF: CFrame, hqCF: CFrame): (Vector3, Vector3, Vector3, Vector3)
 	local refCF = if spot.Space == "Base" then bCF else hqCF
 	return (refCF * CFrame.new(spot.TableOffset)).Position,
@@ -296,12 +311,12 @@ end
 
 local function getMaxCustomersForHQ(player: Player): number
 	local prof = PlayerDataService.GetProfile(player)
-	local lv = math.clamp(prof.RestaurantLevel or 1, 1, 10)
+	local lv = math.clamp(prof.RestaurantLevel or 1, 1, RestaurantExpansionConfig.MAX_PHYSICAL_TIER)
 	local hasVip = prof.HasVIPBooths == true
 	local expTier = RestaurantExpansionConfig.GetTierSpec(lv)
 	local baseCap = expTier.MaxCustomers
-	local vipBonus = if hasVip then 1 else 0
-	return math.clamp(baseCap + vipBonus, 3, #ALL_DINING_SPOTS)
+	local vipBonus = if hasVip then 2 else 0
+	return math.clamp(baseCap + vipBonus, 4, #ALL_DINING_SPOTS)
 end
 
 type WalkingCustomer = {
@@ -887,7 +902,7 @@ local function pickAvailableTableIndex(player: Player): number
 	local expandedFree: { number } = {}
 	local preferredFree: { number } = {}
 	local anyFree: { number } = {}
-	local preferPatio = (patioActive < indoorActive)
+	local preferPatio = (patioActive <= math.max(2, math.floor((indoorActive + expandedActive) * 0.85)))
 	for i, spot in ipairs(ALL_DINING_SPOTS) do
 		local minLv = spot.MinLevel or 1
 		if hqLevel >= minLv and (not spot.IsVIP or allowVIP) and not used[i] then
@@ -901,7 +916,10 @@ local function pickAvailableTableIndex(player: Player): number
 		end
 	end
 
-	-- Showcase newly unlocked physical expansion zones (East/West Wings, 2nd Floor, 3rd Floor!)
+	-- Balance seating smoothly across the upgraded Front Wood Restaurant Pavilions & Indoor Multi-Floor Wings!
+	if preferPatio and #preferredFree > 0 then
+		return preferredFree[math.random(1, #preferredFree)]
+	end
 	if #expandedFree > 0 and expandedActive <= math.max(2, indoorActive) then
 		return expandedFree[math.random(1, #expandedFree)]
 	end
@@ -2128,9 +2146,51 @@ local function syncRestaurantVisuals(player: Player): ()
 
 	local level = PlayerDataService.GetProfile(player).RestaurantLevel
 	local result = RestaurantExpansionBuilder.BuildTierForHQ(baseModel, hq, slot, level)
+	RestaurantExpansionBuilder.BuildFrontWoodPavilion(baseModel, slot, level)
 	if result.BoundsViolations > 0 then
 		warn(string.format("[RestaurantService] %s HQ Tier %d reported %d bounds clamp(s)", slot, result.Tier, result.BoundsViolations))
 	end
+end
+
+function RestaurantService.CheckHQUpgradeRequirements(player: Player): (boolean, string, number, number, number, number)
+	local profile = PlayerDataService.GetProfile(player)
+	local curRestLv = profile.RestaurantLevel or 1
+	local nextTier = RecipeConfig.RestaurantTiers[curRestLv + 1]
+	if not nextTier then
+		return false, "Restaurant HQ is already at Max Level 15!", 20, profile.Level or 1, 2250, profile.TotalDishesServed or 0
+	end
+	local curLv = profile.Level or 1
+	local reqLv = nextTier.RequiredPlayerLevel or 1
+	local curFood = profile.TotalDishesServed or 0
+	local reqFood = nextTier.RequiredDishesServed or 0
+
+	if curLv < reqLv and curFood < reqFood then
+		return false, string.format(
+			"LOCKED: Reach Player Lv.%d (now Lv.%d) & sell %d Food (%d/%d sold) before upgrading HQ to Lv.%d!",
+			reqLv,
+			curLv,
+			reqFood,
+			curFood,
+			reqFood,
+			nextTier.Level
+		), reqLv, curLv, reqFood, curFood
+	elseif curLv < reqLv then
+		return false, string.format(
+			"LOCKED: Reach Player Lv.%d first (currently Lv.%d) to upgrade Restaurant HQ to Lv.%d!",
+			reqLv,
+			curLv,
+			nextTier.Level
+		), reqLv, curLv, reqFood, curFood
+	elseif curFood < reqFood then
+		return false, string.format(
+			"LOCKED: Sell %d Food first (%d/%d sold) before upgrading Restaurant HQ to Lv.%d!",
+			reqFood,
+			curFood,
+			reqFood,
+			nextTier.Level
+		), reqLv, curLv, reqFood, curFood
+	end
+	return true, "OK", reqLv, curLv, reqFood, curFood
 end
 
 local function ensureKitchen(player: Player): KitchenState
@@ -2196,6 +2256,7 @@ local function buildClientPayload(player: Player): { [string]: any }
 	local nextExpSpec = if (profile.RestaurantLevel or 1) < RestaurantExpansionConfig.MAX_PHYSICAL_TIER
 		then RestaurantExpansionConfig.GetTierSpec((profile.RestaurantLevel or 1) + 1)
 		else nil
+	local canUpgHQ, hqLockReason, reqPlrLv, _, reqFoodSold, curFoodSold = RestaurantService.CheckHQUpgradeRequirements(player)
 
 	return {
 		BaseSlot = BaseService.GetPlayerBaseSlot(player),
@@ -2205,6 +2266,8 @@ local function buildClientPayload(player: Player): { [string]: any }
 			DisplayName = expSpec.DisplayName,
 			Subtitle = expSpec.Subtitle,
 			Summary = expSpec.Summary,
+			FrontPavilionName = expSpec.FrontPavilionName,
+			FrontPavilionSummary = expSpec.FrontPavilionSummary,
 			WidthStuds = expSpec.WidthStuds,
 			HeightStuds = expSpec.HeightStuds,
 			DepthStuds = expSpec.DepthStuds,
@@ -2213,6 +2276,14 @@ local function buildClientPayload(player: Player): { [string]: any }
 			KitchenReadyCapacity = expSpec.KitchenReadyCapacity,
 			MaxConcurrentOrders = expSpec.MaxConcurrentOrders + (if profile.HasDualStove then 1 else 0),
 			NextSummary = if nextExpSpec then nextExpSpec.Summary else "",
+			NextFrontPavilionName = if nextExpSpec then nextExpSpec.FrontPavilionName else "",
+			NextFrontPavilionSummary = if nextExpSpec then nextExpSpec.FrontPavilionSummary else "",
+			NextMaxCustomers = if nextExpSpec then (nextExpSpec.MaxCustomers + (if profile.HasVIPBooths then 2 else 0)) else getMaxCustomersForHQ(player),
+			TotalDishesServed = curFoodSold,
+			NextHQReqLevel = reqPlrLv,
+			NextHQReqFood = reqFoodSold,
+			CanUpgradeHQRequirements = canUpgHQ,
+			HQLockReason = hqLockReason,
 		},
 		Warehouse = inv,
 		Kitchen = {
@@ -2591,6 +2662,7 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 
 	table.clear(kitchen.ReadyDishes)
 	clearPlatters(player)
+	PlayerDataService.AddDishesServed(player, totalDishes)
 	PlayerDataService.AddRewards(player, totalCoins, totalExp, totalRep)
 	SyndicateContractService.RecordProgress(player, "CookDishes", totalDishes)
 	local vipCompleted, vipMsg = VIPOrderService.TryFulfillFromServed(player, servedCopy)
@@ -2792,6 +2864,7 @@ function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverrid
 			return
 		end
 
+		PlayerDataService.AddDishesServed(player, 1)
 		PlayerDataService.AddRewards(player, earnedGold, earnedExp, earnedRep)
 		SyndicateContractService.RecordProgress(player, "CookDishes", 1)
 		if usedRecipeId and SPECIALTY_RECIPE_IDS[usedRecipeId] then
@@ -2818,7 +2891,13 @@ function RestaurantService.TryUpgradeRestaurant(player: Player, bypassGold: bool
 	local profile = PlayerDataService.GetProfile(player)
 	local nextTier = RecipeConfig.RestaurantTiers[profile.RestaurantLevel + 1]
 	if not nextTier then
-		return false, "Restaurant HQ is at Max Level!"
+		return false, "Restaurant HQ is at Max Level 15!"
+	end
+
+	-- Enforce Food Sold & Player Level requirements on BOTH Gold AND Robux upgrades (prevents unfair Level-1 Robux skipping!)
+	local reqOk, reqMsg = RestaurantService.CheckHQUpgradeRequirements(player)
+	if not reqOk then
+		return false, reqMsg
 	end
 
 	if not bypassGold and not PlayerDataService.SpendCoins(player, nextTier.UpgradeCost) then
@@ -2830,12 +2909,10 @@ function RestaurantService.TryUpgradeRestaurant(player: Player, bypassGold: bool
 	RestaurantService.PushStateToClient(player)
 	local newExp = RestaurantExpansionConfig.GetTierSpec(nextTier.Level)
 	return true, string.format(
-		"Expanded Restaurant HQ to Lv.%d %s (%dF • %dW x %dH • %d Seats)!",
+		"Expanded Restaurant HQ & %s to Lv.%d (%dF • %d Max Customers)!",
+		newExp.FrontPavilionName,
 		nextTier.Level,
-		newExp.DisplayName,
 		newExp.Floors,
-		newExp.WidthStuds,
-		newExp.HeightStuds,
 		getMaxCustomersForHQ(player)
 	)
 end
@@ -2934,7 +3011,12 @@ local function wireRestaurantPrompts(): ()
 					if typeof(slotAttr) == "string" and BaseService.GetPlayerBaseSlot(player) ~= slotAttr then
 						return
 					end
-					RestaurantService.TryUpgradeRestaurant(player)
+					local okUpg, msgUpg = RestaurantService.TryUpgradeRestaurant(player)
+					local remotes = ReplicatedStorage:FindFirstChild("Remotes")
+					local toastEv = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
+					if toastEv and toastEv:IsA("RemoteEvent") then
+						toastEv:FireClient(player, (if okUpg then "🏛️ " else "🔒 ") .. msgUpg)
+					end
 				end)
 			)
 		end
@@ -3205,15 +3287,25 @@ local function setupRemotes(): ()
 					local prof = PlayerDataService.GetProfile(player)
 					local nextT = RecipeConfig.RestaurantTiers[prof.RestaurantLevel + 1]
 					if not nextT then
-						ok, msg = false, "Restaurant HQ is already at Max Level!"
+						ok, msg = false, "Restaurant HQ is already at Max Level 15!"
 					else
-						local rPrice = MonetizationConfig.GetHQUpgradeRobuxPrice(nextT.Level)
-						local pKey = if nextT.Level <= 3 then "UpgradeHQ_Low" elseif nextT.Level <= 5 then "UpgradeHQ_Mid" elseif nextT.Level <= 8 then "UpgradeHQ_High" else "UpgradeHQ_Max"
-						ok, msg = MonetizationService.TryPromptDualPurchase(player, pKey, rPrice, "Restaurant HQ Lv." .. tostring(nextT.Level), function()
-							local uOk, uMsg = RestaurantService.TryUpgradeRestaurant(player, true)
-							if uOk then SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1) end
-							return uOk, uMsg
-						end)
+						local reqOk, reqMsg = RestaurantService.CheckHQUpgradeRequirements(player)
+						if not reqOk then
+							ok, msg = false, reqMsg
+						else
+							local rPrice = MonetizationConfig.GetHQUpgradeRobuxPrice(nextT.Level)
+							local pKey = if nextT.Level <= 3 then "UpgradeHQ_Low"
+								elseif nextT.Level <= 5 then "UpgradeHQ_Mid"
+								elseif nextT.Level <= 8 then "UpgradeHQ_High"
+								elseif nextT.Level <= 10 then "UpgradeHQ_Max"
+								elseif nextT.Level <= 13 then "UpgradeHQ_Imperial"
+								else "UpgradeHQ_Supreme"
+							ok, msg = MonetizationService.TryPromptDualPurchase(player, pKey, rPrice, "Restaurant HQ Lv." .. tostring(nextT.Level), function()
+								local uOk, uMsg = RestaurantService.TryUpgradeRestaurant(player, true)
+								if uOk then SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1) end
+								return uOk, uMsg
+							end)
+						end
 					end
 				elseif kind == "UpgradeWarehouse" and typeof(subArg) == "string" and WarehouseConfig.Specs[subArg :: WarehouseConfig.WarehouseCategory] then
 					local cat = subArg :: WarehouseConfig.WarehouseCategory
@@ -3513,20 +3605,34 @@ function RestaurantService.Start(): ()
 		end
 	end)
 
-	-- Live Walk-In Customer Loop (scaled dynamically to Restaurant HQ Level 1-10!)
+	-- Live Walk-In Customer Loop (scaled dynamically across Restaurant HQ & Front Wood Pavilion Levels 1-15!)
 	customerOrderThread = task.spawn(function()
 		while isRunning do
-			task.wait(4.5)
+			task.wait(3.2)
 			if not isRunning then
 				break
 			end
 			for _, p in ipairs(Players:GetPlayers()) do
 				if BaseService.GetPlayerBaseSlot(p) then
-					-- Invite walk-in diners continuously from the City Boulevard up to Restaurant HQ Level capacity!
+					-- Bigger Restaurant + Front Wood Pavilion attracts more simultaneous city customers!
 					local wList = activeWalkingCustomers[p]
+					local curCount = if wList then #wList else 0
 					local maxGuests = getMaxCustomersForHQ(p)
-					if not wList or #wList < maxGuests then
-						spawnSingleCityCustomer(p, 195)
+					if curCount < maxGuests then
+						local hqLv = PlayerDataService.GetProfile(p).RestaurantLevel or 1
+						local waveCount = if hqLv >= 11 then 3 elseif hqLv >= 5 then 2 else 1
+						local toSpawn = math.min(waveCount, maxGuests - curCount)
+						for sIdx = 1, toSpawn do
+							if sIdx == 1 then
+								spawnSingleCityCustomer(p, 190)
+							else
+								task.delay((sIdx - 1) * 0.75, function()
+									if isRunning and p.Parent and BaseService.GetPlayerBaseSlot(p) then
+										spawnSingleCityCustomer(p, 198 + sIdx * 10)
+									end
+								end)
+							end
+						end
 					end
 					local urgent = findMostUrgentWaitingCustomer(p, false)
 					if urgent then

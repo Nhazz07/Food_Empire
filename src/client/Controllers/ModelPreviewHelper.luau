@@ -56,24 +56,6 @@ local function addWedge(model: Model, name: string, size: Vector3, cf: CFrame, c
 	return w
 end
 
-local function freezeModelForPreview(model: Model): Model
-	local isCustomTpl = model:GetAttribute("IsCustomNPCTemplate") == true
-	for _, desc in ipairs(model:GetDescendants()) do
-		if desc:IsA("BasePart") then
-			desc.Anchored = true
-			desc.CanCollide = false
-			desc.CanTouch = false
-			desc.CanQuery = false
-			desc.CastShadow = false
-		elseif desc:IsA("BillboardGui") then
-			desc:Destroy()
-		elseif (not isCustomTpl) and (desc:IsA("JointInstance") or desc:IsA("WeldConstraint") or desc:IsA("Humanoid")) then
-			desc:Destroy()
-		end
-	end
-	return model
-end
-
 local function buildWeaponModel(weaponId: string): Model
 	local m = Instance.new("Model")
 	m.Name = "Preview_" .. weaponId
@@ -899,9 +881,268 @@ local function buildCategoryIconModel(catId: string): (Model, "Weapon" | "Charac
 end
 
 -- ============================================================================
+-- BESPOKE 3D HEROIC CHARACTER PORTRAIT ICONS (BODYGUARDS, CHEFS, WAITERS & MAFIA!)
+-- High-contrast upper-body busts with unmistakable headgear, armor & signature props
+-- so every product icon is 100% identifiable at a single glance!
+-- ============================================================================
+local function buildHeroCharacterIcon(charKey: string): Model
+	local m = Instance.new("Model")
+	m.Name = "HeroPortrait_" .. charKey
+
+	local obsidian = Color3.fromRGB(22, 26, 34)
+	local charcoal = Color3.fromRGB(38, 44, 56)
+	local navy = Color3.fromRGB(28, 42, 68)
+	local slate = Color3.fromRGB(64, 76, 92)
+	local steel = Color3.fromRGB(186, 196, 212)
+	local darkSteel = Color3.fromRGB(52, 58, 70)
+	local gold = Color3.fromRGB(244, 196, 58)
+	local brass = Color3.fromRGB(214, 168, 68)
+	local crimson = Color3.fromRGB(214, 34, 52)
+	local white = Color3.fromRGB(246, 244, 240)
+	local skin = P.SkinWarm
+
+	local function addBaseBust(coatCol: Color3, shirtCol: Color3?, tieCol: Color3?, bulk: number?)
+		local b = bulk or 1.0
+		addPart(m, "Shoulders", Vector3.new(1.92 * b, 0.98 * b, 0.94 * b), CFrame.new(0, 0.48, 0), coatCol, Enum.Material.Fabric, nil)
+		addPart(m, "CollarLapelL", Vector3.new(0.26, 0.78, 0.16), CFrame.new(-0.30, 0.56, -0.45 * b) * CFrame.Angles(0, 0, math.rad(14)), coatCol:Lerp(obsidian, 0.25), Enum.Material.Fabric, nil)
+		addPart(m, "CollarLapelR", Vector3.new(0.26, 0.78, 0.16), CFrame.new(0.30, 0.56, -0.45 * b) * CFrame.Angles(0, 0, math.rad(-14)), coatCol:Lerp(obsidian, 0.25), Enum.Material.Fabric, nil)
+		if shirtCol then
+			addPart(m, "DressShirt", Vector3.new(0.58, 0.88, 0.14), CFrame.new(0, 0.52, -0.44 * b), shirtCol, Enum.Material.Fabric, nil)
+		end
+		if tieCol then
+			addPart(m, "NeckTie", Vector3.new(0.20, 0.76, 0.16), CFrame.new(0, 0.46, -0.48 * b), tieCol, Enum.Material.Fabric, nil)
+		end
+		addPart(m, "Neck", Vector3.new(0.46, 0.34, 0.46), CFrame.new(0, 1.04, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		addPart(m, "Head", Vector3.new(1.06, 1.08, 1.06), CFrame.new(0, 1.56, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+	end
+
+	local function addMiniSidearm(cf: CFrame, bodyCol: Color3, accentCol: Color3)
+		addPart(m, "SidearmGrip", Vector3.new(0.18, 0.48, 0.24), cf * CFrame.Angles(math.rad(-14), 0, 0), obsidian, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "SidearmSlide", Vector3.new(0.20, 0.24, 0.86), cf * CFrame.new(0, 0.24, -0.26), bodyCol, Enum.Material.Metal, nil)
+		addPart(m, "SidearmMuzzle", Vector3.new(0.12, 0.12, 0.14), cf * CFrame.new(0, 0.24, -0.72), accentCol, Enum.Material.Metal, nil)
+	end
+
+	local function addMiniRifle(cf: CFrame, bodyCol: Color3, accentCol: Color3, hasScope: boolean, isLongSniper: boolean)
+		local barrelLen = if isLongSniper then 1.55 else 0.95
+		addPart(m, "RifleReceiver", Vector3.new(0.22, 0.34, 0.96), cf, bodyCol, Enum.Material.Metal, nil)
+		addPart(m, "RifleMag", Vector3.new(0.16, 0.54, 0.24), cf * CFrame.new(0, -0.34, -0.14) * CFrame.Angles(math.rad(14), 0, 0), accentCol, Enum.Material.Metal, nil)
+		addPart(m, "RifleBarrel", Vector3.new(barrelLen, 0.14, 0.14), cf * CFrame.new(0, 0.06, -0.48 - barrelLen * 0.5) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		if hasScope then
+			addPart(m, "RifleScope", Vector3.new(0.68, 0.20, 0.20), cf * CFrame.new(0, 0.28, -0.12) * CFrame.Angles(0, math.rad(90), 0), obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+			addPart(m, "ScopeLens", Vector3.new(0.08, 0.18, 0.18), cf * CFrame.new(0, 0.28, -0.46) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(64, 224, 168), Enum.Material.Neon, Enum.PartType.Cylinder)
+		else
+			addPart(m, "HoloOptic", Vector3.new(0.22, 0.22, 0.28), cf * CFrame.new(0, 0.25, -0.08), accentCol, Enum.Material.Metal, nil)
+		end
+	end
+
+	if charKey == "BasicGuard" then
+		-- BASIC BODYGUARD (Entrance Security): Crisp Navy Suit, Aviator Shades, Coiled Earpiece, Gold Security Shield Badge & Raised 9mm Pistol!
+		addBaseBust(navy, white, Color3.fromRGB(48, 132, 224), 1.0)
+		addPart(m, "NeatHair", Vector3.new(1.10, 0.48, 1.10), CFrame.new(0, 1.92, 0.04), Color3.fromRGB(36, 28, 22), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "AviatorLensL", Vector3.new(0.42, 0.26, 0.14), CFrame.new(-0.24, 1.60, -0.50), obsidian, Enum.Material.Glass, nil)
+		addPart(m, "AviatorLensR", Vector3.new(0.42, 0.26, 0.14), CFrame.new(0.24, 1.60, -0.50), obsidian, Enum.Material.Glass, nil)
+		addPart(m, "AviatorBridge", Vector3.new(0.94, 0.06, 0.14), CFrame.new(0, 1.70, -0.51), gold, Enum.Material.Metal, nil)
+		addPart(m, "Earpiece", Vector3.new(0.12, 0.24, 0.18), CFrame.new(0.54, 1.54, -0.04), Color3.fromRGB(96, 188, 255), Enum.Material.Neon, nil)
+		-- Gold Security Shield Badge on Left Chest
+		addPart(m, "SecurityBadge", Vector3.new(0.30, 0.36, 0.10), CFrame.new(-0.54, 0.64, -0.49), gold, Enum.Material.Metal, nil)
+		addPart(m, "BadgeStar", Vector3.new(0.16, 0.16, 0.12), CFrame.new(-0.54, 0.64, -0.51) * CFrame.Angles(0, 0, math.rad(45)), Color3.fromRGB(56, 152, 246), Enum.Material.Neon, nil)
+		-- Raised Ready 9mm Pistol in Foreground
+		addPart(m, "GuardArmR", Vector3.new(0.42, 0.72, 0.42), CFrame.new(0.84, 0.54, -0.34) * CFrame.Angles(math.rad(42), 0, math.rad(-14)), navy, Enum.Material.Fabric, nil)
+		addMiniSidearm(CFrame.new(0.78, 0.88, -0.62) * CFrame.Angles(math.rad(-58), math.rad(18), 0), steel, gold)
+		return m
+
+	elseif charKey == "TacticalGuard" or charKey == "GRD" then
+		-- TACTICAL BODYGUARD (Field Medic Defender): Ballistic Helmet + Comms Headset + Red-Cross Medic Plate Rig + Carbine!
+		addBaseBust(Color3.fromRGB(40, 56, 72), nil, nil, 1.04)
+		addPart(m, "TacVest", Vector3.new(1.48, 0.88, 1.04), CFrame.new(0, 0.50, 0), Color3.fromRGB(46, 62, 76), Enum.Material.Metal, nil)
+		-- Unmistakable Field Medic Patch (White Square + Bright Red Cross!)
+		addPart(m, "MedicPatchBg", Vector3.new(0.46, 0.46, 0.10), CFrame.new(-0.34, 0.56, -0.52), white, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "MedicCrossH", Vector3.new(0.34, 0.12, 0.12), CFrame.new(-0.34, 0.56, -0.54), crimson, Enum.Material.Neon, nil)
+		addPart(m, "MedicCrossV", Vector3.new(0.12, 0.34, 0.12), CFrame.new(-0.34, 0.56, -0.54), crimson, Enum.Material.Neon, nil)
+		-- Tactical Ops Helmet + Cyan Visor + Boom Mic
+		addPart(m, "OpsHelmet", Vector3.new(1.22, 0.72, 1.24), CFrame.new(0, 1.84, 0.03), Color3.fromRGB(48, 64, 82), Enum.Material.Metal, Enum.PartType.Ball)
+		addPart(m, "HelmetRail", Vector3.new(1.26, 0.14, 0.68), CFrame.new(0, 1.76, -0.08), Color3.fromRGB(56, 189, 248), Enum.Material.Metal, nil)
+		addPart(m, "TacVisor", Vector3.new(0.98, 0.30, 0.22), CFrame.new(0, 1.60, -0.46), Color3.fromRGB(56, 189, 248), Enum.Material.Glass, nil)
+		addPart(m, "HeadsetEar", Vector3.new(0.20, 0.36, 0.34), CFrame.new(-0.58, 1.56, 0), obsidian, Enum.Material.Metal, nil)
+		addMiniRifle(CFrame.new(0.28, 0.42, -0.68) * CFrame.Angles(math.rad(-14), math.rad(56), math.rad(16)), darkSteel, Color3.fromRGB(56, 189, 248), false, false)
+		return m
+
+	elseif charKey == "HeavyGuard" then
+		-- HEAVY BODYGUARD (Armored Tank): Massive Juggernaut Blast Helmet, Sloped Pauldrons & Front Reinforced Riot Shield!
+		addBaseBust(Color3.fromRGB(46, 52, 60), nil, nil, 1.18)
+		addPart(m, "BlastCollar", Vector3.new(1.56, 0.44, 1.24), CFrame.new(0, 1.06, 0), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "PauldronL", Vector3.new(0.68, 0.64, 1.08), CFrame.new(-1.02, 0.72, 0) * CFrame.Angles(0, 0, math.rad(18)), Color3.fromRGB(64, 72, 84), Enum.Material.Metal, nil)
+		addPart(m, "PauldronR", Vector3.new(0.68, 0.64, 1.08), CFrame.new(1.02, 0.72, 0) * CFrame.Angles(0, 0, math.rad(-18)), Color3.fromRGB(64, 72, 84), Enum.Material.Metal, nil)
+		addPart(m, "JugHelm", Vector3.new(1.30, 0.96, 1.32), CFrame.new(0, 1.68, 0), Color3.fromRGB(58, 66, 78), Enum.Material.Metal, nil)
+		addPart(m, "FacePlate", Vector3.new(1.16, 0.74, 0.22), CFrame.new(0, 1.56, -0.58), darkSteel, Enum.Material.Metal, nil)
+		addPart(m, "VisorSlit", Vector3.new(0.92, 0.18, 0.26), CFrame.new(0, 1.64, -0.60), Color3.fromRGB(52, 211, 153), Enum.Material.Neon, nil)
+		-- Iconic Front Ballistic Riot Shield angled at Left-Front + Heavy Shotgun Muzzle on Right!
+		local shCF = CFrame.new(-0.56, 0.68, -0.68) * CFrame.Angles(math.rad(-8), math.rad(24), 0)
+		addPart(m, "RiotShield", Vector3.new(1.12, 1.46, 0.16), shCF, Color3.fromRGB(38, 44, 54), Enum.Material.Metal, nil)
+		addPart(m, "ShieldTrim", Vector3.new(1.18, 0.14, 0.18), shCF * CFrame.new(0, -0.22, -0.02), Color3.fromRGB(52, 211, 153), Enum.Material.Neon, nil)
+		addPart(m, "ShieldGlass", Vector3.new(0.76, 0.30, 0.20), shCF * CFrame.new(0, 0.34, 0), Color3.fromRGB(168, 224, 248), Enum.Material.Glass, nil)
+		addPart(m, "ShotgunBarrel", Vector3.new(1.10, 0.24, 0.24), CFrame.new(0.78, 0.72, -0.68) * CFrame.Angles(math.rad(16), math.rad(-14), math.rad(90)), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		return m
+
+	elseif charKey == "NinjaGuard" or charKey == "NJA" or charKey == "NinjaMafiaContract" then
+		-- NINJA BODYGUARD / KAGE ASSASSIN: Shinobi Cowl, Headband + Steel Clan Plate, Crossed Back Katanas & Drawn Blade!
+		local accent = if charKey == "NinjaGuard" then crimson else Color3.fromRGB(148, 72, 248)
+		for _, sign in ipairs({ -1, 1 }) do
+			local cf = CFrame.new(sign * 0.18, 1.08, 0.56) * CFrame.Angles(0, 0, math.rad(-sign * 36))
+			addPart(m, "Scabbard_" .. sign, Vector3.new(0.18, 2.34, 0.20), cf, obsidian, Enum.Material.Metal, nil)
+			addPart(m, "Tsuba_" .. sign, Vector3.new(0.46, 0.12, 0.46), cf * CFrame.new(0, 0.90, 0), gold, Enum.Material.Metal, nil)
+			addPart(m, "Hilt_" .. sign, Vector3.new(0.20, 0.66, 0.22), cf * CFrame.new(0, 1.28, 0), accent, Enum.Material.Fabric, nil)
+		end
+		addPart(m, "Shoulders", Vector3.new(1.88, 0.94, 0.92), CFrame.new(0, 0.46, 0), obsidian, Enum.Material.Fabric, nil)
+		addPart(m, "ShinobiVest", Vector3.new(1.42, 0.78, 1.00), CFrame.new(0, 0.48, 0), charcoal, Enum.Material.Metal, nil)
+		addPart(m, "Scarf", Vector3.new(1.38, 0.30, 1.12), CFrame.new(0, 0.98, 0), accent, Enum.Material.Fabric, nil)
+		addPart(m, "FaceCore", Vector3.new(1.06, 1.06, 1.06), CFrame.new(0, 1.56, 0), skin, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "CowlTop", Vector3.new(1.18, 0.68, 1.20), CFrame.new(0, 1.88, 0.04), obsidian, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "CowlBack", Vector3.new(1.16, 1.12, 0.76), CFrame.new(0, 1.54, 0.26), obsidian, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "Mask", Vector3.new(1.16, 0.62, 0.68), CFrame.new(0, 1.30, -0.26), charcoal, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "EyeL", Vector3.new(0.28, 0.12, 0.10), CFrame.new(-0.24, 1.62, -0.50) * CFrame.Angles(0, math.rad(14), math.rad(-14)), white, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "EyeR", Vector3.new(0.28, 0.12, 0.10), CFrame.new(0.24, 1.62, -0.50) * CFrame.Angles(0, math.rad(-14), math.rad(14)), white, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "IrisL", Vector3.new(0.11, 0.11, 0.12), CFrame.new(-0.23, 1.62, -0.53), accent, Enum.Material.Neon, nil)
+		addPart(m, "IrisR", Vector3.new(0.11, 0.11, 0.12), CFrame.new(0.23, 1.62, -0.53), accent, Enum.Material.Neon, nil)
+		addPart(m, "Headband", Vector3.new(0.26, 1.24, 1.24), CFrame.new(0, 1.84, 0.02) * CFrame.Angles(0, 0, math.rad(90)), accent, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		addPart(m, "ClanPlate", Vector3.new(0.76, 0.24, 0.14), CFrame.new(0, 1.84, -0.59), steel, Enum.Material.Metal, nil)
+		-- Drawn Gleaming Katana Blade across Front!
+		addPart(m, "DrawnBlade", Vector3.new(0.08, 0.22, 1.95), CFrame.new(0.08, 0.56, -0.68) * CFrame.Angles(math.rad(18), math.rad(68), math.rad(-16)), Color3.fromRGB(232, 238, 248), Enum.Material.Metal, nil)
+		return m
+
+	elseif charKey == "AssaultGuard" then
+		-- ASSAULT BODYGUARD (Breacher Rifleman): Tactical Operator Cap, Amber Goggles, Triple Mag Rig & Assault Rifle!
+		addBaseBust(Color3.fromRGB(58, 52, 44), nil, nil, 1.06)
+		addPart(m, "PlateRig", Vector3.new(1.48, 0.86, 1.02), CFrame.new(0, 0.48, 0), Color3.fromRGB(76, 68, 54), Enum.Material.Fabric, nil)
+		for mx = -0.36, 0.36, 0.36 do
+			addPart(m, "MagPouch_" .. tostring(mx), Vector3.new(0.24, 0.42, 0.18), CFrame.new(mx, 0.42, -0.54), brass, Enum.Material.Metal, nil)
+		end
+		addPart(m, "NeckGaiter", Vector3.new(1.10, 0.52, 0.66), CFrame.new(0, 1.28, -0.24), obsidian, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "CapCrown", Vector3.new(1.14, 0.56, 1.16), CFrame.new(0, 1.90, 0.02), Color3.fromRGB(48, 44, 38), Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "CapBrim", Vector3.new(0.96, 0.10, 0.58), CFrame.new(0, 1.78, -0.62) * CFrame.Angles(math.rad(8), 0, 0), obsidian, Enum.Material.Fabric, nil)
+		addPart(m, "AmberGoggles", Vector3.new(0.98, 0.28, 0.24), CFrame.new(0, 1.60, -0.46), Color3.fromRGB(245, 168, 38), Enum.Material.Neon, nil)
+		addMiniRifle(CFrame.new(0.24, 0.46, -0.72) * CFrame.Angles(math.rad(-12), math.rad(54), math.rad(14)), obsidian, Color3.fromRGB(245, 168, 38), false, false)
+		return m
+
+	elseif charKey == "SniperGuard" then
+		-- SNIPER BODYGUARD (Overwatch Marksman): Stealth Recon Hood, Glowing Dual Emerald NVG Optics & Long Scoped Sniper!
+		addBaseBust(Color3.fromRGB(36, 48, 42), nil, nil, 1.02)
+		addPart(m, "CamoCloak", Vector3.new(1.98, 0.42, 1.08), CFrame.new(0, 0.84, 0.04), Color3.fromRGB(48, 66, 54), Enum.Material.Fabric, nil)
+		addPart(m, "ReconHood", Vector3.new(1.28, 1.24, 1.26), CFrame.new(0, 1.66, 0.06), Color3.fromRGB(38, 52, 44), Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "SniperMask", Vector3.new(1.08, 0.58, 0.62), CFrame.new(0, 1.32, -0.26), obsidian, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "NVGMount", Vector3.new(0.76, 0.24, 0.26), CFrame.new(0, 1.66, -0.52), darkSteel, Enum.Material.Metal, nil)
+		for _, sx in ipairs({ -0.22, 0.22 }) do
+			addPart(m, "NVGTube_" .. sx, Vector3.new(0.32, 0.26, 0.26), CFrame.new(sx, 1.64, -0.66) * CFrame.Angles(0, math.rad(90), 0), obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+			addPart(m, "NVGLens_" .. sx, Vector3.new(0.08, 0.20, 0.20), CFrame.new(sx, 1.64, -0.80) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(52, 238, 142), Enum.Material.Neon, Enum.PartType.Cylinder)
+		end
+		addMiniRifle(CFrame.new(0.16, 0.46, -0.68) * CFrame.Angles(math.rad(-10), math.rad(58), math.rad(14)), Color3.fromRGB(44, 58, 48), brass, true, true)
+		return m
+
+	elseif charKey == "EliteGuard" then
+		-- ELITE BODYGUARD (Spec-Ops Ace): Royal Purple Beret + Gold Crest, Wraparound Shades, Gold Epaulettes & Spec-Ops Rifle!
+		local royalPurple = Color3.fromRGB(142, 58, 226)
+		addBaseBust(obsidian, Color3.fromRGB(38, 32, 52), royalPurple, 1.08)
+		addPart(m, "EpauletteL", Vector3.new(0.48, 0.14, 0.36), CFrame.new(-0.74, 0.98, 0), gold, Enum.Material.Metal, nil)
+		addPart(m, "EpauletteR", Vector3.new(0.48, 0.14, 0.36), CFrame.new(0.74, 0.98, 0), gold, Enum.Material.Metal, nil)
+		addPart(m, "SpecShades", Vector3.new(1.00, 0.26, 0.24), CFrame.new(0, 1.60, -0.46), royalPurple, Enum.Material.Neon, nil)
+		addPart(m, "BeretBand", Vector3.new(0.18, 1.14, 1.14), CFrame.new(0, 1.88, 0) * CFrame.Angles(0, 0, math.rad(90)), obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		addPart(m, "BeretTop", Vector3.new(1.24, 0.42, 1.18), CFrame.new(0.10, 2.04, 0) * CFrame.Angles(0, 0, math.rad(-12)), royalPurple, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "BeretCrest", Vector3.new(0.24, 0.28, 0.12), CFrame.new(-0.22, 1.98, -0.56), gold, Enum.Material.Metal, nil)
+		addMiniRifle(CFrame.new(0.26, 0.44, -0.68) * CFrame.Angles(math.rad(-14), math.rad(56), math.rad(16)), obsidian, gold, true, false)
+		return m
+
+	elseif charKey == "BossBodyguard" or charKey == "BossBodyguardPass" then
+		-- COMMANDER BODYGUARD (Mythic Defense Boss): Mafia Fedora + 24K Gold Band, Don Shades, Velvet Coat & Golden Drum Gun!
+		addBaseBust(Color3.fromRGB(48, 20, 28), white, gold, 1.14)
+		addPart(m, "GoldShoulderL", Vector3.new(0.54, 0.16, 0.42), CFrame.new(-0.80, 1.02, 0), gold, Enum.Material.Metal, nil)
+		addPart(m, "GoldShoulderR", Vector3.new(0.54, 0.16, 0.42), CFrame.new(0.80, 1.02, 0), gold, Enum.Material.Metal, nil)
+		addPart(m, "PocketSquare", Vector3.new(0.26, 0.18, 0.10), CFrame.new(0.54, 0.68, -0.52), crimson, Enum.Material.Fabric, nil)
+		addPart(m, "DonShades", Vector3.new(0.98, 0.26, 0.22), CFrame.new(0, 1.60, -0.46), obsidian, Enum.Material.Glass, nil)
+		addPart(m, "ShadesGoldRim", Vector3.new(1.02, 0.06, 0.24), CFrame.new(0, 1.72, -0.47), gold, Enum.Material.Metal, nil)
+		-- Iconic Mafia Borsalino Fedora with Wide Brim & 24K Gold Ribbon
+		addPart(m, "FedoraBrim", Vector3.new(0.12, 1.76, 1.76), CFrame.new(0, 1.88, -0.02) * CFrame.Angles(math.rad(5), 0, math.rad(90)), obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		addPart(m, "FedoraBand", Vector3.new(0.22, 1.18, 1.18), CFrame.new(0, 1.98, 0) * CFrame.Angles(math.rad(5), 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "FedoraCrown", Vector3.new(1.06, 0.54, 1.12), CFrame.new(0, 2.18, 0.02) * CFrame.Angles(math.rad(5), 0, 0), Color3.fromRGB(30, 22, 26), Enum.Material.Fabric, nil)
+		-- 24K Golden Tommy Drum Gun in Foreground!
+		local tomCF = CFrame.new(0.24, 0.44, -0.70) * CFrame.Angles(math.rad(-12), math.rad(56), math.rad(14))
+		addPart(m, "GoldReceiver", Vector3.new(0.24, 0.34, 1.02), tomCF, gold, Enum.Material.Metal, nil)
+		addPart(m, "DrumMag", Vector3.new(0.26, 0.62, 0.62), tomCF * CFrame.new(0, -0.26, -0.14) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "GoldBarrel", Vector3.new(0.86, 0.16, 0.16), tomCF * CFrame.new(0, 0.06, -0.88) * CFrame.Angles(0, math.rad(90), 0), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		return m
+
+	elseif charKey == "CRW" or charKey == "MasterProChef" or charKey == "RaiderChefSquad" then
+		-- KITCHEN CHEF / MASTER PRO CHEF / RAIDER CHEF: Tall Pleated Chef Toque, Double-Breasted Coat & Sizzling Skillet/Spatula!
+		local isMaster = (charKey == "MasterProChef")
+		local isRaider = (charKey == "RaiderChefSquad")
+		local coat = if isMaster then obsidian elseif isRaider then crimson else white
+		local trim = if isMaster then gold elseif isRaider then obsidian else crimson
+		addBaseBust(coat, if isMaster then gold else white, trim, 1.02)
+		for row = 0, 1 do
+			for _, bx in ipairs({ -0.22, 0.22 }) do
+				addPart(m, "ChefBtn_" .. row .. bx, Vector3.new(0.10, 0.10, 0.12), CFrame.new(bx, 0.42 + row * 0.28, -0.50), if isMaster then gold else obsidian, Enum.Material.Metal, Enum.PartType.Ball)
+			end
+		end
+		addPart(m, "SmileEyeL", Vector3.new(0.12, 0.14, 0.10), CFrame.new(-0.20, 1.62, -0.50), obsidian, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "SmileEyeR", Vector3.new(0.12, 0.14, 0.10), CFrame.new(0.20, 1.62, -0.50), obsidian, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		-- Tall Iconic Chef's Toque Hat
+		local toqueCol = if isMaster then obsidian else white
+		addPart(m, "ToqueBand", Vector3.new(0.30, 1.16, 1.16), CFrame.new(0, 1.94, 0) * CFrame.Angles(0, 0, math.rad(90)), if isMaster then gold elseif isRaider then crimson else white, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		addPart(m, "ToqueShaft", Vector3.new(0.68, 1.12, 1.12), CFrame.new(0, 2.32, 0) * CFrame.Angles(0, 0, math.rad(90)), toqueCol, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		addPart(m, "ToquePuff", Vector3.new(1.34, 0.62, 1.34), CFrame.new(0, 2.68, 0), toqueCol, Enum.Material.Fabric, Enum.PartType.Ball)
+		-- Raised Sizzling Pan / Golden Spatula!
+		addPart(m, "SkilletPan", Vector3.new(0.20, 0.84, 0.84), CFrame.new(-0.62, 0.64, -0.58) * CFrame.Angles(math.rad(28), 0, math.rad(90)), obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "SizzleSteak", Vector3.new(0.46, 0.18, 0.36), CFrame.new(-0.62, 0.74, -0.60) * CFrame.Angles(math.rad(28), 0, 0), Color3.fromRGB(218, 86, 42), Enum.Material.SmoothPlastic, nil)
+		local toolCol = if isMaster then gold else steel
+		addPart(m, "SpatulaNeck", Vector3.new(0.12, 0.92, 0.12), CFrame.new(0.74, 0.84, -0.52) * CFrame.Angles(0, 0, math.rad(-18)), toolCol, Enum.Material.Metal, nil)
+		addPart(m, "SpatulaHead", Vector3.new(0.42, 0.50, 0.08), CFrame.new(0.88, 1.34, -0.52) * CFrame.Angles(0, 0, math.rad(-18)), toolCol, Enum.Material.Metal, nil)
+		return m
+
+	elseif charKey == "WTR" or charKey == "VIPEmpireStaff" then
+		-- DINING WAITER / VIP EMPIRE STAFF: Crisp Black Tuxedo, Silk Bowtie & Elevated Silver Cloche Dome on Brass Tray!
+		local isVIP = (charKey == "VIPEmpireStaff")
+		addBaseBust(obsidian, white, nil, 1.0)
+		local bowCol = if isVIP then gold else crimson
+		addPart(m, "BowtieL", Vector3.new(0.22, 0.16, 0.12), CFrame.new(-0.12, 0.88, -0.49) * CFrame.Angles(0, 0, math.rad(14)), bowCol, Enum.Material.Fabric, nil)
+		addPart(m, "BowtieR", Vector3.new(0.22, 0.16, 0.12), CFrame.new(0.12, 0.88, -0.49) * CFrame.Angles(0, 0, math.rad(-14)), bowCol, Enum.Material.Fabric, nil)
+		addPart(m, "WaiterHair", Vector3.new(1.10, 0.50, 1.10), CFrame.new(0, 1.94, 0.04), Color3.fromRGB(46, 32, 24), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "EyeL", Vector3.new(0.12, 0.14, 0.10), CFrame.new(-0.20, 1.60, -0.50), obsidian, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "EyeR", Vector3.new(0.12, 0.14, 0.10), CFrame.new(0.20, 1.60, -0.50), obsidian, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		-- Polished Serving Tray + Gleaming Cloche Dome!
+		addPart(m, "ServingTray", Vector3.new(0.12, 1.12, 1.12), CFrame.new(0.68, 0.88, -0.52) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "ClocheDome", Vector3.new(0.84, 0.68, 0.84), CFrame.new(0.68, 1.12, -0.52), if isVIP then gold else steel, Enum.Material.Metal, Enum.PartType.Ball)
+		addPart(m, "ClocheKnob", Vector3.new(0.18, 0.18, 0.18), CFrame.new(0.68, 1.50, -0.52), gold, Enum.Material.Metal, Enum.PartType.Ball)
+		return m
+
+	elseif charKey == "SMR" or charKey == "SamuraiMafiaContract" then
+		-- RONIN SAMURAI ENFORCER: Crimson Lacquered Kabuto Helmet, Golden Crescent Maedate Crest, Menpo Mask & Katana!
+		addBaseBust(Color3.fromRGB(118, 22, 32), obsidian, gold, 1.12)
+		addPart(m, "SodeL", Vector3.new(0.56, 0.72, 0.96), CFrame.new(-0.96, 0.64, 0) * CFrame.Angles(0, 0, math.rad(16)), crimson, Enum.Material.Metal, nil)
+		addPart(m, "SodeR", Vector3.new(0.56, 0.72, 0.96), CFrame.new(0.96, 0.64, 0) * CFrame.Angles(0, 0, math.rad(-16)), crimson, Enum.Material.Metal, nil)
+		addPart(m, "MenpoMask", Vector3.new(1.06, 0.56, 0.64), CFrame.new(0, 1.32, -0.28), obsidian, Enum.Material.Metal, Enum.PartType.Ball)
+		addPart(m, "KabutoBowl", Vector3.new(1.26, 0.74, 1.28), CFrame.new(0, 1.88, 0.02), crimson, Enum.Material.Metal, Enum.PartType.Ball)
+		addPart(m, "ShikoroFlapL", Vector3.new(0.24, 0.68, 0.96), CFrame.new(-0.68, 1.56, 0.08) * CFrame.Angles(0, 0, math.rad(20)), obsidian, Enum.Material.Metal, nil)
+		addPart(m, "ShikoroFlapR", Vector3.new(0.24, 0.68, 0.96), CFrame.new(0.68, 1.56, 0.08) * CFrame.Angles(0, 0, math.rad(-20)), obsidian, Enum.Material.Metal, nil)
+		-- Sweeping Golden Crescent Horns (Maedate)!
+		addPart(m, "HornL", Vector3.new(0.18, 0.78, 0.14), CFrame.new(-0.34, 2.22, -0.54) * CFrame.Angles(0, 0, math.rad(34)), gold, Enum.Material.Metal, nil)
+		addPart(m, "HornR", Vector3.new(0.18, 0.78, 0.14), CFrame.new(0.34, 2.22, -0.54) * CFrame.Angles(0, 0, math.rad(-34)), gold, Enum.Material.Metal, nil)
+		addPart(m, "KatanaBlade", Vector3.new(0.08, 0.22, 2.04), CFrame.new(0.10, 0.52, -0.70) * CFrame.Angles(math.rad(16), math.rad(68), math.rad(-14)), steel, Enum.Material.Metal, nil)
+		return m
+
+	else
+		-- EMPIRE RAIDER ("RDR"): Crimson Syndicate Enforcer Trench, Dark Fedora, Shades & Tactical SMG!
+		addBaseBust(Color3.fromRGB(92, 24, 34), obsidian, crimson, 1.06)
+		addPart(m, "RaiderShades", Vector3.new(0.96, 0.26, 0.22), CFrame.new(0, 1.60, -0.46), crimson, Enum.Material.Neon, nil)
+		addPart(m, "FedoraBrim", Vector3.new(0.10, 1.64, 1.64), CFrame.new(0, 1.88, 0) * CFrame.Angles(0, 0, math.rad(90)), obsidian, Enum.Material.Fabric, Enum.PartType.Cylinder)
+		addPart(m, "FedoraTop", Vector3.new(1.02, 0.50, 1.06), CFrame.new(0, 2.12, 0), obsidian, Enum.Material.Fabric, nil)
+		addMiniRifle(CFrame.new(0.24, 0.44, -0.68) * CFrame.Angles(math.rad(-14), math.rad(56), math.rad(16)), obsidian, crimson, false, false)
+		return m
+	end
+end
+
+-- ============================================================================
 -- SCULPTED 3D EMPIRE / SYNDICATE OPERATION ICONS
 -- ============================================================================
-local function buildEmpireModel(code: string): (Model, "Character" | "Object" | "Weapon")
+local function buildEmpireModel(code: string): (Model, "Character" | "Object" | "Weapon" | "IconPortrait")
 	local m = Instance.new("Model")
 	m.Name = "PreviewEmpire_" .. code
 	local gold = Color3.fromRGB(214, 174, 72)
@@ -911,24 +1152,8 @@ local function buildEmpireModel(code: string): (Model, "Character" | "Object" | 
 	local brick = Color3.fromRGB(118, 52, 42)
 	local cream = Color3.fromRGB(238, 234, 224)
 
-	if code == "CRW" then
-		local rig = MafiaVisualBuilder.BuildChefRig("PreviewCrewChef", P.DeepRed, 1.0, CFrame.new(), false)
-		return freezeModelForPreview(rig.Model), "Character"
-	elseif code == "WTR" then
-		local rig = MafiaVisualBuilder.BuildWaiterRig("PreviewWaiter", false, 1.0, CFrame.new())
-		return freezeModelForPreview(rig.Model), "Character"
-	elseif code == "RDR" then
-		local rig = MafiaVisualBuilder.BuildSyndicateSpecialistRig("PreviewRaider", "ApexAssassin", 1.0, CFrame.new(), true)
-		return rig.Model, "Character"
-	elseif code == "GRD" then
-		local rig = MafiaVisualBuilder.BuildBodyguardRig("PreviewSquadGuard", "TacticalGuard", 1.0, CFrame.new(), nil, true)
-		return rig.Model, "Character"
-	elseif code == "SMR" then
-		local rig = MafiaVisualBuilder.BuildSyndicateSpecialistRig("PreviewSamuraiMerc", "SamuraiMafia", 1.0, CFrame.new(), true)
-		return rig.Model, "Character"
-	elseif code == "NJA" then
-		local rig = MafiaVisualBuilder.BuildSyndicateSpecialistRig("PreviewNinjaMerc", "NinjaMafia", 1.0, CFrame.new(), true)
-		return rig.Model, "Character"
+	if code == "CRW" or code == "WTR" or code == "RDR" or code == "GRD" or code == "SMR" or code == "NJA" then
+		return buildHeroCharacterIcon(code), "IconPortrait"
 	elseif code == "MTR" then
 		return buildMotorbikeModel(true, Color3.fromRGB(58, 152, 214)), "Object"
 	elseif code == "BKE" then
@@ -939,21 +1164,97 @@ local function buildEmpireModel(code: string): (Model, "Character" | "Object" | 
 		return buildCarModel("Van"), "Object"
 	elseif code == "CPE" then
 		return buildCarModel("Coupe"), "Object"
-	elseif code == "CNV" or code == "WTH" then
+	elseif code == "CNV" then
 		return buildCarModel("Truck"), "Object"
-	elseif code == "HQ" or code == "PRK" or code == "RST" or code == "RST_Noodle" or code == "RST_Steak" or code == "RST_Oyster" then
-		-- Miniature Restaurant Building with Striped Awning, Warm Window & Roof Cornice
+	elseif code == "WTH" then
+		-- Noir Storm Cloud + Golden Lightning Bolt!
+		addPart(m, "CloudCore", Vector3.new(1.56, 0.88, 1.04), CFrame.new(0, 1.42, 0), Color3.fromRGB(68, 78, 96), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "CloudL", Vector3.new(1.04, 0.72, 0.88), CFrame.new(-0.56, 1.30, 0.06), Color3.fromRGB(54, 62, 78), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "CloudR", Vector3.new(1.00, 0.68, 0.86), CFrame.new(0.56, 1.32, -0.04), Color3.fromRGB(82, 92, 112), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		addPart(m, "BoltUpper", Vector3.new(0.26, 0.76, 0.16), CFrame.new(0.08, 0.82, -0.18) * CFrame.Angles(0, 0, math.rad(-24)), Color3.fromRGB(255, 214, 58), Enum.Material.Neon, nil)
+		addPart(m, "BoltLower", Vector3.new(0.22, 0.72, 0.16), CFrame.new(-0.08, 0.36, -0.20) * CFrame.Angles(0, 0, math.rad(-24)), Color3.fromRGB(255, 214, 58), Enum.Material.Neon, nil)
+		return m, "Object"
+	elseif code == "HQ" then
+		-- Grand Multi-Tier Food Empire Restaurant + Twin Cedar-Roofed Front Wood Pavilions!
+		local cedar = Color3.fromRGB(142, 92, 48)
+		addPart(m, "EstatePlinth", Vector3.new(2.50, 0.22, 2.20), CFrame.new(0, 0.11, 0), darkStone, Enum.Material.Slate, nil)
+		addPart(m, "MainHall1F", Vector3.new(2.10, 0.96, 1.15), CFrame.new(0, 0.70, 0.34), brick, Enum.Material.Brick, nil)
+		addPart(m, "UpperHall2F", Vector3.new(1.56, 0.74, 0.94), CFrame.new(0, 1.54, 0.34), cream, Enum.Material.Marble, nil)
+		addPart(m, "PalaceCrown", Vector3.new(1.68, 0.20, 1.06), CFrame.new(0, 2.00, 0.34), gold, Enum.Material.Metal, nil)
+		addPart(m, "SkyDome", Vector3.new(0.86, 0.56, 0.68), CFrame.new(0, 2.26, 0.34), Color3.fromRGB(128, 198, 238), Enum.Material.Glass, Enum.PartType.Ball)
+		addPart(m, "GlowWindow", Vector3.new(1.36, 0.44, 0.10), CFrame.new(0, 0.74, -0.24), Color3.fromRGB(255, 224, 138), Enum.Material.Neon, nil)
+		addPart(m, "RedCarpet", Vector3.new(0.46, 0.06, 0.92), CFrame.new(0, 0.24, -0.58), oxblood, Enum.Material.Fabric, nil)
+		-- Twin Front Wood Restaurant Pavilions with Pitched Cedar Roofs!
+		for _, sx in ipairs({ -0.78, 0.78 }) do
+			addPart(m, "WoodDeck_" .. sx, Vector3.new(0.76, 0.10, 0.82), CFrame.new(sx, 0.25, -0.58), cedar, Enum.Material.WoodPlanks, nil)
+			addPart(m, "WoodRoofL_" .. sx, Vector3.new(0.46, 0.10, 0.86), CFrame.new(sx - 0.18, 0.78, -0.58) * CFrame.Angles(0, 0, math.rad(18)), cedar, Enum.Material.Wood, nil)
+			addPart(m, "WoodRoofR_" .. sx, Vector3.new(0.46, 0.10, 0.86), CFrame.new(sx + 0.18, 0.78, -0.58) * CFrame.Angles(0, 0, math.rad(-18)), cedar, Enum.Material.Wood, nil)
+			addPart(m, "WoodRidge_" .. sx, Vector3.new(0.12, 0.10, 0.88), CFrame.new(sx, 0.88, -0.58), gold, Enum.Material.Metal, nil)
+		end
+		return m, "Object"
+	elseif code == "PRK" or code == "RST" or code == "RST_Noodle" or code == "RST_Steak" or code == "RST_Oyster" then
+		-- Distinct Themed City Restaurants (Park Bistro, Ramen Noodle House, Tomahawk Steakhouse, Pearl Oyster Bar!)
 		local awningCol = if code == "PRK"
-			then Color3.fromRGB(52, 138, 86)
-			elseif code == "RST_Oyster" then Color3.fromRGB(52, 92, 148)
+			then Color3.fromRGB(46, 158, 92)
+			elseif code == "RST_Oyster" then Color3.fromRGB(48, 118, 196)
 			elseif code == "RST_Steak" then gold
 			else oxblood
-		addPart(m, "Base", Vector3.new(2.2, 0.24, 1.8), CFrame.new(0, 0.12, 0), darkStone, Enum.Material.Slate, nil)
-		addPart(m, "Building", Vector3.new(1.9, 1.45, 1.45), CFrame.new(0, 0.96, 0), if code == "HQ" then brick else Color3.fromRGB(36, 38, 46), Enum.Material.Brick, nil)
-		addPart(m, "Roof", Vector3.new(2.1, 0.24, 1.65), CFrame.new(0, 1.80, 0), darkStone, Enum.Material.Metal, nil)
-		addPart(m, "GoldCornice", Vector3.new(2.16, 0.12, 1.70), CFrame.new(0, 1.96, 0), gold, Enum.Material.Metal, nil)
-		addPart(m, "Window", Vector3.new(1.26, 0.62, 0.12), CFrame.new(0, 0.88, -0.74), Color3.fromRGB(246, 214, 134), Enum.Material.SmoothPlastic, nil)
-		addPart(m, "Awning", Vector3.new(1.76, 0.18, 0.62), CFrame.new(0, 1.38, -0.94) * CFrame.Angles(math.rad(22), 0, 0), awningCol, Enum.Material.Fabric, nil)
+		addPart(m, "Base", Vector3.new(2.24, 0.24, 1.84), CFrame.new(0, 0.12, 0), if code == "PRK" then Color3.fromRGB(54, 116, 66) else darkStone, Enum.Material.Slate, nil)
+		addPart(m, "Building", Vector3.new(1.88, 1.32, 1.40), CFrame.new(0, 0.90, 0.06), if code == "PRK" then cream else Color3.fromRGB(34, 38, 48), Enum.Material.Brick, nil)
+		addPart(m, "Roof", Vector3.new(2.08, 0.22, 1.62), CFrame.new(0, 1.66, 0.06), darkStone, Enum.Material.Metal, nil)
+		addPart(m, "GoldCornice", Vector3.new(2.14, 0.10, 1.68), CFrame.new(0, 1.80, 0.06), gold, Enum.Material.Metal, nil)
+		addPart(m, "Window", Vector3.new(1.26, 0.56, 0.12), CFrame.new(0, 0.82, -0.64), Color3.fromRGB(252, 218, 134), Enum.Material.Neon, nil)
+		addPart(m, "Awning", Vector3.new(1.76, 0.18, 0.58), CFrame.new(0, 1.28, -0.84) * CFrame.Angles(math.rad(22), 0, 0), awningCol, Enum.Material.Fabric, nil)
+		if code == "RST_Noodle" then
+			-- Rooftop Giant Crimson Ramen Bowl + Golden Noodles + Chopsticks!
+			addPart(m, "RamenBowl", Vector3.new(0.96, 0.56, 0.96), CFrame.new(0, 2.08, 0.06), oxblood, Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+			addPart(m, "Noodles", Vector3.new(0.14, 0.78, 0.78), CFrame.new(0, 2.28, 0.06) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(248, 206, 78), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+			addPart(m, "Chopstick1", Vector3.new(0.08, 0.96, 0.08), CFrame.new(0.18, 2.46, 0.06) * CFrame.Angles(0, 0, math.rad(-54)), Color3.fromRGB(168, 112, 58), Enum.Material.Wood, nil)
+			addPart(m, "Chopstick2", Vector3.new(0.08, 0.96, 0.08), CFrame.new(0.22, 2.38, 0.14) * CFrame.Angles(0, 0, math.rad(-46)), Color3.fromRGB(168, 112, 58), Enum.Material.Wood, nil)
+		elseif code == "RST_Steak" then
+			-- Rooftop Marbled Tomahawk Ribeye Steak Sign!
+			addPart(m, "SteakSign", Vector3.new(0.96, 0.36, 0.72), CFrame.new(-0.08, 2.12, 0.06) * CFrame.Angles(math.rad(24), math.rad(16), math.rad(18)), Color3.fromRGB(192, 42, 48), Enum.Material.SmoothPlastic, nil)
+			addPart(m, "SteakBone", Vector3.new(0.76, 0.16, 0.16), CFrame.new(0.46, 2.24, 0.06) * CFrame.Angles(0, 0, math.rad(18)), cream, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		elseif code == "RST_Oyster" then
+			-- Rooftop Open Sea Shell + Glowing Pearl!
+			addPart(m, "ShellBot", Vector3.new(0.96, 0.22, 0.84), CFrame.new(0, 1.96, 0.06), Color3.fromRGB(196, 212, 228), Enum.Material.Marble, Enum.PartType.Ball)
+			addPart(m, "ShellTop", Vector3.new(0.96, 0.20, 0.84), CFrame.new(0, 2.28, 0.24) * CFrame.Angles(math.rad(-44), 0, 0), Color3.fromRGB(196, 212, 228), Enum.Material.Marble, Enum.PartType.Ball)
+			addPart(m, "Pearl", Vector3.new(0.36, 0.36, 0.36), CFrame.new(0, 2.10, -0.02), Color3.fromRGB(255, 252, 244), Enum.Material.Neon, Enum.PartType.Ball)
+		elseif code == "PRK" then
+			addPart(m, "ParkTree", Vector3.new(0.68, 0.72, 0.68), CFrame.new(0.84, 0.86, -0.56), Color3.fromRGB(58, 168, 76), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		end
+		return m, "Object"
+	elseif code == "BIZ_HarborCannery" then
+		-- Harbor Seafood Cannery Front Business: Steel Cannery Safe + Silver Fish Tins + Fresh Salmon + Gold!
+		addPart(m, "CannerySafe", Vector3.new(1.56, 1.38, 1.26), CFrame.new(-0.18, 0.72, 0.10), Color3.fromRGB(48, 72, 96), Enum.Material.Metal, nil)
+		addPart(m, "SafeDial", Vector3.new(0.18, 0.56, 0.56), CFrame.new(-0.18, 0.74, -0.56) * CFrame.Angles(0, math.rad(90), 0), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "FishTin1", Vector3.new(0.34, 0.62, 0.62), CFrame.new(0.68, 0.20, -0.24) * CFrame.Angles(0, 0, math.rad(90)), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "FishTin2", Vector3.new(0.34, 0.62, 0.62), CFrame.new(0.68, 0.56, -0.24) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(58, 162, 224), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "SalmonBody", Vector3.new(1.12, 0.34, 0.42), CFrame.new(-0.12, 1.56, 0.06) * CFrame.Angles(0, math.rad(18), 0), Color3.fromRGB(82, 178, 228), Enum.Material.SmoothPlastic, Enum.PartType.Ball)
+		return m, "Object"
+	elseif code == "BIZ_DowntownLounge" then
+		-- Downtown Velvet Lounge Front Business: Oxblood Velvet Bar + Golden Goblet + Neon Lounge Sign!
+		addPart(m, "LoungeBar", Vector3.new(1.88, 1.12, 1.06), CFrame.new(0, 0.56, 0.12), oxblood, Enum.Material.Fabric, nil)
+		addPart(m, "MarbleTop", Vector3.new(1.98, 0.18, 1.16), CFrame.new(0, 1.18, 0.12), cream, Enum.Material.Marble, nil)
+		addPart(m, "GoldGobletCup", Vector3.new(0.44, 0.48, 0.44), CFrame.new(-0.42, 1.62, 0.10), gold, Enum.Material.Metal, Enum.PartType.Ball)
+		addPart(m, "GoldGobletStem", Vector3.new(0.36, 0.12, 0.12), CFrame.new(-0.42, 1.38, 0.10) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "GoldStack", Vector3.new(0.68, 0.30, 0.42), CFrame.new(0.44, 1.42, 0.12), gold, Enum.Material.Metal, nil)
+		addPart(m, "NeonBarStrip", Vector3.new(1.56, 0.14, 0.10), CFrame.new(0, 0.86, -0.44), Color3.fromRGB(244, 114, 182), Enum.Material.Neon, nil)
+		return m, "Object"
+	elseif code == "BIZ_BackAlleyArms" then
+		-- Back-Alley Arms & Butcher Front Business: Armored Gun Safe + Rifle Barrel + Gold Bullion!
+		addPart(m, "ArmsLocker", Vector3.new(1.62, 1.56, 1.24), CFrame.new(0, 0.78, 0.12), Color3.fromRGB(46, 54, 46), Enum.Material.Metal, nil)
+		addPart(m, "HazardStripe", Vector3.new(1.42, 0.20, 0.10), CFrame.new(0, 1.24, -0.52), gold, Enum.Material.Metal, nil)
+		addPart(m, "CrossBarrel", Vector3.new(1.76, 0.20, 0.20), CFrame.new(0, 0.74, -0.58) * CFrame.Angles(0, 0, math.rad(32)), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "GoldBarTop", Vector3.new(0.76, 0.28, 0.38), CFrame.new(0, 1.70, 0.12), gold, Enum.Material.Metal, nil)
+		return m, "Object"
+	elseif code == "DAY" then
+		-- 7-Day Daily Syndicate Treasure Chest with Gold Trim & Emerald Gem!
+		addPart(m, "ChestBox", Vector3.new(1.78, 1.06, 1.24), CFrame.new(0, 0.54, 0), oxblood, Enum.Material.Wood, nil)
+		addPart(m, "ChestDome", Vector3.new(1.26, 0.68, 1.78), CFrame.new(0, 1.12, 0) * CFrame.Angles(0, math.rad(90), math.rad(90)), oxblood, Enum.Material.Wood, Enum.PartType.Cylinder)
+		addPart(m, "GoldBandL", Vector3.new(0.20, 1.44, 1.32), CFrame.new(-0.56, 0.78, 0), gold, Enum.Material.Metal, nil)
+		addPart(m, "GoldBandR", Vector3.new(0.20, 1.44, 1.32), CFrame.new(0.56, 0.78, 0), gold, Enum.Material.Metal, nil)
+		addPart(m, "EmeraldLock", Vector3.new(0.34, 0.42, 0.18), CFrame.new(0, 0.88, -0.64), Color3.fromRGB(52, 224, 128), Enum.Material.Neon, nil)
 		return m, "Object"
 	elseif code == "STV" then
 		-- Commercial Dual-Burner Stainless Steel Range with Twin Skillets
@@ -998,7 +1299,7 @@ local function buildEmpireModel(code: string): (Model, "Character" | "Object" | 
 		addPart(m, "CanCap", Vector3.new(0.24, 0.42, 0.42), CFrame.new(0.62, 1.20, -0.22) * CFrame.Angles(0, 0, math.rad(90)), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
 		addPart(m, "Wrench", Vector3.new(0.22, 1.42, 0.16), CFrame.new(-0.12, 0.82, -0.32) * CFrame.Angles(0, 0, math.rad(-28)), Color3.fromRGB(196, 202, 214), Enum.Material.Metal, nil)
 		return m, "Object"
-	elseif code == "DAY" or code == "VLT" or code == "BIZ" then
+	elseif code == "VLT" or code == "BIZ" then
 		-- Heavy Steel Syndicate Bank Vault Safe with Brass Dial & Gold Bars
 		local accent = if code == "VLT" then oxblood else gold
 		addPart(m, "SafeBody", Vector3.new(1.68, 1.72, 1.48), CFrame.new(0, 0.88, 0), darkStone, Enum.Material.Metal, nil)
@@ -1295,7 +1596,7 @@ end
 
 function ModelPreviewHelper.CreatePreview(
 	parent: Instance,
-	kind: "Weapon" | "Ammo" | "Bodyguard" | "Equipment" | "Premium" | "Dish" | "Warehouse" | "Empire" | "CategoryIcon",
+	kind: "Weapon" | "Ammo" | "Bodyguard" | "Guard" | "Equipment" | "Premium" | "Dish" | "Warehouse" | "Empire" | "CategoryIcon",
 	itemId: string,
 	size: UDim2,
 	pos: UDim2,
@@ -1319,10 +1620,9 @@ function ModelPreviewHelper.CreatePreview(
 	elseif kind == "Ammo" then
 		model = buildAmmoModel(itemId)
 		viewMode = "Object"
-	elseif kind == "Bodyguard" then
-		local rig = MafiaVisualBuilder.BuildBodyguardRig("PreviewGuard_" .. itemId, itemId, 1.0, CFrame.new(), nil, true)
-		model = rig.Model
-		viewMode = "Character"
+	elseif kind == "Bodyguard" or kind == "Guard" then
+		model = buildHeroCharacterIcon(itemId)
+		viewMode = "IconPortrait"
 	elseif kind == "Dish" then
 		model = buildDishModel(itemId)
 		viewMode = "Object"
@@ -1335,36 +1635,15 @@ function ModelPreviewHelper.CreatePreview(
 		if itemId == "DeliveryMotorbike" then
 			model = buildMotorbikeModel(false, Color3.fromRGB(48, 168, 186))
 			viewMode = "Object"
-		elseif itemId == "RaiderChefSquad" then
-			local rig = MafiaVisualBuilder.BuildChefRig("PreviewRaiderChef", P.DeepRed, 1.0, CFrame.new(), false)
-			model = freezeModelForPreview(rig.Model)
-			viewMode = "Character"
-		elseif itemId == "MasterProChef" then
-			local rig = MafiaVisualBuilder.BuildChefRig("PreviewMasterProChef", P.TarnishedBrass, 1.0, CFrame.new(), true)
-			model = freezeModelForPreview(rig.Model)
-			viewMode = "Character"
-		elseif itemId == "VIPEmpireStaff" then
-			local rig = MafiaVisualBuilder.BuildWaiterRig("PreviewVIPStaff", false, 1.0, CFrame.new())
-			model = freezeModelForPreview(rig.Model)
-			viewMode = "Character"
-		elseif itemId == "SamuraiMafiaContract" then
-			local rig = MafiaVisualBuilder.BuildSyndicateSpecialistRig("PreviewSamuraiPass", "SamuraiMafia", 1.0, CFrame.new(), true)
-			model = rig.Model
-			viewMode = "Character"
-		elseif itemId == "NinjaMafiaContract" then
-			local rig = MafiaVisualBuilder.BuildSyndicateSpecialistRig("PreviewNinjaPass", "NinjaMafia", 1.0, CFrame.new(), true)
-			model = rig.Model
-			viewMode = "Character"
+		elseif itemId == "RaiderChefSquad" or itemId == "MasterProChef" or itemId == "VIPEmpireStaff" or itemId == "SamuraiMafiaContract" or itemId == "NinjaMafiaContract" or itemId == "BossBodyguardPass" then
+			model = buildHeroCharacterIcon(itemId)
+			viewMode = "IconPortrait"
 		elseif itemId == "GoldenEmperorPistolPass" then
 			model = buildWeaponModel("GoldenEmperorPistol")
 			viewMode = "Weapon"
 		elseif itemId == "CrimsonDragonARPass" then
 			model = buildWeaponModel("CrimsonDragonAR")
 			viewMode = "Weapon"
-		elseif itemId == "BossBodyguardPass" then
-			local rig = MafiaVisualBuilder.BuildBodyguardRig("PreviewBossGuard", "BossBodyguard", 1.0, CFrame.new(), nil, true)
-			model = rig.Model
-			viewMode = "Character"
 		elseif itemId == "GoldenEmperorSuitPass" then
 			model = buildEquipmentModel("GoldenEmperorSuit")
 			viewMode = "Object"

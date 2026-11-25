@@ -7,8 +7,8 @@
 -- Every seat Y sits +2.95 studs above its floor so customer feet NEVER clip through ceilings!
 
 export type ExpansionDiningSpot = {
-	Space: "HQ",
-	Zone: "Indoor" | "EastWing" | "WestWing" | "RearAtrium" | "SecondFloor" | "ThirdFloor" | "VIP",
+	Space: "HQ" | "Base",
+	Zone: "Indoor" | "EastWing" | "WestWing" | "RearAtrium" | "SecondFloor" | "ThirdFloor" | "VIP" | "Patio",
 	Floor: number,
 	MinLevel: number,
 	TableOffset: Vector3,
@@ -23,6 +23,8 @@ export type ExpansionTierSpec = {
 	DisplayName: string,
 	Subtitle: string,
 	Summary: string,
+	FrontPavilionName: string,
+	FrontPavilionSummary: string,
 	WidthStuds: number,
 	HeightStuds: number,
 	DepthStuds: number,
@@ -48,26 +50,28 @@ local RestaurantExpansionConfig = {}
 -- * Shifted WarehousePlots: Z <= -90 -> keep HQ Z >= -80 (10+ studs service avenue clear!)
 -- * FrontDiningPlaza Pergolas: Z >= +52 -> keep HQ Z <= +36 (16+ studs courtyard clear!)
 RestaurantExpansionConfig.SAFE_BOUNDS = {
-	MinX = -148,
-	MaxX = 148,
+	MinX = -156,
+	MaxX = 156,
 	MinZ = -82.0,
 	MaxZ = 38.0,
-	MaxY = 116.0,
+	MaxY = 132.0,
 } :: SafeBoundsSpec
 
-RestaurantExpansionConfig.MAX_PHYSICAL_TIER = 10
+RestaurantExpansionConfig.MAX_PHYSICAL_TIER = 15
 
 RestaurantExpansionConfig.TIERS = {
 	[1] = {
 		Tier = 1,
 		DisplayName = "Grand Starter Bistro",
-		Subtitle = "LEVEL 1  •  AIRY STARTER RESTAURANT",
-		Summary = "Tall 21-stud ceiling dining hall, wide 24-stud grand entrance & open kitchen (86x26x56).",
+		Subtitle = "LEVEL 1  •  AIRY STARTER BISTRO & TIMBER PERGOLA",
+		Summary = "Tall 21-stud dining hall, open kitchen & Twin Starter Wood Pergola Terraces out front.",
+		FrontPavilionName = "Open Timber Pergola Deck",
+		FrontPavilionSummary = "Starter cedar plank terraces with string lights & 8 patio seats.",
 		WidthStuds = 86,
 		HeightStuds = 26,
 		DepthStuds = 56,
 		Floors = 1,
-		MaxCustomers = 3,
+		MaxCustomers = 4,
 		KitchenReadyCapacity = 5,
 		MaxConcurrentOrders = 1,
 		RecommendedMaxCrew = 2,
@@ -75,13 +79,15 @@ RestaurantExpansionConfig.TIERS = {
 	[2] = {
 		Tier = 2,
 		DisplayName = "East Conservatory Bistro",
-		Subtitle = "LEVEL 2  •  EAST GLASS CONSERVATORY",
-		Summary = "Opens tall panoramic East Glass Conservatory (+3 spacious tables) & stainless prep island (130x28x62).",
+		Subtitle = "LEVEL 2  •  EAST CONSERVATORY & CEDAR ROOF PAVILION",
+		Summary = "East Glass Conservatory (+3 HQ tables) + Full Pitched Cedar & Slate Wood Restaurant Roof (+8 front seats)!",
+		FrontPavilionName = "Cedar-Roofed Wood Restaurant",
+		FrontPavilionSummary = "Pitched cedar & slate roof, warm wood soffits, brass eaves & +4 front wood tables.",
 		WidthStuds = 130,
 		HeightStuds = 28,
 		DepthStuds = 62,
 		Floors = 1,
-		MaxCustomers = 4,
+		MaxCustomers = 6,
 		KitchenReadyCapacity = 7,
 		MaxConcurrentOrders = 1,
 		RecommendedMaxCrew = 3,
@@ -89,13 +95,15 @@ RestaurantExpansionConfig.TIERS = {
 	[3] = {
 		Tier = 3,
 		DisplayName = "Two-Story Atrium Bistro",
-		Subtitle = "LEVEL 3  •  2ND FLOOR & REAR ATRIUM",
-		Summary = "Soaring Rear Staircase Atrium, airy 2nd-Floor Gallery (+4 tables) & West Culinary Wing (154x50x82).",
+		Subtitle = "LEVEL 3  •  2ND FLOOR & WOOD HOST COUNTERS",
+		Summary = "Rear Staircase Atrium, 2nd-Floor Gallery (+4 tables) & Front Wood Restaurant Host Bars.",
+		FrontPavilionName = "Skylight Wood Bistro & Host Bar",
+		FrontPavilionSummary = "Frosted skylight roof ridge, wooden host & drink counters & warm hanging lanterns.",
 		WidthStuds = 154,
 		HeightStuds = 50,
 		DepthStuds = 82,
 		Floors = 2,
-		MaxCustomers = 5,
+		MaxCustomers = 8,
 		KitchenReadyCapacity = 10,
 		MaxConcurrentOrders = 2,
 		RecommendedMaxCrew = 4,
@@ -103,13 +111,15 @@ RestaurantExpansionConfig.TIERS = {
 	[4] = {
 		Tier = 4,
 		DisplayName = "Modern Culinary Pavilion",
-		Subtitle = "LEVEL 4  •  MODERN GLASS PAVILION",
-		Summary = "Symmetrical tall wings, soaring cantilevered glass portico, wine wall & 2nd-floor lounges (168x54x86).",
+		Subtitle = "LEVEL 4  •  GLASS PAVILION & TIMBER GABLES",
+		Summary = "Symmetrical wings, glass portico, wine wall & Timber-Gabled Front Wood Dining Hall.",
+		FrontPavilionName = "Gabled Timber Dining Hall",
+		FrontPavilionSummary = "Carved cedar gables, planter balustrades & warm brass acoustic eaves.",
 		WidthStuds = 168,
 		HeightStuds = 54,
 		DepthStuds = 86,
 		Floors = 2,
-		MaxCustomers = 6,
+		MaxCustomers = 9,
 		KitchenReadyCapacity = 12,
 		MaxConcurrentOrders = 2,
 		RecommendedMaxCrew = 5,
@@ -117,13 +127,15 @@ RestaurantExpansionConfig.TIERS = {
 	[5] = {
 		Tier = 5,
 		DisplayName = "Grand Syndicate Brasserie",
-		Subtitle = "LEVEL 5  •  EAST BANQUET HALL",
-		Summary = "Grand East Banquet Hall wing (+3 tables), unobstructed red carpet portico & twin marble fountains (192x56x90).",
+		Subtitle = "LEVEL 5  •  EAST BANQUET & EXPANDED WOOD VERANDAS",
+		Summary = "East Banquet Hall (+3 HQ tables) + Twin Covered Side Wood Restaurant Verandas (+6 wood tables, +12 seats)!",
+		FrontPavilionName = "Twin Expanded Wood Verandas",
+		FrontPavilionSummary = "Expands wood plank decks & pitched cedar roofs outward with +6 new wood tables!",
 		WidthStuds = 192,
 		HeightStuds = 56,
 		DepthStuds = 90,
 		Floors = 2,
-		MaxCustomers = 7,
+		MaxCustomers = 11,
 		KitchenReadyCapacity = 15,
 		MaxConcurrentOrders = 3,
 		RecommendedMaxCrew = 6,
@@ -131,13 +143,15 @@ RestaurantExpansionConfig.TIERS = {
 	[6] = {
 		Tier = 6,
 		DisplayName = "Dual-Wing Estate Bistro",
-		Subtitle = "LEVEL 6  •  WEST ESTATE DINING WING",
-		Summary = "Grand West Estate Dining Pavilion (+3 tables), executive copper kitchen hood & glass terraces (214x58x92).",
+		Subtitle = "LEVEL 6  •  WEST WING & OUTDOOR WOOD GRILL BARS",
+		Summary = "West Estate Dining Pavilion (+3 HQ tables) & Smoking Cedar Wood-Fired Grill Bars out front.",
+		FrontPavilionName = "Wood-Fired Grill Veranda",
+		FrontPavilionSummary = "Adds twin outdoor cedar & stone wood-fired grill bars and warm bistro lighting.",
 		WidthStuds = 214,
 		HeightStuds = 58,
 		DepthStuds = 92,
 		Floors = 2,
-		MaxCustomers = 8,
+		MaxCustomers = 12,
 		KitchenReadyCapacity = 17,
 		MaxConcurrentOrders = 3,
 		RecommendedMaxCrew = 6,
@@ -145,13 +159,15 @@ RestaurantExpansionConfig.TIERS = {
 	[7] = {
 		Tier = 7,
 		DisplayName = "Three-Story Sky Terrace",
-		Subtitle = "LEVEL 7  •  WALKABLE 3RD FLOOR SKY-DECK",
-		Summary = "Unlocks soaring 3rd-Floor Marble Sky-Terrace with upper grand staircase & glass balustrades (224x74x98).",
+		Subtitle = "LEVEL 7  •  3RD FLOOR SKY-DECK & LANTERN ARCHES",
+		Summary = "Walkable 3rd-Floor Marble Sky-Terrace + Carved Cedar Entry Archways on Front Wood Restaurant.",
+		FrontPavilionName = "Lantern-Crowned Timber Veranda",
+		FrontPavilionSummary = "Grand cedar entry archways, hanging brass lanterns & lush courtyard planters.",
 		WidthStuds = 224,
 		HeightStuds = 74,
 		DepthStuds = 98,
 		Floors = 3,
-		MaxCustomers = 9,
+		MaxCustomers = 14,
 		KitchenReadyCapacity = 19,
 		MaxConcurrentOrders = 3,
 		RecommendedMaxCrew = 6,
@@ -159,44 +175,130 @@ RestaurantExpansionConfig.TIERS = {
 	[8] = {
 		Tier = 8,
 		DisplayName = "Imperial Colonnade Hall",
-		Subtitle = "LEVEL 8  •  MARBLE COLONNADE PAVILIONS",
-		Summary = "Tall Marble & Brass Colonnade Pavilions (+3 VIP tables) & 2-story Crystal Atrium Chandelier (244x78x102).",
+		Subtitle = "LEVEL 8  •  MARBLE COLONNADES & BRASS TIMBER TRUSSES",
+		Summary = "Marble & Brass Colonnades (+3 VIP tables), Crystal Chandelier & Brass-Trimmed Timber Roof Trusses.",
+		FrontPavilionName = "Brass-Trussed Timber Pavilion",
+		FrontPavilionSummary = "Exposed cedar king-post trusses, brushed brass capitals & VIP patio lighting.",
 		WidthStuds = 244,
 		HeightStuds = 78,
 		DepthStuds = 102,
 		Floors = 3,
-		MaxCustomers = 10,
-		KitchenReadyCapacity = 21,
+		MaxCustomers = 15,
+		KitchenReadyCapacity = 22,
 		MaxConcurrentOrders = 4,
-		RecommendedMaxCrew = 6,
+		RecommendedMaxCrew = 7,
 	},
 	[9] = {
 		Tier = 9,
 		DisplayName = "Royal Grand Ballroom",
-		Subtitle = "LEVEL 9  •  3RD-FLOOR ROYAL BALLROOM",
-		Summary = "Full glass-and-marble enclosed 3rd-Floor Royal Ballroom, mansard gold roof & VIP ballroom tables (256x88x106).",
+		Subtitle = "LEVEL 9  •  3F BALLROOM & 2-TIER PAGODA WOOD ROOFS",
+		Summary = "3rd-Floor Royal Ballroom + 2nd-Tier Clerestory Pagoda Wood Roofs & +6 Outer Veranda Wood Tables!",
+		FrontPavilionName = "Two-Tier Pagoda Wood Restaurant",
+		FrontPavilionSummary = "Raised clerestory pagoda roofs, illuminated wood marquees & +6 outer wood tables!",
 		WidthStuds = 256,
 		HeightStuds = 88,
 		DepthStuds = 106,
 		Floors = 3,
-		MaxCustomers = 11,
-		KitchenReadyCapacity = 23,
+		MaxCustomers = 17,
+		KitchenReadyCapacity = 25,
 		MaxConcurrentOrders = 4,
-		RecommendedMaxCrew = 6,
+		RecommendedMaxCrew = 7,
 	},
 	[10] = {
 		Tier = 10,
 		DisplayName = "Food Emperor Imperial Palace",
-		Subtitle = "LEVEL 10  •  MAX IMPERIAL PALACE EMPIRE",
-		Summary = "Monumental 268-stud 3-story Imperial Palace crowned with a soaring 106-stud Glass & Gold Sky-Atrium Dome (268x106x114).",
+		Subtitle = "LEVEL 10  •  SKY-ATRIUM DOME & GRAND TIMBER HALL",
+		Summary = "268-stud 3-story Imperial Palace with 106-stud Sky-Atrium Dome & Illuminated Timber Marquee Pavilions.",
+		FrontPavilionName = "Grand Timber Courtyard Hall",
+		FrontPavilionSummary = "Twin illuminated wood restaurant marquees, brass chandeliers & full veranda seating.",
 		WidthStuds = 268,
 		HeightStuds = 106,
 		DepthStuds = 114,
 		Floors = 3,
-		MaxCustomers = 12,
-		KitchenReadyCapacity = 26,
+		MaxCustomers = 18,
+		KitchenReadyCapacity = 28,
 		MaxConcurrentOrders = 4,
-		RecommendedMaxCrew = 6,
+		RecommendedMaxCrew = 8,
+	},
+	[11] = {
+		Tier = 11,
+		DisplayName = "Grand Imperial Veranda Palace",
+		Subtitle = "LEVEL 11  •  OUTER IMPERIAL WINGS & TWIN WOOD ARCADES",
+		Summary = "Expands outer Imperial Banquet Arcades (280 studs wide, +4 VIP tables) & Twin Cedar Courtyard Bridges.",
+		FrontPavilionName = "Imperial Cedar Arcade Restaurant",
+		FrontPavilionSummary = "Connected cedar timber arcades, warm hanging chandeliers & VIP host podiums.",
+		WidthStuds = 280,
+		HeightStuds = 108,
+		DepthStuds = 114,
+		Floors = 3,
+		MaxCustomers = 20,
+		KitchenReadyCapacity = 31,
+		MaxConcurrentOrders = 5,
+		RecommendedMaxCrew = 8,
+	},
+	[12] = {
+		Tier = 12,
+		DisplayName = "Twin Sky-Tower Brasserie",
+		Subtitle = "LEVEL 12  •  ROOFTOP SKY-TOWERS & ROYAL WOOD WINGS",
+		Summary = "Crowned with Dual 3F Glass Sky-Pavilions + Outer Royal Wood Restaurant Wings (+4 VIP wood tables)!",
+		FrontPavilionName = "Royal Three-Bay Wood Pavilion",
+		FrontPavilionSummary = "Expands wood restaurant wings out to 157 studs with pitched roofs & +4 VIP wood tables!",
+		WidthStuds = 286,
+		HeightStuds = 112,
+		DepthStuds = 116,
+		Floors = 3,
+		MaxCustomers = 21,
+		KitchenReadyCapacity = 34,
+		MaxConcurrentOrders = 5,
+		RecommendedMaxCrew = 9,
+	},
+	[13] = {
+		Tier = 13,
+		DisplayName = "Gilded Syndicate Palazzo",
+		Subtitle = "LEVEL 13  •  GOLDEN FACADE & TEPPANYAKI WOOD ROTUNDAS",
+		Summary = "Illuminated Golden Pilaster Colonnades, 3F Sky-Lounge VIPs & Outdoor Cedar Teppanyaki Chef Bars.",
+		FrontPavilionName = "Gilded Cedar Teppanyaki Pavilion",
+		FrontPavilionSummary = "Gilded cedar gables, live outdoor teppanyaki counters & warm amber lanterns.",
+		WidthStuds = 292,
+		HeightStuds = 116,
+		DepthStuds = 116,
+		Floors = 3,
+		MaxCustomers = 23,
+		KitchenReadyCapacity = 37,
+		MaxConcurrentOrders = 5,
+		RecommendedMaxCrew = 9,
+	},
+	[14] = {
+		Tier = 14,
+		DisplayName = "Four-Spire Culinary Citadel",
+		Subtitle = "LEVEL 14  •  FOUR IMPERIAL SPIRES & GRAND WOOD BANQUET",
+		Summary = "Four soaring Golden Corner Spire Towers + Full Royal Wood Banquet Pavilions (+2 VIP wood tables)!",
+		FrontPavilionName = "Grand Imperial Wood Banquet Hall",
+		FrontPavilionSummary = "Twin golden roof finials, ornate cedar rafters & full 44-seat outdoor wood dining!",
+		WidthStuds = 298,
+		HeightStuds = 122,
+		DepthStuds = 118,
+		Floors = 3,
+		MaxCustomers = 24,
+		KitchenReadyCapacity = 40,
+		MaxConcurrentOrders = 6,
+		RecommendedMaxCrew = 10,
+	},
+	[15] = {
+		Tier = 15,
+		DisplayName = "Supreme Food Empire Citadel",
+		Subtitle = "LEVEL 15 MAX  •  STRONGEST FOOD EMPIRE IN THE CITY",
+		Summary = "Monumental 304-stud Supreme Citadel with 128-stud Golden Crown Beacon & Imperial Wood Restaurant Complex!",
+		FrontPavilionName = "Supreme Golden-Roof Wood Empire",
+		FrontPavilionSummary = "Gilded multi-tier cedar roofs, golden crest marquees & maximum city customer draw!",
+		WidthStuds = 304,
+		HeightStuds = 128,
+		DepthStuds = 118,
+		Floors = 3,
+		MaxCustomers = 26,
+		KitchenReadyCapacity = 44,
+		MaxConcurrentOrders = 6,
+		RecommendedMaxCrew = 10,
 	},
 } :: { [number]: ExpansionTierSpec }
 
@@ -284,12 +386,85 @@ addTablePair(extraSpots, "ThirdFloor", 3, 9, 24.0, 43.60, -14.0, true)
 addTablePair(extraSpots, "ThirdFloor", 3, 9, -24.0, 43.60, -14.0, true)
 addTablePair(extraSpots, "ThirdFloor", 3, 9, 0.0, 43.60, -14.0, true)
 
--- LEVEL 10 (MAX): Imperial Palace Penthouse & Grand Wing Banquet -> +6 seats
+-- LEVEL 10: Imperial Palace Penthouse & Grand Wing Banquet -> +6 seats
 addTablePair(extraSpots, "EastWing", 1, 10, 124.0, 0.80, -4.0, true)
 addTablePair(extraSpots, "WestWing", 1, 10, -124.0, 0.80, -4.0, true)
 addTablePair(extraSpots, "ThirdFloor", 3, 10, 0.0, 43.60, -28.0, true)
 
+-- LEVEL 11+: Outer Imperial Banquet Arcades (Floor 1, X = +/-138) -> +8 seats
+addTablePair(extraSpots, "EastWing", 1, 11, 138.0, 0.80, 6.0, true)
+addTablePair(extraSpots, "EastWing", 1, 11, 138.0, 0.80, -14.0, true)
+addTablePair(extraSpots, "WestWing", 1, 11, -138.0, 0.80, 6.0, true)
+addTablePair(extraSpots, "WestWing", 1, 11, -138.0, 0.80, -14.0, true)
+
+-- LEVEL 13+: 3rd-Floor Gilded Palazzo VIP Alcoves -> +4 seats
+addTablePair(extraSpots, "ThirdFloor", 3, 13, 24.0, 43.60, -28.0, true)
+addTablePair(extraSpots, "ThirdFloor", 3, 13, -24.0, 43.60, -28.0, true)
+
+-- LEVEL 15 (MAX): Supreme Food Empire Royal Throne Banquet -> +4 seats
+addTablePair(extraSpots, "EastWing", 1, 15, 124.0, 0.80, 10.0, true)
+addTablePair(extraSpots, "WestWing", 1, 15, -124.0, 0.80, 10.0, true)
+
 RestaurantExpansionConfig.EXTRA_DINING_SPOTS = extraSpots
+
+-- Front Wood Restaurant with Roof (FrontDiningPlaza in BasePivot space, deck top = Y 0.40)
+-- Unlocks progressively as the player upgrades Restaurant HQ from Lv.2 -> Lv.15!
+local frontPavilionSpots: { ExpansionDiningSpot } = {}
+
+local function addPatioWoodTablePair(minLevel: number, tx: number, tz: number, isVIP: boolean): ()
+	local wX = if tx >= 0 then tx - 4.6 else tx + 4.6
+	table.insert(frontPavilionSpots, {
+		Space = "Base",
+		Zone = "Patio",
+		Floor = 1,
+		MinLevel = minLevel,
+		TableOffset = Vector3.new(tx, 3.28, tz),
+		PlateOffset = Vector3.new(tx, 3.30, tz + 1.3),
+		SeatOffset = Vector3.new(tx, 2.55, tz + 3.1),
+		WaiterOffset = Vector3.new(wX, 2.90, tz + 0.8),
+		IsVIP = isVIP,
+	})
+	table.insert(frontPavilionSpots, {
+		Space = "Base",
+		Zone = "Patio",
+		Floor = 1,
+		MinLevel = minLevel,
+		TableOffset = Vector3.new(tx, 3.28, tz),
+		PlateOffset = Vector3.new(tx, 3.30, tz - 1.3),
+		SeatOffset = Vector3.new(tx, 2.55, tz - 3.1),
+		WaiterOffset = Vector3.new(wX, 2.90, tz - 0.8),
+		IsVIP = isVIP,
+	})
+end
+
+-- LEVEL 2+: Front 3rd row of existing Inner Wood Restaurant tables (Z = 81) -> +8 patio seats
+addPatioWoodTablePair(2, -69.0, 81.0, false)
+addPatioWoodTablePair(2, -47.0, 81.0, false)
+addPatioWoodTablePair(2, 47.0, 81.0, false)
+addPatioWoodTablePair(2, 69.0, 81.0, false)
+
+-- LEVEL 5+: Expanded Covered Wood Veranda Column A (X = +/-98, Z = 43, 62, 81) -> +12 patio seats
+for _, side in ipairs({ -1, 1 }) do
+	for _, tz in ipairs({ 43.0, 62.0, 81.0 }) do
+		addPatioWoodTablePair(5, side * 98.0, tz, false)
+	end
+end
+
+-- LEVEL 9+: Two-Tier Pagoda Wood Veranda Column B (X = +/-116, Z = 43, 62, 81) -> +12 patio seats
+for _, side in ipairs({ -1, 1 }) do
+	for _, tz in ipairs({ 43.0, 62.0, 81.0 }) do
+		addPatioWoodTablePair(9, side * 116.0, tz, false)
+	end
+end
+
+-- LEVEL 12 & 14+: Royal Outer Wood Restaurant Wings (X = +/-142, Z = 44, 62, 80) -> +12 VIP patio seats
+for _, side in ipairs({ -1, 1 }) do
+	addPatioWoodTablePair(12, side * 142.0, 44.0, true)
+	addPatioWoodTablePair(12, side * 142.0, 80.0, true)
+	addPatioWoodTablePair(14, side * 142.0, 62.0, true)
+end
+
+RestaurantExpansionConfig.FRONT_PAVILION_SPOTS = frontPavilionSpots
 
 -- Rear Grand Atrium Staircase & Wing Archway Waypoints (matching airy Floor 2 = 22.20 & Floor 3 = 43.60!)
 RestaurantExpansionConfig.STAIR_WAYPOINTS = {

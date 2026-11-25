@@ -41,7 +41,7 @@ local playerRemovingConn: RBXScriptConnection? = nil
 local unsubscribeProfile: (() -> ())? = nil
 local unsubscribeBase: (() -> ())? = nil
 
--- Spacious Rear Commercial Kitchen Line Stations (spaced well apart along back line so dining floor stays open!)
+-- Spacious Rear Commercial Kitchen Line Stations (supports up to 12 Chefs across HQ Lv.1-15 + VIP bonuses!)
 local CREW_STATIONS: { { Pos: Vector3, Action: string, Label: string } } = {
 	{ Pos = Vector3.new(-28.0, 0.85, -21.5), Action = "TossingPan", Label = "TOSSING PAN" },
 	{ Pos = Vector3.new(-22.5, 0.85, -21.5), Action = "Searing",    Label = "SEARING" },
@@ -49,6 +49,12 @@ local CREW_STATIONS: { { Pos: Vector3, Action: string, Label: string } } = {
 	{ Pos = Vector3.new(-11.5, 0.85, -21.5), Action = "Plating",    Label = "PLATING" },
 	{ Pos = Vector3.new(-6.0,  0.85, -21.5), Action = "Searing",    Label = "GRILLING" },
 	{ Pos = Vector3.new(-32.5, 0.85, -16.5), Action = "Plating",    Label = "GARNISHING" },
+	{ Pos = Vector3.new(-27.0, 0.85, -13.5), Action = "Chopping",   Label = "SAUCE & PREP" },
+	{ Pos = Vector3.new(-12.0, 0.85, -13.5), Action = "TossingPan", Label = "FLAMBE LINE" },
+	{ Pos = Vector3.new(-6.0,  0.85, -13.5), Action = "Plating",    Label = "PASS EXPEDITE" },
+	{ Pos = Vector3.new(-32.5, 0.85, -22.5), Action = "Searing",    Label = "ROAST STATION" },
+	{ Pos = Vector3.new(-20.0, 0.85, -25.5), Action = "Chopping",   Label = "BUTCHER PREP" },
+	{ Pos = Vector3.new(-14.0, 0.85, -25.5), Action = "Plating",    Label = "PASTRY & GOLD" },
 }
 
 local CHEF_CYCLE_ACTIONS: { { Action: string, Label: string } } = {

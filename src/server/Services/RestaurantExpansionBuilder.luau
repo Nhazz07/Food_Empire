@@ -622,8 +622,9 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 		mPart("EastArch_BrickS", Vector3.new(1.8, 6.0, 12.0), CFrame.new(37.5, 3.5, 12.0), stoneWainscot, Enum.Material.Brick, true)
 		mPart("EastArch_BrickN", Vector3.new(1.8, 6.0, 12.5), CFrame.new(37.5, 3.5, -24.2), stoneWainscot, Enum.Material.Brick, true)
 
-		-- East Wing Outer X grows progressively wider with level!
-		local eastOuterX = if tier >= 10 then 134.0
+		-- East Wing Outer X grows progressively wider with level (up to +150 at Lv.11-15)!
+		local eastOuterX = if tier >= 11 then 150.0
+			elseif tier >= 10 then 134.0
 			elseif tier >= 8 then 118.0
 			elseif tier >= 5 then 94.0
 			else 70.0
@@ -647,15 +648,25 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 			addDiningTableSet("EastImperial_1", 106.0, 0.80, 4.0, true)
 			addDiningTableSet("EastImperial_2", 106.0, 0.80, -14.0, true)
 		end
-		-- Lv.10: Grand Palace Wing VIP Table at X = +124 (+2 seats!)
+		-- Lv.10+: Grand Palace Wing VIP Table at X = +124 (+2 seats!)
 		if tier >= 10 then
 			addDiningTableSet("EastPalace_VIP", 124.0, 0.80, -4.0, true)
+		end
+		-- Lv.11+: Outer Imperial Arcade VIP Tables at X = +138 (+4 seats!)
+		if tier >= 11 then
+			addDiningTableSet("EastOuterArcade_1", 138.0, 0.80, 6.0, true)
+			addDiningTableSet("EastOuterArcade_2", 138.0, 0.80, -14.0, true)
+		end
+		-- Lv.15: Supreme Food Empire Royal Throne Banquet Table at X = +124, Z = +10
+		if tier >= 15 then
+			addDiningTableSet("EastSupremeThrone_VIP", 124.0, 0.80, 10.0, true)
 		end
 
 		-- Elevated warm brass pendant lamps (Y = 17.5 — well above head height!)
 		local lampXList = { 54.0 }
 		if tier >= 5 then table.insert(lampXList, 80.0) end
 		if tier >= 8 then table.insert(lampXList, 106.0) end
+		if tier >= 11 then table.insert(lampXList, 136.0) end
 		for _, lx in ipairs(lampXList) do
 			for _, lz in ipairs({ 6.0, -14.0 }) do
 				mPart("EastWing_LampRod", Vector3.new(0.18, 3.2, 0.18), CFrame.new(lx, 19.2, lz), darkSteel, Enum.Material.Metal, false)
@@ -764,8 +775,9 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 			end
 		end
 
-		-- 3D. West Culinary Kitchen & Estate Dining Wing (wider at every level up to -134!)
-		local westOuterX = if tier >= 10 then -134.0
+		-- 3D. West Culinary Kitchen & Estate Dining Wing (wider at every level up to -150!)
+		local westOuterX = if tier >= 11 then -150.0
+			elseif tier >= 10 then -134.0
 			elseif tier >= 8 then -118.0
 			elseif tier >= 6 then -98.0
 			elseif tier >= 4 then -70.0
@@ -802,9 +814,18 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 		if tier >= 8 then
 			addDiningTableSet("WestImperial_1", -106.0, 0.80, -4.0, true)
 		end
-		-- Lv.10: Grand Palace West Wing VIP Table at X = -124 (+2 seats!)
+		-- Lv.10+: Grand Palace West Wing VIP Table at X = -124 (+2 seats!)
 		if tier >= 10 then
 			addDiningTableSet("WestPalace_VIP", -124.0, 0.80, -4.0, true)
+		end
+		-- Lv.11+: Outer Imperial West Arcade VIP Tables at X = -138 (+4 seats!)
+		if tier >= 11 then
+			addDiningTableSet("WestOuterArcade_1", -138.0, 0.80, 6.0, true)
+			addDiningTableSet("WestOuterArcade_2", -138.0, 0.80, -14.0, true)
+		end
+		-- Lv.15: Supreme Food Empire West Royal Throne Banquet Table at X = -124, Z = +10
+		if tier >= 15 then
+			addDiningTableSet("WestSupremeThrone_VIP", -124.0, 0.80, 10.0, true)
 		end
 	end
 
@@ -943,7 +964,7 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 	-- LEVEL 8+: TALL IMPERIAL MARBLE COLONNADE WING PAVILIONS & 2-STORY CRYSTAL CHANDELIER!
 	-- =========================================================================
 	if tier >= 8 then
-		local colX = if tier >= 10 then 135.0 else 119.0
+		local colX = if tier >= 11 then 151.0 elseif tier >= 10 then 135.0 else 119.0
 		for _, side in ipairs({ -1, 1 }) do
 			for _, pz in ipairs({ -22.0, -4.0, 14.0 }) do
 				mPart("Lv8_FlutedCol", Vector3.new(22.6, 2.4, 2.4), CFrame.new(side * colX, 11.9, pz) * CFrame.Angles(0, 0, math.rad(90)), marbleWhite, Enum.Material.Marble, false, nil, Enum.PartType.Cylinder)
@@ -1002,10 +1023,99 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 		end
 		mPart("Lv10_DomeCap", Vector3.new(48.8, 2.4, 26.8), CFrame.new(0, 91.6, -6.5), darkSteel, Enum.Material.Metal, false)
 		mPart("Lv10_CrownBase", Vector3.new(28.0, 4.0, 19.0), CFrame.new(0, 94.8, -6.5), palette.BrassAccent, Enum.Material.Metal, false)
-		local imperialSpire = mPart("Lv10_ImperialFinial", Vector3.new(9.2, 8.2, 9.2), CFrame.new(0, 100.8, -6.5) * CFrame.Angles(0, math.rad(45), 0), palette.BrassAccent, Enum.Material.Metal, false)
-		addWarmLight(imperialSpire, 84, 2.2, Color3.fromRGB(255, 224, 146))
+		if tier < 15 then
+			local imperialSpire = mPart("Lv10_ImperialFinial", Vector3.new(9.2, 8.2, 9.2), CFrame.new(0, 100.8, -6.5) * CFrame.Angles(0, math.rad(45), 0), palette.BrassAccent, Enum.Material.Metal, false)
+			addWarmLight(imperialSpire, 84, 2.2, Color3.fromRGB(255, 224, 146))
+		end
 
 		addDiningTableSet("EmperorPenthouse_VIP", 0.0, 43.60, -28.0, true)
+	end
+
+	-- =========================================================================
+	-- LEVEL 11+: OUTER IMPERIAL COLONNADE ARCADES & ROOFTOP BALUSTRADE GALLERY
+	-- =========================================================================
+	if tier >= 11 then
+		for _, side in ipairs({ -1, 1 }) do
+			mPart("Lv11_OuterParapetF", Vector3.new(110.0, 2.8, 0.5), CFrame.new(side * 94.0, 25.4, 18.8), marbleWhite, Enum.Material.Marble, false)
+			mPart("Lv11_OuterGoldCapF", Vector3.new(111.0, 0.45, 0.9), CFrame.new(side * 94.0, 27.0, 18.8), palette.BrassAccent, Enum.Material.Metal, false)
+			for _, pz in ipairs({ -16.0, 0.0, 16.0 }) do
+				local archGlow = mPart("Lv11_ArcadeSconce", Vector3.new(1.1, 2.4, 1.1), CFrame.new(side * 149.2, 13.5, pz), Color3.fromRGB(255, 224, 150), Enum.Material.Glass, false, 0.15)
+				addWarmLight(archGlow, 28, 1.2)
+			end
+		end
+	end
+
+	-- =========================================================================
+	-- LEVEL 12+: TWIN WING ROOFTOP SKY-TOWER PAVILIONS (EAST & WEST CUPOLAS!)
+	-- =========================================================================
+	if tier >= 12 then
+		for _, side in ipairs({ -1, 1 }) do
+			local tx = side * 86.0
+			local tz = -4.0
+			mPart("Lv12_SkyTowerPlinth", Vector3.new(26.0, 3.0, 22.0), CFrame.new(tx, 25.0, tz), marbleWhite, Enum.Material.Marble, false)
+			mPart("Lv12_SkyTowerGoldBelt", Vector3.new(27.0, 0.8, 23.0), CFrame.new(tx, 26.9, tz), palette.BrassAccent, Enum.Material.Metal, false)
+			mPart("Lv12_SkyTowerGlass", Vector3.new(21.0, 12.6, 17.0), CFrame.new(tx, 33.6, tz), glassCol, Enum.Material.Glass, false, 0.35)
+			for _, cx in ipairs({ -10.5, 10.5 }) do
+				for _, cz in ipairs({ -8.5, 8.5 }) do
+					mPart("Lv12_SkyTowerCol", Vector3.new(1.8, 13.2, 1.8), CFrame.new(tx + cx, 33.6, tz + cz), marbleWhite, Enum.Material.Marble, false)
+				end
+			end
+			mPart("Lv12_SkyTowerRoof", Vector3.new(25.4, 2.4, 21.4), CFrame.new(tx, 41.2, tz), palette.RoofColor, Enum.Material.Slate, false)
+			mPart("Lv12_SkyTowerCrown", Vector3.new(14.0, 3.2, 11.0), CFrame.new(tx, 44.0, tz), palette.BrassAccent, Enum.Material.Metal, false)
+			local finial = mPart("Lv12_SkyTowerSpire", Vector3.new(3.6, 6.2, 3.6), CFrame.new(tx, 48.6, tz) * CFrame.Angles(0, math.rad(45), 0), palette.BrassAccent, Enum.Material.Metal, false)
+			addWarmLight(finial, 52, 1.6, Color3.fromRGB(255, 224, 152))
+		end
+	end
+
+	-- =========================================================================
+	-- LEVEL 13+: GILDED SYNDICATE PALAZZO FACADE & 3F VIP ALCOVES
+	-- =========================================================================
+	if tier >= 13 then
+		for _, gx in ipairs({ -122, -96, -70, -34, 34, 70, 96, 122 }) do
+			mPart("Lv13_GoldPilaster", Vector3.new(1.1, 20.6, 1.1), CFrame.new(gx, 11.0, 19.0), palette.BrassAccent, Enum.Material.Metal, false)
+		end
+		mPart("Lv13_PorticoCrestArch", Vector3.new(35.0, 2.2, 1.4), CFrame.new(0, 22.8, 30.2), palette.BrassAccent, Enum.Material.Metal, false)
+		addDiningTableSet("Palazzo3F_VIP_R", 24.0, 43.60, -28.0, true)
+		addDiningTableSet("Palazzo3F_VIP_L", -24.0, 43.60, -28.0, true)
+	end
+
+	-- =========================================================================
+	-- LEVEL 14+: FOUR-SPIRE CULINARY CITADEL — SOARING CORNER IMPERIAL TOWERS!
+	-- =========================================================================
+	if tier >= 14 then
+		for _, sx in ipairs({ -38.0, 38.0 }) do
+			for _, sz in ipairs({ -30.0, 17.5 }) do
+				mPart("Lv14_CornerTowerBase", Vector3.new(8.4, 18.0, 8.4), CFrame.new(sx, 78.5, sz), marbleWhite, Enum.Material.Marble, false)
+				mPart("Lv14_CornerTowerBand", Vector3.new(9.2, 1.2, 9.2), CFrame.new(sx, 88.0, sz), palette.BrassAccent, Enum.Material.Metal, false)
+				mPart("Lv14_CornerTowerLantern", Vector3.new(6.2, 9.0, 6.2), CFrame.new(sx, 93.1, sz), glassCol, Enum.Material.Glass, false, 0.3)
+				mPart("Lv14_CornerTowerCap", Vector3.new(7.6, 2.2, 7.6), CFrame.new(sx, 98.7, sz), darkSteel, Enum.Material.Metal, false)
+				local cSpire = mPart("Lv14_CornerSpire", Vector3.new(11.0, 2.8, 2.8), CFrame.new(sx, 105.2, sz) * CFrame.Angles(0, 0, math.rad(90)), palette.BrassAccent, Enum.Material.Metal, false, nil, Enum.PartType.Cylinder)
+				addWarmLight(cSpire, 48, 1.5, Color3.fromRGB(255, 218, 134))
+			end
+		end
+	end
+
+	-- =========================================================================
+	-- LEVEL 15 (MAX): SUPREME FOOD EMPIRE CITADEL — 128-STUD GOLDEN CROWN BEACON!
+	-- =========================================================================
+	if tier >= 15 then
+		local goldBright = Color3.fromRGB(246, 198, 68)
+		mPart("Lv15_CitadelDrum", Vector3.new(22.0, 10.0, 15.0), CFrame.new(0, 101.8, -6.5), marbleWhite, Enum.Material.Marble, false)
+		mPart("Lv15_CitadelGoldCollar", Vector3.new(23.6, 1.6, 16.6), CFrame.new(0, 107.4, -6.5), goldBright, Enum.Material.Metal, false)
+		local crownLantern = mPart("Lv15_CitadelBeaconCore", Vector3.new(14.0, 8.6, 10.0), CFrame.new(0, 112.5, -6.5), Color3.fromRGB(255, 232, 162), Enum.Material.Neon, false, 0.12)
+		addWarmLight(crownLantern, 110, 2.6, Color3.fromRGB(255, 224, 140))
+		mPart("Lv15_CitadelCrownCap", Vector3.new(17.0, 2.2, 13.0), CFrame.new(0, 117.8, -6.5), goldBright, Enum.Material.Metal, false)
+		mPart("Lv15_SupremeSpire", Vector3.new(8.5, 3.2, 3.2), CFrame.new(0, 123.0, -6.5) * CFrame.Angles(0, 0, math.rad(90)), goldBright, Enum.Material.Metal, false, nil, Enum.PartType.Cylinder)
+
+		local sign15 = mPart("Lv15_SupremeCrestMarquee", Vector3.new(52.0, 8.4, 0.7), CFrame.new(0, 76.2, 11.2), Color3.fromRGB(16, 18, 22), Enum.Material.SmoothPlastic, false)
+		if sign15 then
+			setArchMarqueeText(sign15, "★ " .. palette.BrandTitle .. " ★", "LV.15 MAX • STRONGEST FOOD EMPIRE IN THE CITY", goldBright)
+		end
+
+		for _, tx in ipairs({ -22.5, 22.5 }) do
+			mPart("Lv15_TriumphColumn", Vector3.new(21.6, 2.6, 2.6), CFrame.new(tx, 11.4, 30.0) * CFrame.Angles(0, 0, math.rad(90)), goldBright, Enum.Material.Metal, true, nil, Enum.PartType.Cylinder)
+			mPart("Lv15_TriumphOrb", Vector3.new(3.2, 3.2, 3.2), CFrame.new(tx, 23.4, 30.0), Color3.fromRGB(255, 230, 158), Enum.Material.Neon, false, nil, Enum.PartType.Ball)
+		end
 	end
 
 	local bp = baseModel:FindFirstChild("BasePivot")
@@ -1032,6 +1142,339 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 		Height = actualH,
 		Depth = actualD,
 	}
+end
+
+-- =========================================================================
+-- FRONT WOOD RESTAURANT WITH ROOF (FrontDiningPlaza — Levels 1 to 15!)
+-- Progressively upgrades & widens the covered wooden outdoor dining restaurant
+-- in front of RestaurantHQ so a higher-level restaurant looks bigger & seats more customers!
+-- =========================================================================
+function RestaurantExpansionBuilder.BuildFrontWoodPavilion(baseModel: Model, slot: string, restaurantLevel: number): ()
+	local bp = baseModel:FindFirstChild("BasePivot")
+	local plaza = baseModel:FindFirstChild("FrontDiningPlaza")
+	if not bp or not bp:IsA("BasePart") or not plaza then
+		return
+	end
+
+	local tier = math.clamp(math.floor(restaurantLevel or 1), 1, RestaurantExpansionConfig.MAX_PHYSICAL_TIER)
+	local palette = SLOT_PALETTES[slot] or SLOT_PALETTES.East
+	local bCF = bp.CFrame
+
+	local oldRoofs = plaza:FindFirstChild("PergolaPavilionRoofs")
+	if oldRoofs then
+		oldRoofs:Destroy()
+	end
+	local roofFolder = Instance.new("Folder")
+	roofFolder.Name = "PergolaPavilionRoofs"
+	roofFolder:SetAttribute("PavilionLevel", tier)
+
+	local cedarWood = Color3.fromRGB(134, 86, 48)
+	local richTimber = palette.WallTrim
+	local deckWood = Color3.fromRGB(118, 78, 46)
+	local soffitWood = Color3.fromRGB(148, 102, 62)
+	local roofShingle = if tier >= 15 then Color3.fromRGB(184, 134, 42) else Color3.fromRGB(58, 42, 32)
+	local slateRoof = palette.RoofColor
+	local brassCol = if tier >= 13 then Color3.fromRGB(238, 192, 72) else palette.BrassAccent
+	local skylightCol = Color3.fromRGB(186, 214, 236)
+	local lanternGlow = Color3.fromRGB(255, 224, 156)
+	local darkIron = Color3.fromRGB(34, 38, 44)
+	local hedgeGreen = Color3.fromRGB(48, 96, 52)
+
+	local function rPart(
+		prefix: string,
+		name: string,
+		sz: Vector3,
+		relCF: CFrame,
+		col: Color3,
+		mat: Enum.Material,
+		transp: number?,
+		collide: boolean?,
+		shape: Enum.PartType?
+	): Part
+		local part = Instance.new("Part")
+		part.Name = prefix .. name
+		part.Size = sz
+		part.CFrame = bCF * relCF
+		part.Color = col
+		part.Material = mat
+		if shape then
+			part.Shape = shape
+		end
+		part.Anchored = true
+		part.CanCollide = if collide == nil then true else collide
+		part.CanTouch = false
+		part.CanQuery = false
+		part.TopSurface = Enum.SurfaceType.Smooth
+		part.BottomSurface = Enum.SurfaceType.Smooth
+		if transp then
+			part.Transparency = transp
+		end
+		part.Parent = roofFolder
+		return part
+	end
+
+	local function addGlow(parent: BasePart, range: number, brightness: number): ()
+		local pl = Instance.new("PointLight")
+		pl.Color = lanternGlow
+		pl.Range = range
+		pl.Brightness = brightness
+		pl.Shadows = false
+		pl.Parent = parent
+	end
+
+	local function buildWoodDiningTable(tag: string, tx: number, tz: number, isVIP: boolean): ()
+		local topCol = if isVIP then Color3.fromRGB(162, 110, 62) else cedarWood
+		local seatCol = if isVIP then Color3.fromRGB(132, 34, 40) else palette.SeatLeather
+		rPart(tag, "Pedestal", Vector3.new(1.1, 2.5, 1.1), CFrame.new(tx, 1.65, tz), darkIron, Enum.Material.Metal, nil, true)
+		rPart(tag, "Foot", Vector3.new(2.2, 0.22, 2.2), CFrame.new(tx, 0.50, tz), brassCol, Enum.Material.Metal, nil, false)
+		rPart(tag, "WoodTop", Vector3.new(4.8, 0.36, 4.0), CFrame.new(tx, 3.06, tz), topCol, Enum.Material.Wood, nil, true)
+		if isVIP then
+			rPart(tag, "BrassRim", Vector3.new(5.0, 0.16, 4.2), CFrame.new(tx, 3.06, tz), brassCol, Enum.Material.Metal, nil, false)
+			local candle = rPart(tag, "TableLantern", Vector3.new(0.45, 0.75, 0.45), CFrame.new(tx, 3.60, tz), lanternGlow, Enum.Material.Neon, 0.1, false)
+			addGlow(candle, 12, 0.7)
+		end
+		for _, dz in ipairs({ -3.1, 3.1 }) do
+			local faceIn = if dz > 0 then math.rad(180) else 0
+			local sCF = CFrame.new(tx, 0.40, tz + dz) * CFrame.Angles(0, faceIn, 0)
+			rPart(tag, "ChairBase", Vector3.new(2.1, 1.5, 2.0), sCF * CFrame.new(0, 0.85, 0), richTimber, Enum.Material.Wood, nil, false)
+			rPart(tag, "ChairCushion", Vector3.new(2.15, 0.32, 2.05), sCF * CFrame.new(0, 1.72, 0), seatCol, Enum.Material.Leather, nil, false)
+			rPart(tag, "ChairBack", Vector3.new(2.15, 1.85, 0.34), sCF * CFrame.new(0, 2.65, -0.86), richTimber, Enum.Material.Wood, nil, false)
+		end
+	end
+
+	local function buildPitchedWoodRoof(
+		tag: string,
+		cx: number,
+		cz: number,
+		w: number,
+		dLen: number,
+		eaveY: number,
+		roofMat: Enum.Material,
+		roofCol: Color3
+	): ()
+		-- Cedar Timber Fascia Beam Ring
+		rPart(tag, "FasciaF", Vector3.new(w + 1.4, 1.35, 0.95), CFrame.new(cx, eaveY + 0.55, cz + dLen * 0.5), richTimber, Enum.Material.Wood, nil, false)
+		rPart(tag, "FasciaB", Vector3.new(w + 1.4, 1.35, 0.95), CFrame.new(cx, eaveY + 0.55, cz - dLen * 0.5), richTimber, Enum.Material.Wood, nil, false)
+		rPart(tag, "FasciaL", Vector3.new(0.95, 1.35, dLen + 1.4), CFrame.new(cx - w * 0.5, eaveY + 0.55, cz), richTimber, Enum.Material.Wood, nil, false)
+		rPart(tag, "FasciaR", Vector3.new(0.95, 1.35, dLen + 1.4), CFrame.new(cx + w * 0.5, eaveY + 0.55, cz), richTimber, Enum.Material.Wood, nil, false)
+
+		-- Brushed Brass Eave Trim
+		rPart(tag, "BrassF", Vector3.new(w + 1.8, 0.34, 1.18), CFrame.new(cx, eaveY + 1.24, cz + dLen * 0.5), brassCol, Enum.Material.Metal, nil, false)
+		rPart(tag, "BrassB", Vector3.new(w + 1.8, 0.34, 1.18), CFrame.new(cx, eaveY + 1.24, cz - dLen * 0.5), brassCol, Enum.Material.Metal, nil, false)
+		rPart(tag, "BrassL", Vector3.new(1.18, 0.34, dLen + 1.8), CFrame.new(cx - w * 0.5, eaveY + 1.24, cz), brassCol, Enum.Material.Metal, nil, false)
+		rPart(tag, "BrassR", Vector3.new(1.18, 0.34, dLen + 1.8), CFrame.new(cx + w * 0.5, eaveY + 1.24, cz), brassCol, Enum.Material.Metal, nil, false)
+
+		-- Solid Pitched Wood & Shingle Roof Slopes + Warm Cedar Plank Ceiling Soffit
+		local slopeW = w * 0.45
+		local pitchRad = math.rad(12)
+		local roofMidY = eaveY + 2.45
+		rPart(tag, "RoofSlopeL", Vector3.new(slopeW, 0.68, dLen + 1.8), CFrame.new(cx - w * 0.27, roofMidY, cz) * CFrame.Angles(0, 0, pitchRad), roofCol, roofMat, nil, true)
+		rPart(tag, "RoofSlopeR", Vector3.new(slopeW, 0.68, dLen + 1.8), CFrame.new(cx + w * 0.27, roofMidY, cz) * CFrame.Angles(0, 0, -pitchRad), roofCol, roofMat, nil, true)
+		rPart(tag, "CedarSoffitL", Vector3.new(slopeW - 0.6, 0.30, dLen - 0.4), CFrame.new(cx - w * 0.27, roofMidY - 0.44, cz) * CFrame.Angles(0, 0, pitchRad), soffitWood, Enum.Material.WoodPlanks, nil, false)
+		rPart(tag, "CedarSoffitR", Vector3.new(slopeW - 0.6, 0.30, dLen - 0.4), CFrame.new(cx + w * 0.27, roofMidY - 0.44, cz) * CFrame.Angles(0, 0, -pitchRad), soffitWood, Enum.Material.WoodPlanks, nil, false)
+
+		-- Center Frosted Skylight Ridge & Illuminated Cedar/Brass Ridge Beam
+		rPart(tag, "Skylight", Vector3.new(w * 0.18, 0.36, dLen + 0.6), CFrame.new(cx, eaveY + 4.35, cz), skylightCol, Enum.Material.Glass, 0.36, true)
+		local ridge = rPart(tag, "RidgeCap", Vector3.new(1.3, 0.72, dLen + 2.4), CFrame.new(cx, eaveY + 4.78, cz), brassCol, Enum.Material.Metal, nil, false)
+		addGlow(ridge, 46, 1.35)
+
+		-- Carved Cedar Gable Ends
+		rPart(tag, "GableLowF", Vector3.new(w * 0.86, 2.2, 0.6), CFrame.new(cx, eaveY + 2.25, cz + dLen * 0.49), cedarWood, Enum.Material.Wood, nil, false)
+		rPart(tag, "GableLowB", Vector3.new(w * 0.86, 2.2, 0.6), CFrame.new(cx, eaveY + 2.25, cz - dLen * 0.49), cedarWood, Enum.Material.Wood, nil, false)
+		rPart(tag, "GableHighF", Vector3.new(w * 0.42, 1.5, 0.6), CFrame.new(cx, eaveY + 3.70, cz + dLen * 0.49), richTimber, Enum.Material.Wood, nil, false)
+		rPart(tag, "GableHighB", Vector3.new(w * 0.42, 1.5, 0.6), CFrame.new(cx, eaveY + 3.70, cz - dLen * 0.49), richTimber, Enum.Material.Wood, nil, false)
+	end
+
+	for _, side in ipairs({ -1, 1 }) do
+		local sideTag = if side < 0 then "LeftWoodRest_" else "RightWoodRest_"
+		local innerCX = side * 58.0
+		local innerCZ = 62.0
+		local innerW = 54.4
+		local innerD = 62.4
+		local topY = 11.4
+
+		-- Stone Column Plinths on Inner Terrace Corners (All Levels)
+		for _, sx in ipairs({ -innerW * 0.47, innerW * 0.47 }) do
+			for _, sz in ipairs({ -innerD * 0.47, innerD * 0.47 }) do
+				rPart(sideTag, "CornerPlinth", Vector3.new(2.5, 2.2, 2.5), CFrame.new(innerCX + sx, 1.4, innerCZ + sz), Color3.fromRGB(84, 80, 74), Enum.Material.Brick, nil, false)
+			end
+		end
+
+		if tier == 1 then
+			-- LEVEL 1: Starter Open Cedar Pergola with Timber Rafters & Warm Bistro Bulbs
+			rPart(sideTag, "StarterBeamF", Vector3.new(innerW, 1.0, 0.8), CFrame.new(innerCX, topY + 0.4, innerCZ + innerD * 0.5), cedarWood, Enum.Material.Wood, nil, false)
+			rPart(sideTag, "StarterBeamB", Vector3.new(innerW, 1.0, 0.8), CFrame.new(innerCX, topY + 0.4, innerCZ - innerD * 0.5), cedarWood, Enum.Material.Wood, nil, false)
+			for rz = 36, 88, 13 do
+				rPart(sideTag, "OpenRafter", Vector3.new(innerW - 1.0, 0.55, 0.55), CFrame.new(innerCX, topY + 0.65, rz), soffitWood, Enum.Material.WoodPlanks, nil, false)
+				local bulb = rPart(sideTag, "BistroBulb", Vector3.new(0.65, 0.65, 0.65), CFrame.new(innerCX, topY + 0.1, rz), lanternGlow, Enum.Material.Neon, 0.1, false, Enum.PartType.Ball)
+				if rz == 62 then
+					addGlow(bulb, 36, 1.1)
+				end
+			end
+		else
+			-- LEVEL 2+: Full Pitched Cedar & Shingle Wood Restaurant Roof over Entire 54x62 Terrace!
+			buildPitchedWoodRoof(sideTag .. "Inner_", innerCX, innerCZ, innerW, innerD, topY, Enum.Material.WoodPlanks, roofShingle)
+		end
+
+		-- LEVEL 3+: Carved Cedar Host & Appetizer Bar Counter + Hanging Timber Lanterns
+		if tier >= 3 then
+			local barX = side * 34.8
+			rPart(sideTag, "HostBarBody", Vector3.new(3.4, 3.2, 9.6), CFrame.new(barX, 2.0, 36.8), cedarWood, Enum.Material.Wood, nil, true)
+			rPart(sideTag, "HostBarTop", Vector3.new(4.0, 0.34, 10.2), CFrame.new(barX, 3.75, 36.8), brassCol, Enum.Material.WoodPlanks, nil, true)
+			rPart(sideTag, "EspressoMachine", Vector3.new(1.8, 1.6, 2.2), CFrame.new(barX, 4.7, 35.0), brassCol, Enum.Material.Metal, nil, false)
+			for _, lz in ipairs({ 43.0, 62.0, 81.0 }) do
+				rPart(sideTag, "LanternCord", Vector3.new(0.16, 2.0, 0.16), CFrame.new(innerCX, topY - 0.6, lz), darkIron, Enum.Material.Metal, nil, false)
+				local lant = rPart(sideTag, "WarmLantern", Vector3.new(1.3, 1.8, 1.3), CFrame.new(innerCX, topY - 2.1, lz), lanternGlow, Enum.Material.Glass, 0.15, false)
+				addGlow(lant, 26, 0.95)
+			end
+		end
+
+		-- LEVEL 4+: Cedar Planter Boxes & Decorative Gable Crest Trim
+		if tier >= 4 then
+			for _, pz in ipairs({ 31.6, 92.4 }) do
+				rPart(sideTag, "CedarPlanter", Vector3.new(18.0, 1.8, 2.2), CFrame.new(innerCX, 1.3, pz), richTimber, Enum.Material.Wood, nil, true)
+				rPart(sideTag, "BoxwoodHedge", Vector3.new(17.2, 1.6, 1.7), CFrame.new(innerCX, 2.7, pz), hedgeGreen, Enum.Material.Grass, nil, false)
+			end
+		end
+
+		-- LEVEL 5+: EXPANDED COVERED SIDE WOOD VERANDA (X = +/-85..+/-127, +6 Wood Tables at Lv.5 & +6 at Lv.9!)
+		if tier >= 5 then
+			local midCX = side * 106.0
+			local midW = 42.0
+			local midD = 60.0
+			local midTag = sideTag .. "Veranda_"
+
+			-- Seamless Flush Cedar Plank Deck (top Y = 0.40, matching DiningTerraceDeck!)
+			rPart(midTag, "WoodDeck", Vector3.new(midW + 0.8, 0.40, midD), CFrame.new(midCX, 0.20, innerCZ), deckWood, Enum.Material.WoodPlanks, nil, true)
+			rPart(midTag, "DeckBorderF", Vector3.new(midW + 1.2, 0.44, 0.8), CFrame.new(midCX, 0.22, innerCZ + midD * 0.5), richTimber, Enum.Material.Wood, nil, false)
+			rPart(midTag, "DeckBorderB", Vector3.new(midW + 1.2, 0.44, 0.8), CFrame.new(midCX, 0.22, innerCZ - midD * 0.5), richTimber, Enum.Material.Wood, nil, false)
+
+			-- Heavy Cedar Support Columns (clear of all table & chair lanes!)
+			for _, px in ipairs({ side * 87.0, side * 125.0 }) do
+				for _, pz in ipairs({ 33.0, 52.0, 72.0, 91.0 }) do
+					rPart(midTag, "Plinth", Vector3.new(2.2, 1.8, 2.2), CFrame.new(px, 1.1, pz), Color3.fromRGB(84, 80, 74), Enum.Material.Brick, nil, false)
+					rPart(midTag, "CedarPost", Vector3.new(1.5, 10.6, 1.5), CFrame.new(px, 6.2, pz), richTimber, Enum.Material.Wood, nil, true)
+					if tier >= 8 then
+						rPart(midTag, "BrassCap", Vector3.new(1.9, 0.55, 1.9), CFrame.new(px, 11.2, pz), brassCol, Enum.Material.Metal, nil, false)
+					end
+				end
+			end
+
+			buildPitchedWoodRoof(midTag, midCX, innerCZ, midW, midD, 11.0, Enum.Material.Slate, slateRoof)
+
+			-- Lv.5+: Column A Handcrafted Wood Dining Tables (X = +/-98, Z = 43, 62, 81)
+			for _, tz in ipairs({ 43.0, 62.0, 81.0 }) do
+				buildWoodDiningTable(midTag .. "TblA_" .. tostring(tz) .. "_", side * 98.0, tz, tier >= 8)
+			end
+		end
+
+		-- LEVEL 6+: Outdoor Cedar & Stone Wood-Fired Grill Bar at Rear of Veranda
+		if tier >= 6 then
+			local gx = side * 107.0
+			local gz = 33.4
+			rPart(sideTag, "GrillStoneBase", Vector3.new(9.6, 3.4, 2.8), CFrame.new(gx, 2.1, gz), Color3.fromRGB(116, 62, 48), Enum.Material.Brick, nil, true)
+			rPart(sideTag, "GrillWoodCounter", Vector3.new(10.2, 0.36, 3.4), CFrame.new(gx, 3.95, gz), cedarWood, Enum.Material.Wood, nil, true)
+			local ember = rPart(sideTag, "GrillEmbers", Vector3.new(4.2, 0.25, 1.6), CFrame.new(gx, 4.18, gz), Color3.fromRGB(242, 112, 38), Enum.Material.Neon, 0.08, false)
+			addGlow(ember, 18, 1.1)
+			rPart(sideTag, "GrillCopperHood", Vector3.new(5.4, 2.2, 2.4), CFrame.new(gx, 8.6, gz), Color3.fromRGB(184, 108, 64), Enum.Material.Metal, nil, false)
+		end
+
+		-- LEVEL 7+: Carved Cedar Entry Archway Welcoming Diners from Center Walkway
+		if tier >= 7 then
+			local archX = side * 31.2
+			for _, az in ipairs({ 55.5, 68.5 }) do
+				rPart(sideTag, "EntryArchPost", Vector3.new(1.6, 11.4, 1.6), CFrame.new(archX, 6.1, az), richTimber, Enum.Material.Wood, nil, true)
+			end
+			rPart(sideTag, "EntryArchBeam", Vector3.new(2.0, 1.6, 15.6), CFrame.new(archX, 12.2, 62.0), cedarWood, Enum.Material.Wood, nil, false)
+			rPart(sideTag, "EntryArchGold", Vector3.new(2.2, 0.38, 16.0), CFrame.new(archX, 13.1, 62.0), brassCol, Enum.Material.Metal, nil, false)
+		end
+
+		-- LEVEL 8+: Exposed Cedar King-Post Trusses Across Inner & Veranda Roofs
+		if tier >= 8 then
+			for _, tz in ipairs({ 42.0, 62.0, 82.0 }) do
+				rPart(sideTag, "KingTrussTie", Vector3.new(innerW - 2.0, 0.55, 0.65), CFrame.new(innerCX, topY + 0.9, tz), cedarWood, Enum.Material.Wood, nil, false)
+				rPart(sideTag, "KingPost", Vector3.new(0.75, 3.2, 0.75), CFrame.new(innerCX, topY + 2.6, tz), brassCol, Enum.Material.Metal, nil, false)
+			end
+		end
+
+		-- LEVEL 9+: TWO-TIER PAGODA CLERESTORY WOOD ROOF & COLUMN B WOOD TABLES (+12 Seats!)
+		if tier >= 9 then
+			local pagW = 28.0
+			local pagD = 38.0
+			local pagBaseY = topY + 4.4
+			rPart(sideTag, "PagodaClerestoryGlass", Vector3.new(pagW - 2.0, 2.8, pagD - 2.0), CFrame.new(innerCX, pagBaseY + 1.4, innerCZ), skylightCol, Enum.Material.Glass, 0.28, false)
+			for _, cx in ipairs({ -pagW * 0.46, pagW * 0.46 }) do
+				for _, czOff in ipairs({ -pagD * 0.46, pagD * 0.46 }) do
+					rPart(sideTag, "PagodaPost", Vector3.new(1.4, 3.2, 1.4), CFrame.new(innerCX + cx, pagBaseY + 1.5, innerCZ + czOff), richTimber, Enum.Material.Wood, nil, false)
+				end
+			end
+			buildPitchedWoodRoof(sideTag .. "PagodaTop_", innerCX, innerCZ, pagW + 3.0, pagD + 3.0, pagBaseY + 2.8, Enum.Material.WoodPlanks, roofShingle)
+
+			for _, tz in ipairs({ 43.0, 62.0, 81.0 }) do
+				buildWoodDiningTable(sideTag .. "Veranda_TblB_" .. tostring(tz) .. "_", side * 116.0, tz, true)
+			end
+		end
+
+		-- LEVEL 10+: Twin Illuminated Wood Restaurant Level Marquee Signs Facing City Gate!
+		if tier >= 10 then
+			local mBacking = rPart(sideTag, "MarqueeWoodFrame", Vector3.new(28.0, 4.6, 1.2), CFrame.new(innerCX, topY + 3.4, innerCZ + innerD * 0.5 + 0.8), richTimber, Enum.Material.Wood, nil, false)
+			local mFace = rPart(sideTag, "MarqueeSignFace", Vector3.new(26.4, 3.6, 0.35), CFrame.new(innerCX, topY + 3.4, innerCZ + innerD * 0.5 + 1.35), Color3.fromRGB(18, 20, 26), Enum.Material.SmoothPlastic, nil, false)
+			setArchMarqueeText(mFace, palette.BrandTitle .. " WOOD PAVILION", string.format("LV.%d OUTDOOR DINING HALL", tier), brassCol)
+			mBacking.CanQuery = false
+		end
+
+		-- LEVEL 11+: Suspended Brass & Cedar Ring Chandeliers + Connecting Cedar Bridges
+		if tier >= 11 then
+			local chRing = rPart(sideTag, "WoodPavilionChandelier", Vector3.new(0.45, 6.4, 6.4), CFrame.new(side * 106.0, 9.2, 62.0) * CFrame.Angles(0, 0, math.rad(90)), brassCol, Enum.Material.Metal, nil, false, Enum.PartType.Cylinder)
+			addGlow(chRing, 38, 1.4)
+			rPart(sideTag, "ArcadeBridgeBeam", Vector3.new(10.0, 1.2, 58.0), CFrame.new(side * 85.5, 11.4, 62.0), cedarWood, Enum.Material.Wood, nil, false)
+		end
+
+		-- LEVEL 12+: ROYAL OUTER WOOD RESTAURANT WINGS (X = +/-127..+/-157, +4 VIP Tables at Lv.12 & +2 at Lv.14!)
+		if tier >= 12 then
+			local outCX = side * 142.0
+			local outW = 30.0
+			local outD = 54.0
+			local outTag = sideTag .. "RoyalWing_"
+
+			rPart(outTag, "WoodDeck", Vector3.new(outW + 0.8, 0.40, outD), CFrame.new(outCX, 0.20, innerCZ), deckWood, Enum.Material.WoodPlanks, nil, true)
+			for _, px in ipairs({ side * 128.0, side * 156.0 }) do
+				for _, pz in ipairs({ 36.0, 53.0, 71.0, 88.0 }) do
+					rPart(outTag, "Plinth", Vector3.new(2.0, 1.8, 2.0), CFrame.new(px, 1.1, pz), Color3.fromRGB(84, 80, 74), Enum.Material.Brick, nil, false)
+					rPart(outTag, "CedarPost", Vector3.new(1.4, 10.2, 1.4), CFrame.new(px, 5.9, pz), richTimber, Enum.Material.Wood, nil, true)
+					rPart(outTag, "BrassCap", Vector3.new(1.8, 0.5, 1.8), CFrame.new(px, 10.8, pz), brassCol, Enum.Material.Metal, nil, false)
+				end
+			end
+			buildPitchedWoodRoof(outTag, outCX, innerCZ, outW, outD, 10.6, Enum.Material.WoodPlanks, roofShingle)
+
+			buildWoodDiningTable(outTag .. "VIP_44_", outCX, 44.0, true)
+			buildWoodDiningTable(outTag .. "VIP_80_", outCX, 80.0, true)
+		end
+
+		-- LEVEL 13+: Outdoor Cedar Teppanyaki Chef Counter & Gilded Gable Trim
+		if tier >= 13 then
+			local tepX = side * 142.0
+			rPart(sideTag, "TeppanyakiCounter", Vector3.new(8.6, 3.3, 2.6), CFrame.new(tepX, 2.05, 36.2), richTimber, Enum.Material.Wood, nil, true)
+			rPart(sideTag, "TeppanyakiSteelPlate", Vector3.new(6.8, 0.24, 1.9), CFrame.new(tepX, 3.82, 36.2), Color3.fromRGB(178, 184, 194), Enum.Material.Metal, nil, false)
+			rPart(sideTag, "GildedGableBar", Vector3.new(innerW * 0.90, 0.45, 0.85), CFrame.new(innerCX, topY + 2.25, innerCZ + innerD * 0.50), brassCol, Enum.Material.Metal, nil, false)
+		end
+
+		-- LEVEL 14+: Twin Golden Pagoda Roof Finials & Center Royal VIP Wood Table
+		if tier >= 14 then
+			local fin = rPart(sideTag, "GoldenPagodaFinial", Vector3.new(5.4, 1.8, 1.8), CFrame.new(innerCX, topY + 14.2, innerCZ) * CFrame.Angles(0, 0, math.rad(90)), brassCol, Enum.Material.Metal, nil, false, Enum.PartType.Cylinder)
+			addGlow(fin, 42, 1.5)
+			buildWoodDiningTable(sideTag .. "RoyalWing_VIP_62_", side * 142.0, 62.0, true)
+		end
+
+		-- LEVEL 15 (MAX): SUPREME GOLDEN-ROOF WOOD EMPIRE BEACONS & IMPERIAL CREST!
+		if tier >= 15 then
+			local goldOrb = rPart(sideTag, "SupremeWoodCrestOrb", Vector3.new(2.8, 2.8, 2.8), CFrame.new(innerCX, topY + 17.5, innerCZ), Color3.fromRGB(255, 232, 152), Enum.Material.Neon, 0.06, false, Enum.PartType.Ball)
+			addGlow(goldOrb, 64, 2.0)
+			rPart(sideTag, "SupremeVerandaGoldRidge", Vector3.new(1.5, 0.9, 62.0), CFrame.new(side * 106.0, 16.2, innerCZ), Color3.fromRGB(248, 202, 68), Enum.Material.Metal, nil, false)
+		end
+	end
+
+	roofFolder.Parent = plaza
 end
 
 return RestaurantExpansionBuilder

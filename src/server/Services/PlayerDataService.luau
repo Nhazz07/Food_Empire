@@ -52,6 +52,7 @@ export type PlayerProfile = {
 	DailyStreak: number,
 	LastDailyClaimDay: number,
 	PrestigeLevel: number,
+	TotalDishesServed: number,
 }
 
 export type ProfileChangedCallback = (player: Player, profile: PlayerProfile) -> ()
@@ -132,6 +133,7 @@ local function createDefaultProfile(): PlayerProfile
 		DailyStreak = 0,
 		LastDailyClaimDay = 0,
 		PrestigeLevel = 0,
+		TotalDishesServed = 0,
 	}
 end
 
@@ -277,8 +279,23 @@ end
 
 function PlayerDataService.SetRestaurantLevel(player: Player, level: number): ()
 	local profile = PlayerDataService.GetProfile(player)
-	profile.RestaurantLevel = math.clamp(math.floor(level), 1, 10)
+	profile.RestaurantLevel = math.clamp(math.floor(level), 1, 15)
 	notifyChanged(player)
+end
+
+function PlayerDataService.AddDishesServed(player: Player, count: number): number
+	local profile = PlayerDataService.GetProfile(player)
+	local add = math.max(0, math.floor(count))
+	if add > 0 then
+		profile.TotalDishesServed = (profile.TotalDishesServed or 0) + add
+		notifyChanged(player)
+	end
+	return profile.TotalDishesServed or 0
+end
+
+function PlayerDataService.GetDishesServed(player: Player): number
+	local profile = PlayerDataService.GetProfile(player)
+	return profile.TotalDishesServed or 0
 end
 
 function PlayerDataService.SetDefenseLevel(player: Player, level: number): ()
@@ -660,6 +677,7 @@ function PlayerDataService.IncrementPrestige(player: Player): number
 	local profile = PlayerDataService.GetProfile(player)
 	profile.PrestigeLevel = (profile.PrestigeLevel or 0) + 1
 	profile.RestaurantLevel = 1
+	profile.TotalDishesServed = 0
 	profile.Coins = 500
 	notifyChanged(player)
 	return profile.PrestigeLevel
@@ -725,7 +743,7 @@ local function loadPlayer(player: Player): ()
 			if typeof(saved.EXP) == "number" then profile.EXP = saved.EXP end
 			if typeof(saved.Level) == "number" then profile.Level = math.max(1, saved.Level) end
 			if typeof(saved.Reputation) == "number" then profile.Reputation = saved.Reputation end
-			if typeof(saved.RestaurantLevel) == "number" then profile.RestaurantLevel = math.clamp(saved.RestaurantLevel, 1, 10) end
+			if typeof(saved.RestaurantLevel) == "number" then profile.RestaurantLevel = math.clamp(saved.RestaurantLevel, 1, 15) end
 			if typeof(saved.DefenseLevel) == "number" then profile.DefenseLevel = math.clamp(saved.DefenseLevel, 1, 3) end
 			if typeof(saved.CrewCount) == "number" then profile.CrewCount = math.max(0, saved.CrewCount) end
 			if typeof(saved.RaiderCount) == "number" then profile.RaiderCount = math.clamp(saved.RaiderCount, 0, 2) end
@@ -843,7 +861,8 @@ local function loadPlayer(player: Player): ()
 			if typeof(saved.DailyStreak) == "number" then profile.DailyStreak = math.clamp(math.floor(saved.DailyStreak), 0, 7) end
 			if typeof(saved.LastDailyClaimDay) == "number" then profile.LastDailyClaimDay = math.floor(saved.LastDailyClaimDay) end
 			if typeof(saved.PrestigeLevel) == "number" then profile.PrestigeLevel = math.max(0, math.floor(saved.PrestigeLevel)) end
-			if typeof(saved.WaiterCount) == "number" then profile.WaiterCount = math.clamp(math.floor(saved.WaiterCount), 0, 3) end
+			if typeof(saved.TotalDishesServed) == "number" then profile.TotalDishesServed = math.max(0, math.floor(saved.TotalDishesServed)) end
+			if typeof(saved.WaiterCount) == "number" then profile.WaiterCount = math.clamp(math.floor(saved.WaiterCount), 0, 5) end
 			if typeof(saved.CourierCount) == "number" then profile.CourierCount = math.clamp(math.floor(saved.CourierCount), 0, 2) end
 			if typeof(saved.OwnsCentralParkBranch) == "boolean" then profile.OwnsCentralParkBranch = saved.OwnsCentralParkBranch end
 			if typeof(saved.CentralParkBranchStaffed) == "boolean" then profile.CentralParkBranchStaffed = saved.CentralParkBranchStaffed end
@@ -928,6 +947,7 @@ local function savePlayer(player: Player): ()
 		DailyStreak = profile.DailyStreak,
 		LastDailyClaimDay = profile.LastDailyClaimDay,
 		PrestigeLevel = profile.PrestigeLevel,
+		TotalDishesServed = profile.TotalDishesServed,
 		HasKevlarVest = profile.HasKevlarVest,
 		Armor = profile.Armor,
 		OwnedWeapons = profile.OwnedWeapons,

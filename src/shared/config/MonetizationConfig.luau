@@ -176,6 +176,8 @@ local DualRobuxOptions: { [string]: DualRobuxOptionSpec } = {
 	UpgradeHQ_Mid = { Key = "UpgradeHQ_Mid", DisplayName = "Restaurant HQ Upgrade (Lv.4-5)", RobuxPrice = 79, AssetId = 0 },
 	UpgradeHQ_High = { Key = "UpgradeHQ_High", DisplayName = "Restaurant HQ Upgrade (Lv.6-8)", RobuxPrice = 119, AssetId = 0 },
 	UpgradeHQ_Max = { Key = "UpgradeHQ_Max", DisplayName = "Restaurant HQ Upgrade (Lv.9-10)", RobuxPrice = 169, AssetId = 0 },
+	UpgradeHQ_Imperial = { Key = "UpgradeHQ_Imperial", DisplayName = "Restaurant HQ Upgrade (Lv.11-13)", RobuxPrice = 219, AssetId = 0 },
+	UpgradeHQ_Supreme = { Key = "UpgradeHQ_Supreme", DisplayName = "Restaurant HQ Upgrade (Lv.14-15)", RobuxPrice = 279, AssetId = 0 },
 	UnlockWarehouse = { Key = "UnlockWarehouse", DisplayName = "Unlock Ingredient Warehouse", RobuxPrice = 39, AssetId = 0 },
 	UpgradeWarehouse = { Key = "UpgradeWarehouse", DisplayName = "Upgrade Ingredient Warehouse", RobuxPrice = 49, AssetId = 0 },
 	BuyDualStove = { Key = "BuyDualStove", DisplayName = "Dual-Stove Kitchen Line", RobuxPrice = 59, AssetId = 0 },
@@ -194,8 +196,12 @@ local function getHQUpgradeRobuxPrice(nextLevel: number): number
 		return DualRobuxOptions.UpgradeHQ_Mid.RobuxPrice
 	elseif nextLevel <= 8 then
 		return DualRobuxOptions.UpgradeHQ_High.RobuxPrice
-	else
+	elseif nextLevel <= 10 then
 		return DualRobuxOptions.UpgradeHQ_Max.RobuxPrice
+	elseif nextLevel <= 13 then
+		return DualRobuxOptions.UpgradeHQ_Imperial.RobuxPrice
+	else
+		return DualRobuxOptions.UpgradeHQ_Supreme.RobuxPrice
 	end
 end
 

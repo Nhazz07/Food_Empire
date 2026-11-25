@@ -21,6 +21,8 @@ export type RestaurantTierSpec = {
 	PayoutMultiplier: number,
 	CookSpeedMultiplier: number,
 	MaxCrew: number,
+	RequiredPlayerLevel: number,
+	RequiredDishesServed: number,
 }
 
 export type RecipeConfigType = {
@@ -211,20 +213,25 @@ local RecipeConfig: RecipeConfigType = {
 		"GrilledFish",
 	},
 	Recipes = Recipes,
-	-- Harder, rewarding progression: 5x Gold HQ upgrade costs & balanced PayoutMultiplier curve!
+	-- Long-term 15-Level Food Empire progression with fair Food Sold & Player Level requirements!
 	RestaurantTiers = {
-		[1] = { Level = 1, UpgradeCost = 0,     PayoutMultiplier = 1.00, CookSpeedMultiplier = 1.00, MaxCrew = 2 },
-		[2] = { Level = 2, UpgradeCost = 2500,  PayoutMultiplier = 1.12, CookSpeedMultiplier = 1.15, MaxCrew = 3 },
-		[3] = { Level = 3, UpgradeCost = 5000,  PayoutMultiplier = 1.25, CookSpeedMultiplier = 1.30, MaxCrew = 4 },
-		[4] = { Level = 4, UpgradeCost = 8250,  PayoutMultiplier = 1.40, CookSpeedMultiplier = 1.45, MaxCrew = 5 },
-		[5] = { Level = 5, UpgradeCost = 12250, PayoutMultiplier = 1.55, CookSpeedMultiplier = 1.60, MaxCrew = 6 },
-		[6] = { Level = 6, UpgradeCost = 17000, PayoutMultiplier = 1.72, CookSpeedMultiplier = 1.78, MaxCrew = 6 },
-		[7] = { Level = 7, UpgradeCost = 22500, PayoutMultiplier = 1.90, CookSpeedMultiplier = 1.96, MaxCrew = 6 },
-		[8] = { Level = 8, UpgradeCost = 29000, PayoutMultiplier = 2.10, CookSpeedMultiplier = 2.15, MaxCrew = 6 },
-		[9] = { Level = 9, UpgradeCost = 36500, PayoutMultiplier = 2.35, CookSpeedMultiplier = 2.35, MaxCrew = 6 },
-		[10] = { Level = 10, UpgradeCost = 46000, PayoutMultiplier = 2.65, CookSpeedMultiplier = 2.60, MaxCrew = 6 },
+		[1]  = { Level = 1,  UpgradeCost = 0,      PayoutMultiplier = 1.00, CookSpeedMultiplier = 1.00, MaxCrew = 2,  RequiredPlayerLevel = 1,  RequiredDishesServed = 0 },
+		[2]  = { Level = 2,  UpgradeCost = 2500,   PayoutMultiplier = 1.12, CookSpeedMultiplier = 1.15, MaxCrew = 3,  RequiredPlayerLevel = 2,  RequiredDishesServed = 30 },
+		[3]  = { Level = 3,  UpgradeCost = 5000,   PayoutMultiplier = 1.25, CookSpeedMultiplier = 1.30, MaxCrew = 4,  RequiredPlayerLevel = 3,  RequiredDishesServed = 75 },
+		[4]  = { Level = 4,  UpgradeCost = 8250,   PayoutMultiplier = 1.40, CookSpeedMultiplier = 1.45, MaxCrew = 5,  RequiredPlayerLevel = 4,  RequiredDishesServed = 140 },
+		[5]  = { Level = 5,  UpgradeCost = 12250,  PayoutMultiplier = 1.55, CookSpeedMultiplier = 1.60, MaxCrew = 6,  RequiredPlayerLevel = 5,  RequiredDishesServed = 220 },
+		[6]  = { Level = 6,  UpgradeCost = 17000,  PayoutMultiplier = 1.72, CookSpeedMultiplier = 1.78, MaxCrew = 6,  RequiredPlayerLevel = 6,  RequiredDishesServed = 320 },
+		[7]  = { Level = 7,  UpgradeCost = 22500,  PayoutMultiplier = 1.90, CookSpeedMultiplier = 1.96, MaxCrew = 6,  RequiredPlayerLevel = 7,  RequiredDishesServed = 440 },
+		[8]  = { Level = 8,  UpgradeCost = 29000,  PayoutMultiplier = 2.10, CookSpeedMultiplier = 2.15, MaxCrew = 7,  RequiredPlayerLevel = 8,  RequiredDishesServed = 580 },
+		[9]  = { Level = 9,  UpgradeCost = 36500,  PayoutMultiplier = 2.35, CookSpeedMultiplier = 2.35, MaxCrew = 7,  RequiredPlayerLevel = 9,  RequiredDishesServed = 740 },
+		[10] = { Level = 10, UpgradeCost = 46000,  PayoutMultiplier = 2.65, CookSpeedMultiplier = 2.60, MaxCrew = 8,  RequiredPlayerLevel = 10, RequiredDishesServed = 920 },
+		[11] = { Level = 11, UpgradeCost = 58000,  PayoutMultiplier = 2.95, CookSpeedMultiplier = 2.85, MaxCrew = 8,  RequiredPlayerLevel = 12, RequiredDishesServed = 1120 },
+		[12] = { Level = 12, UpgradeCost = 72000,  PayoutMultiplier = 3.28, CookSpeedMultiplier = 3.10, MaxCrew = 9,  RequiredPlayerLevel = 14, RequiredDishesServed = 1350 },
+		[13] = { Level = 13, UpgradeCost = 88000,  PayoutMultiplier = 3.65, CookSpeedMultiplier = 3.38, MaxCrew = 9,  RequiredPlayerLevel = 16, RequiredDishesServed = 1600 },
+		[14] = { Level = 14, UpgradeCost = 108000, PayoutMultiplier = 4.05, CookSpeedMultiplier = 3.68, MaxCrew = 10, RequiredPlayerLevel = 18, RequiredDishesServed = 1900 },
+		[15] = { Level = 15, UpgradeCost = 135000, PayoutMultiplier = 4.50, CookSpeedMultiplier = 4.00, MaxCrew = 10, RequiredPlayerLevel = 20, RequiredDishesServed = 2250 },
 	},
-	MaxRestaurantLevel = 10,
+	MaxRestaurantLevel = 15,
 	CrewHireBaseCost = 1300,
 	CrewHireCostStep = 1000,
 }
