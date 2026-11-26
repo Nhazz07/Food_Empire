@@ -1091,6 +1091,14 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 				local e = if typeof(expAttr) == "number" then expAttr else 95
 				local r = if typeof(repAttr) == "number" then repAttr else 50
 				PlayerDataService.AddRewards(player, g, e, r)
+			elseif CollectionService:HasTag(hitModel, "NightRaidMafiaUnit") then
+				local goldAttr = hitModel:GetAttribute("BountyGold")
+				local expAttr = hitModel:GetAttribute("BountyExp")
+				local repAttr = hitModel:GetAttribute("BountyRep")
+				local g = if typeof(goldAttr) == "number" then goldAttr else 85
+				local e = if typeof(expAttr) == "number" then expAttr else 32
+				local r = if typeof(repAttr) == "number" then repAttr else 15
+				PlayerDataService.AddRewards(player, g, e, r)
 			elseif isMafiaBoss then
 				PlayerDataService.AddRewards(player, 220, 80, 45)
 			elseif isMafia then

@@ -408,6 +408,45 @@ function WarehouseService.ConsumeIngredients(player: Player, required: { [string
 	return true
 end
 
+-- Server-authoritative theft of actually stored warehouse ingredients (used by Nighttime Mafia Raids).
+-- Strictly steals only ingredients with positive stock, never produces negative quantities,
+-- never steals nonexistent items, and never touches Robux purchases or warehouse unlock levels.
+function WarehouseService.StealRandomStoredIngredients(player: Player, maxQuantity: number): ({ [string]: number }, number)
+	local limit = math.max(0, math.floor(maxQuantity))
+	local stolen: { [string]: number } = {}
+	if limit <= 0 then
+		return stolen, 0
+	end
+
+	local state = ensureState(player)
+	local totalStolen = 0
+
+	for _ = 1, limit do
+		local availableKeys: { string } = {}
+		for ingredient, qty in pairs(state.Stock) do
+			if typeof(qty) == "number" and qty > 0 and WarehouseConfig.IngredientToCategory[ingredient] ~= nil then
+				table.insert(availableKeys, ingredient)
+			end
+		end
+		if #availableKeys == 0 then
+			break
+		end
+		local chosen = availableKeys[math.random(1, #availableKeys)]
+		local current = state.Stock[chosen] or 0
+		if current > 0 then
+			state.Stock[chosen] = math.max(0, current - 1)
+			stolen[chosen] = (stolen[chosen] or 0) + 1
+			totalStolen += 1
+		end
+	end
+
+	if totalStolen > 0 then
+		notifyChanged(player)
+	end
+
+	return stolen, totalStolen
+end
+
 function WarehouseService.TryUpgradeWarehouse(player: Player, category: WarehouseCategory, bypassGold: boolean?): (boolean, string)
 	local state = ensureState(player)
 	local currentLevel = state.Levels[category] or 0

@@ -22,6 +22,7 @@ local FishingController = require(controllersFolder:WaitForChild("FishingControl
 local WeaponController = require(controllersFolder:WaitForChild("WeaponController"))
 local HotbarController = require(controllersFolder:WaitForChild("HotbarController"))
 local NightController = require(controllersFolder:WaitForChild("NightController"))
+local RaidWarningController = require(controllersFolder:WaitForChild("RaidWarningController"))
 local CinematicRevealController = require(controllersFolder:WaitForChild("CinematicRevealController"))
 local SpinWheelController = require(controllersFolder:WaitForChild("SpinWheelController"))
 
@@ -45,6 +46,7 @@ local function applyState(state: { [string]: any }): ()
 	BaseSelectController.Update(state)
 	UrbanNPCController.Update(state)
 	SpinWheelController.Update(state)
+	RaidWarningController.Update(state)
 end
 
 local function sendAction(action: string, arg: any?): ()
@@ -128,6 +130,7 @@ FishingController.Init(hudGui)
 NightController.Init(hudGui, function()
 	sendAction("SkipDayNight", nil)
 end)
+RaidWarningController.Init(hudGui)
 WaypointController.Start()
 AmbientEffectsController.Start()
 CentralNPCController.Start()

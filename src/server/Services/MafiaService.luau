@@ -14,6 +14,7 @@ local PlayerDataService = require("./PlayerDataService")
 local ShipmentService = require("./ShipmentService")
 local BlackMarketService = require("./BlackMarketService")
 local CombatLockService = require("./CombatLockService")
+local NightMafiaRaidService = require("./NightMafiaRaidService")
 
 type MafiaAgent = {
 	Model: Model,
@@ -396,7 +397,10 @@ function MafiaService.Start(): ()
 				shakedownTimer = 0
 				local eligiblePlayers: { Player } = {}
 				for _, p in ipairs(Players:GetPlayers()) do
-					if BaseService.GetPlayerBaseSlot(p) and PlayerDataService.GetProfile(p).Coins >= 60 then
+					if BaseService.GetPlayerBaseSlot(p)
+						and not NightMafiaRaidService.IsRaidActive(p)
+						and PlayerDataService.GetProfile(p).Coins >= 60
+					then
 						table.insert(eligiblePlayers, p)
 					end
 				end

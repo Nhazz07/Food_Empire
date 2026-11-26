@@ -53,6 +53,7 @@ local MercenaryMafiaService = require("./MercenaryMafiaService")
 local SyndicateFamilyService = require("./SyndicateFamilyService")
 local PrestigeVaultService = require("./PrestigeVaultService")
 local CombatLockService = require("./CombatLockService")
+local NightMafiaRaidService = require("./NightMafiaRaidService")
 
 local COLLISION_GROUP_PLAYERS = "FoodEmpirePlayers"
 local COLLISION_GROUP_NPCS = "FoodEmpireRestaurantNPCs"
@@ -2335,6 +2336,7 @@ local function buildClientPayload(player: Player): { [string]: any }
 		BaseSlots = BaseService.GetSlotAvailability(),
 		WaitingCustomer = waitingOrders[player],
 		SeatedPatience = buildSeatedPatienceSnapshot(player),
+		NightRaid = NightMafiaRaidService.GetSnapshot(player),
 		Receipts = receiptHistory[player] or {},
 		LatestReceipt = if receiptHistory[player] then receiptHistory[player][1] else nil,
 		Shipments = ShipmentService.GetSnapshot(),
