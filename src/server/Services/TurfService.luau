@@ -484,14 +484,24 @@ local function populateBlockGarrison(blockId: string): ()
 		end
 	end
 
-	-- Every Mafia-controlled Urban Turf Block spawns EXACTLY 4 Rivals (4 Ninja Assassin Mafia or 4 Samurai Mafia; HQ blocks = 3 + 1 Boss = 4)!
-	local targetNormal = if not isMafia then 2 elseif spec.IsHQ then 3 else 4
+	-- Major Urban Turf Blocks spawn 4 Rivals (HQ = 3 + 1 Boss); Secondary Mini Outposts spawn 2 Rivals (1 PlayerGuard when owned)!
+	local isMini = spec.IsMiniOutpost == true
+	local targetNormal = if not isMafia then (if isMini then 1 else 2)
+		elseif isMini then 2
+		elseif spec.IsHQ then 3
+		else 4
 	local kind: "Mafia" | "PlayerGuard" = if isMafia then "Mafia" else "PlayerGuard"
 
 	while existingNormal < targetNormal do
 		existingNormal += 1
-		local offset = PLAZA_GUARD_OFFSETS[((existingNormal - 1) % #PLAZA_GUARD_OFFSETS) + 1]
-		local sp = spec.PlazaPos + offset
+		local sp: Vector3
+		if isMini and #pts >= 3 then
+			-- Spawn directly on curated open-courtyard patrol points so guards never clip outpost walls!
+			sp = pts[math.min(#pts, existingNormal + 1)]
+		else
+			local offset = PLAZA_GUARD_OFFSETS[((existingNormal - 1) % #PLAZA_GUARD_OFFSETS) + 1]
+			sp = spec.PlazaPos + offset
+		end
 		table.insert(activeAgents, buildTurfAgentModel(kind, st.Owner, blockId, blockId, sp, false, pts))
 	end
 
@@ -1273,6 +1283,7 @@ function TurfService.GetSnapshotForPlayer(player: Player): { [string]: any }
 				UnderAttack = isUnderAttack,
 				DefendersAlive = st.DefendersAlive,
 				IsHQ = st.Spec.IsHQ,
+				IsMiniOutpost = st.Spec.IsMiniOutpost == true,
 				PlazaX = st.Spec.PlazaPos.X,
 				PlazaZ = st.Spec.PlazaPos.Z,
 				CaptureRadius = st.Spec.CaptureRadius,

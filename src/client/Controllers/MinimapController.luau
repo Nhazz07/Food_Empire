@@ -1399,17 +1399,19 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	-- STATIC & LIVE-SYNCED TACTICAL MARKERS (INSIDE OverlayWorld)
 	-- =========================================================================
 
-	-- 28 Urban Territory Block Tiles (exact TurfConfig PlazaPos + live faction sync)
+	-- 52 Urban Territory Block Tiles & Mini Outpost Diamonds (exact TurfConfig PlazaPos + live faction sync)
 	for _, blockId in ipairs(TurfConfig.BlockOrder) do
 		local spec = TurfConfig.Blocks[blockId]
 		if spec then
 			local initCol = TurfConfig.ResolveFactionColor(spec.InitialOwner)
-			local sz = if spec.IsHQ then 9 else 7
+			local isMini = spec.IsMiniOutpost == true
+			local sz = if spec.IsHQ then 9 elseif isMini then 5 else 7
 			local tile = Instance.new("TextButton")
 			tile.Name = "TurfTile_" .. blockId
 			tile.AnchorPoint = Vector2.new(0.5, 0.5)
 			tile.Position = worldToScale(spec.PlazaPos.X, spec.PlazaPos.Z)
 			tile.Size = UDim2.fromOffset(sz, sz)
+			tile.Rotation = if isMini then 45 else 0
 			tile.BackgroundColor3 = initCol
 			tile.BorderSizePixel = 0
 			tile.AutoButtonColor = false
@@ -1417,14 +1419,15 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 			tile.Text = if spec.IsHQ then "★" else ""
 			tile.TextSize = 7
 			tile.TextColor3 = Color3.new(1, 1, 1)
-			tile.ZIndex = 3
+			tile.ZIndex = if isMini then 4 else 3
 			tile.Parent = oWorld
-			makeCorner(tile, 2)
+			makeCorner(tile, if isMini then 1 else 2)
 
-			local st = makeStroke(tile, Color3.fromRGB(14, 18, 26), 1.0, Enum.ApplyStrokeMode.Border)
+			local st = makeStroke(tile, Color3.fromRGB(14, 18, 26), if isMini then 0.9 else 1.0, Enum.ApplyStrokeMode.Border)
 
 			tile.MouseEnter:Connect(function()
-				showHoverTip(spec.DisplayName .. (if spec.IsHQ then " [HQ]" else ""))
+				local suffix = if spec.IsHQ then " [HQ]" elseif isMini then " [OUTPOST]" else ""
+				showHoverTip(spec.DisplayName .. suffix)
 			end)
 			tile.MouseLeave:Connect(function()
 				showHoverTip(nil)

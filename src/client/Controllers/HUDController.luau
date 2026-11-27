@@ -1359,7 +1359,7 @@ function HUDController.Init(
 	tBlocks.Size = UDim2.new(0.58, -10, 0, 16)
 	tBlocks.BackgroundTransparency = 1
 	tBlocks.Font = FONT_TITLE
-	tBlocks.Text = "0 / 28 BLOCKS"
+	tBlocks.Text = "0 / 52 BLOCKS"
 	tBlocks.TextSize = 11
 	tBlocks.TextXAlignment = Enum.TextXAlignment.Left
 	tBlocks.TextColor3 = C_BONE
@@ -1400,7 +1400,7 @@ function HUDController.Init(
 	tAlert.Size = UDim2.new(1, -20, 0, 14)
 	tAlert.BackgroundTransparency = 1
 	tAlert.Font = FONT_REG
-	tAlert.Text = "Engage Mafia across 28 urban blocks"
+	tAlert.Text = "Engage Mafia across 52 urban blocks & outposts"
 	tAlert.TextSize = 9
 	tAlert.TextXAlignment = Enum.TextXAlignment.Left
 	tAlert.TextColor3 = C_ASH
@@ -1891,7 +1891,7 @@ function HUDController.Update(state: { [string]: any }): ()
 		elseif restLv < 2 then
 			objectiveLabel.Text = "Upgrade Restaurant HQ [U], escort Convoys & complete Contracts!"
 		else
-			objectiveLabel.Text = "Conquer all 28 Turf Blocks, finish Contracts [U] & reign as Food Emperor!"
+			objectiveLabel.Text = "Conquer all 52 Turf Blocks & Outposts, finish Contracts [U] & reign as Food Emperor!"
 		end
 	end
 
@@ -1947,12 +1947,12 @@ function HUDController.Update(state: { [string]: any }): ()
 		end
 	end
 
-	-- Top-Right Urban Turf Control Card (28 Blocks + Progress Bar)
+	-- Top-Right Urban Turf Control Card (52 Blocks & Outposts + Progress Bar)
 	local turf = state.Turf
 	if typeof(turf) == "table" then
 		latestTurfState = turf
 		local owned = tonumber(turf.OwnedCount) or 0
-		local total = tonumber(turf.TotalBlocks) or 28
+		local total = tonumber(turf.TotalBlocks) or 52
 		local inc = tonumber(turf.IncomePerCycle) or 0
 		local mono = tonumber(turf.Monopolies) or 0
 		if turfBlocksLabel then
@@ -1978,10 +1978,10 @@ function HUDController.Update(state: { [string]: any }): ()
 				turfAlertLabel.Text = "RAID ACTIVE: " .. string.upper(underAttackName)
 				turfAlertLabel.TextColor3 = Color3.fromRGB(232, 102, 108)
 			elseif owned == 0 then
-				turfAlertLabel.Text = "Engage Mafia across 28 urban blocks"
+				turfAlertLabel.Text = "Engage Mafia across 52 urban blocks & outposts"
 				turfAlertLabel.TextColor3 = C_ASH
 			else
-				turfAlertLabel.Text = "Hold all 7 in a quadrant for +50%"
+				turfAlertLabel.Text = "Hold all 13 in a quadrant for +50%"
 				turfAlertLabel.TextColor3 = Color3.fromRGB(154, 212, 172)
 			end
 		end
