@@ -7,6 +7,7 @@ export type AmmoTypeId = "Pistol9mm" | "Shotgun12G" | "SMG45" | "Rifle556" | "Sn
 export type WeaponCategory = "Pistol" | "Shotgun" | "SMG" | "AssaultRifle" | "Sniper" | "Melee"
 export type ReloadType = "Magazine" | "ShellByShell"
 export type WeaponRarity = "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary" | "Mythic"
+export type MarketTier = "Market" | "BlackMarket"
 
 export type AmmoPackOption = {
 	Quantity: number,
@@ -30,6 +31,7 @@ export type WeaponSpec = {
 	Icon: string,
 	Category: WeaponCategory,
 	Rarity: WeaponRarity,
+	MarketTier: MarketTier?, -- "Market" (regular city market) | "BlackMarket" (underground contraband)
 	Price: number,
 	RobuxItemId: string?, -- Non-nil for optional Robux GamePass weapons
 	RobuxPrice: number?,
@@ -683,6 +685,29 @@ function WeaponConfig.GetCompatibleWeaponsForAmmo(ammoId: AmmoTypeId): { string 
 		end
 	end
 	return names
+end
+
+-- Regular City Market vs Underground Black Market classification (single source of truth!)
+local REGULAR_MARKET_WEAPONS: { [string]: boolean } = {
+	MafiaKnife = true,
+	StreetPistol = true,
+	PepperShotgun = true,
+	SilencedDeagle = true,
+	TacticalSMG = true,
+}
+
+for wid, spec in pairs(WeaponConfig.WEAPONS) do
+	if spec.MarketTier == nil then
+		spec.MarketTier = if REGULAR_MARKET_WEAPONS[wid] then "Market" else "BlackMarket"
+	end
+end
+
+function WeaponConfig.GetMarketTier(weaponId: string): MarketTier
+	local w = WeaponConfig.WEAPONS[weaponId]
+	if w and w.MarketTier then
+		return w.MarketTier
+	end
+	return if REGULAR_MARKET_WEAPONS[weaponId] then "Market" else "BlackMarket"
 end
 
 return WeaponConfig

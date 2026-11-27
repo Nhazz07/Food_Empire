@@ -157,6 +157,8 @@ local activeRaidsByPlayer: { [Player]: ActiveRaid } = {}
 local pendingRaidByPlayer: { [Player]: thread } = {}
 local warningStateByPlayer: { [Player]: RaidWarningPayload } = {}
 local lastAlertPhaseKeyByPlayer: { [Player]: string } = {}
+local resolvedRaidIds: { [string]: boolean } = {}
+local lastResultByPlayer: { [Player]: RaidResultSummary } = {}
 local raidAlertRemote: RemoteEvent? = nil
 
 local warningListeners: { (payload: RaidWarningPayload) -> () } = {}
@@ -548,6 +550,12 @@ local function finalizeRaid(raid: ActiveRaid, summary: RaidResultSummary, setCoo
 	end
 
 	destroyRemainingRaidUnits(raid)
+	lastResultByPlayer[raid.Owner] = summary
+
+	local stolenText = if summary.TotalIngredientsStolen > 0
+		then formatStolenIngredients(summary.StolenIngredients)
+		else ""
+	local cfg = getCfg()
 
 	fireOwnerRaidAlert(raid.Owner, {
 		Phase = "Ended",
@@ -555,7 +563,18 @@ local function finalizeRaid(raid: ActiveRaid, summary: RaidResultSummary, setCoo
 		GroupId = raid.GroupSpec.Id,
 		GroupName = raid.GroupSpec.DisplayName,
 		BaseSlot = raid.BaseSlot,
+		RestaurantName = getAffectedRestaurantName(raid.Owner, raid.BaseSlot),
 		Outcome = summary.Outcome,
+		PenaltyResource = summary.PenaltyResource,
+		CoinsLost = summary.CoinsLost,
+		ReputationLost = summary.ReputationLost,
+		StolenIngredients = summary.StolenIngredients,
+		TotalIngredientsStolen = summary.TotalIngredientsStolen,
+		StolenText = stolenText,
+		RewardGold = summary.RewardGold,
+		RewardExp = summary.RewardExp,
+		RewardRep = summary.RewardRep,
+		DisplayDuration = cfg.OutcomeBannerDurationSeconds,
 	})
 
 	for _, cb in ipairs(endedListeners) do
@@ -564,10 +583,11 @@ local function finalizeRaid(raid: ActiveRaid, summary: RaidResultSummary, setCoo
 end
 
 local function resolveRaidDefeated(raid: ActiveRaid): ()
-	if raid.Resolved then
+	if raid.Resolved or resolvedRaidIds[raid.RaidId] then
 		return
 	end
 	raid.Resolved = true
+	resolvedRaidIds[raid.RaidId] = true
 
 	local g = raid.GroupSpec
 	local owner = raid.Owner
@@ -618,10 +638,11 @@ local function resolveRaidDefeated(raid: ActiveRaid): ()
 end
 
 local function resolveRaidSucceeded(raid: ActiveRaid): ()
-	if raid.Resolved then
+	if raid.Resolved or resolvedRaidIds[raid.RaidId] then
 		return
 	end
 	raid.Resolved = true
+	resolvedRaidIds[raid.RaidId] = true
 
 	local cfg = getCfg()
 	local g = raid.GroupSpec
@@ -645,9 +666,14 @@ local function resolveRaidSucceeded(raid: ActiveRaid): ()
 			repLost = PlayerDataService.DeductReputation(owner, rawLoss)
 		end
 
-		-- Configurable theft of actually stored warehouse ingredients (never negative, never Robux items!)
+		-- Configurable theft of actually stored unlocked warehouse ingredients (never negative, never Robux items!)
 		if cfg.EnableWarehouseTheft and g.MaxIngredientsToSteal > 0 then
-			stolenMap, totalStolen = WarehouseService.StealRandomStoredIngredients(owner, g.MaxIngredientsToSteal)
+			stolenMap, totalStolen = WarehouseService.StealRandomStoredIngredients(
+				owner,
+				g.MaxIngredientsToSteal,
+				cfg.WarehouseTheftPercent,
+				cfg.WarehouseTheftOnlyUnlocked
+			)
 		end
 
 		local penaltyText = if penaltyResource == "Money"
@@ -694,10 +720,11 @@ local function resolveRaidSucceeded(raid: ActiveRaid): ()
 end
 
 local function resolveRaidRetreated(raid: ActiveRaid, outcome: "RetreatedDawn" | "Cancelled", reasonText: string?): ()
-	if raid.Resolved then
+	if raid.Resolved or resolvedRaidIds[raid.RaidId] then
 		return
 	end
 	raid.Resolved = true
+	resolvedRaidIds[raid.RaidId] = true
 
 	local g = raid.GroupSpec
 	local owner = raid.Owner
@@ -1478,12 +1505,18 @@ local function setupStudioTestBridge(): ()
 			else Players:GetPlayers()[1]
 
 		if action == "GetState" then
+			local prof = if plr then PlayerDataService.GetProfile(plr) else nil
 			return {
 				IsNight = DayNightService.IsNight(),
 				NightCycleId = nightCycleId,
 				Snapshot = if plr then NightMafiaRaidService.GetSnapshot(plr) else nil,
-				Coins = if plr then PlayerDataService.GetProfile(plr).Coins else 0,
-				Reputation = if plr then PlayerDataService.GetProfile(plr).Reputation else 0,
+				LastResult = if plr then lastResultByPlayer[plr] else nil,
+				Coins = if prof then prof.Coins else 0,
+				Reputation = if prof then prof.Reputation else 0,
+				HasDualStove = if prof then prof.HasDualStove else false,
+				HasVIPBooths = if prof then prof.HasVIPBooths else false,
+				OwnsMotorbike = if prof then prof.OwnsMotorbike else false,
+				RestaurantLevel = if prof then prof.RestaurantLevel else 1,
 				Warehouse = if plr then WarehouseService.GetInventorySnapshot(plr) else nil,
 			}
 		elseif action == "SetNight" then
@@ -1511,7 +1544,25 @@ local function setupStudioTestBridge(): ()
 			end
 			raid.StealProgress = 100
 			resolveRaidSucceeded(raid)
-			return { Ok = true, Coins = PlayerDataService.GetProfile(plr).Coins, Reputation = PlayerDataService.GetProfile(plr).Reputation, Warehouse = WarehouseService.GetInventorySnapshot(plr) }
+			-- Attempt a second resolution immediately to guarantee single-resolution lock!
+			resolveRaidSucceeded(raid)
+			resolveRaidDefeated(raid)
+			return {
+				Ok = true,
+				Result = lastResultByPlayer[plr],
+				Coins = PlayerDataService.GetProfile(plr).Coins,
+				Reputation = PlayerDataService.GetProfile(plr).Reputation,
+				Warehouse = WarehouseService.GetInventorySnapshot(plr),
+			}
+		elseif action == "ClearWarehouseStock" and plr then
+			WarehouseService.ClearAllStockForTest(plr)
+			return { Warehouse = WarehouseService.GetInventorySnapshot(plr) }
+		elseif action == "SeedPermanentUpgradesForTest" and plr then
+			local prof = PlayerDataService.GetProfile(plr)
+			prof.HasDualStove = true
+			prof.HasVIPBooths = true
+			prof.OwnsMotorbike = true
+			return { HasDualStove = prof.HasDualStove, HasVIPBooths = prof.HasVIPBooths, OwnsMotorbike = prof.OwnsMotorbike }
 		elseif action == "KillAllRaiders" and plr then
 			local raid = activeRaidsByPlayer[plr]
 			if not raid or raid.Resolved then

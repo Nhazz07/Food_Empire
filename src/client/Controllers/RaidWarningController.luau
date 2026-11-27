@@ -44,6 +44,16 @@ local detailLabel: TextLabel? = nil
 local progressFill: Frame? = nil
 local edgeGlowBar: Frame? = nil
 
+-- Stage 7: Raid Outcome & Warehouse Theft Summary Card References
+local outcomeFrame: Frame? = nil
+local outcomeStroke: UIStroke? = nil
+local outcomeTopBar: Frame? = nil
+local outcomeTitleLabel: TextLabel? = nil
+local outcomePrimaryBadge: TextLabel? = nil
+local outcomeSecondaryBadge: TextLabel? = nil
+local outcomeFooterLabel: TextLabel? = nil
+local outcomeDismissToken = 0
+
 local alarmSound: Sound? = nil
 local fallbackSound: Sound? = nil
 local primaryAudioVerified = false
@@ -186,6 +196,124 @@ local function startAlarmAudio(raidId: string): ()
 	end
 end
 
+local function hideOutcomeCard(): ()
+	outcomeDismissToken += 1
+	if outcomeFrame then
+		outcomeFrame.Visible = false
+	end
+end
+
+local function showOutcomeCard(payload: { [string]: any }): ()
+	if not outcomeFrame then
+		return
+	end
+	local outcome = tostring(payload.Outcome or "")
+	if outcome ~= "Succeeded" and outcome ~= "Defeated" and outcome ~= "RetreatedDawn" then
+		return
+	end
+
+	local groupName = string.upper(tostring(payload.GroupName or "MAFIA"))
+	local displaySec = if typeof(payload.DisplayDuration) == "number"
+		then math.clamp(payload.DisplayDuration, 3, 15)
+		else (RestaurantSecurityConfig.NightRaids.OutcomeBannerDurationSeconds or 7.5)
+
+	local accent: Color3
+	local titleText: string
+	local primaryText: string
+	local primaryBg: Color3
+	local secondaryText: string
+	local secondaryBg: Color3
+	local footerText: string
+
+	if outcome == "Succeeded" then
+		accent = Color3.fromRGB(224, 58, 68)
+		titleText = "RAID BREACHED  •  " .. groupName
+		local res = tostring(payload.PenaltyResource or "Money")
+		local cLost = math.max(0, math.floor(tonumber(payload.CoinsLost) or 0))
+		local rLost = math.max(0, math.floor(tonumber(payload.ReputationLost) or 0))
+		if res == "Reputation" then
+			primaryText = string.format("-%d REPUTATION LOST (20%%)  •  0 GOLD LOST", rLost)
+		else
+			primaryText = string.format("-%d GOLD LOST (20%%)  •  0 REP LOST", cLost)
+		end
+		primaryBg = Color3.fromRGB(76, 22, 30)
+
+		local totalStolen = math.max(0, math.floor(tonumber(payload.TotalIngredientsStolen) or 0))
+		local stolenText = tostring(payload.StolenText or "")
+		if totalStolen > 0 and stolenText ~= "" then
+			secondaryText = string.format("WAREHOUSE STOLEN (%d): %s", totalStolen, stolenText)
+			secondaryBg = Color3.fromRGB(64, 42, 18)
+		else
+			secondaryText = "WAREHOUSE EMPTY  •  0 STORED INGREDIENTS STOLEN"
+			secondaryBg = Color3.fromRGB(32, 36, 46)
+		end
+		footerText = "Robux items, Gamepasses & Warehouse levels remain 100% safe."
+	elseif outcome == "Defeated" then
+		accent = Color3.fromRGB(54, 198, 118)
+		titleText = "RESTAURANT PROTECTED!  •  " .. groupName .. " DEFEATED"
+		local rGold = math.max(0, math.floor(tonumber(payload.RewardGold) or 0))
+		local rRep = math.max(0, math.floor(tonumber(payload.RewardRep) or 0))
+		local rExp = math.max(0, math.floor(tonumber(payload.RewardExp) or 0))
+		primaryText = string.format("DEFENSE REWARD: +%d GOLD  •  +%d REP  •  +%d EXP", rGold, rRep, rExp)
+		primaryBg = Color3.fromRGB(18, 58, 38)
+		secondaryText = "0% MONEY LOST  •  0% REP LOST  •  WAREHOUSE SUPPLIES 100% SAFE"
+		secondaryBg = Color3.fromRGB(22, 42, 36)
+		footerText = "Your restaurant security stopped the heist before any losses occurred!"
+	else
+		accent = Color3.fromRGB(232, 178, 66)
+		titleText = "SUNRISE RETREAT  •  " .. groupName .. " FLED"
+		primaryText = "DAWN BROKE BEFORE HEIST COMPLETED  •  NO LOSSES"
+		primaryBg = Color3.fromRGB(56, 44, 20)
+		secondaryText = "MONEY, REPUTATION & WAREHOUSE SUPPLIES REMAIN SAFE"
+		secondaryBg = Color3.fromRGB(28, 34, 44)
+		footerText = "Stay alert on future nights — hire Ninjas & Bodyguards in Empire [U]."
+	end
+
+	if outcomeStroke then
+		outcomeStroke.Color = accent
+	end
+	if outcomeTopBar then
+		outcomeTopBar.BackgroundColor3 = accent
+	end
+	if outcomeTitleLabel then
+		outcomeTitleLabel.Text = titleText
+		outcomeTitleLabel.TextColor3 = if outcome == "Defeated"
+			then Color3.fromRGB(168, 246, 196)
+			else Color3.fromRGB(255, 228, 148)
+	end
+	if outcomePrimaryBadge then
+		outcomePrimaryBadge.Text = primaryText
+		outcomePrimaryBadge.BackgroundColor3 = primaryBg
+		local st = outcomePrimaryBadge:FindFirstChildOfClass("UIStroke")
+		if st then
+			st.Color = accent
+		end
+	end
+	if outcomeSecondaryBadge then
+		outcomeSecondaryBadge.Text = secondaryText
+		outcomeSecondaryBadge.BackgroundColor3 = secondaryBg
+	end
+	if outcomeFooterLabel then
+		outcomeFooterLabel.Text = footerText
+	end
+
+	outcomeDismissToken += 1
+	local myToken = outcomeDismissToken
+	outcomeFrame.Visible = true
+	outcomeFrame.Position = UDim2.new(0.5, 0, 0, 92)
+	TweenService:Create(
+		outcomeFrame,
+		TweenInfo.new(0.28, Enum.EasingStyle.Back, Enum.EasingDirection.Out),
+		{ Position = UDim2.new(0.5, 0, 0, 108) }
+	):Play()
+
+	task.delay(displaySec, function()
+		if outcomeDismissToken == myToken and outcomeFrame then
+			outcomeFrame.Visible = false
+		end
+	end)
+end
+
 local function hideWarningBanner(): ()
 	activeWarningRaidId = nil
 	stopAlarmAudio()
@@ -198,6 +326,7 @@ local function hideWarningBanner(): ()
 end
 
 local function showWarningBanner(payload: { [string]: any }): ()
+	hideOutcomeCard()
 	local raidId = tostring(payload.RaidId or "")
 	if raidId == "" then
 		return
@@ -283,10 +412,15 @@ local function handleRaidAlert(payload: any): ()
 
 	if phase == "Warning" then
 		showWarningBanner(payload)
-	elseif phase == "Started" or phase == "Cancelled" or phase == "Ended" then
+	elseif phase == "Started" or phase == "Cancelled" then
 		if activeWarningRaidId == nil or raidId == "" or activeWarningRaidId == raidId then
 			hideWarningBanner()
 		end
+	elseif phase == "Ended" then
+		if activeWarningRaidId == nil or raidId == "" or activeWarningRaidId == raidId then
+			hideWarningBanner()
+		end
+		showOutcomeCard(payload)
 	end
 end
 
@@ -491,6 +625,117 @@ function RaidWarningController.Init(parentGui: ScreenGui): ()
 	local barFillCorner = Instance.new("UICorner")
 	barFillCorner.CornerRadius = UDim.new(0, 3)
 	barFillCorner.Parent = barFill
+
+	-- Stage 7: Raid Outcome & Warehouse Theft Summary Card (auto-dismissing, non-overlapping)
+	local outCard = Instance.new("Frame")
+	outCard.Name = "NightRaidOutcomeCard"
+	outCard.AnchorPoint = Vector2.new(0.5, 0)
+	outCard.Position = UDim2.new(0.5, 0, 0, 108)
+	outCard.Size = UDim2.fromOffset(560, 118)
+	outCard.BackgroundColor3 = Color3.fromRGB(16, 15, 22)
+	outCard.BackgroundTransparency = 0.04
+	outCard.BorderSizePixel = 0
+	outCard.ZIndex = 36
+	outCard.Visible = false
+	outCard.Parent = parentGui
+	outcomeFrame = outCard
+
+	local outCorner = Instance.new("UICorner")
+	outCorner.CornerRadius = UDim.new(0, 10)
+	outCorner.Parent = outCard
+
+	local outStroke = Instance.new("UIStroke")
+	outStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	outStroke.Color = Color3.fromRGB(224, 58, 68)
+	outStroke.Thickness = 2.0
+	outStroke.Parent = outCard
+	outcomeStroke = outStroke
+
+	local outTop = Instance.new("Frame")
+	outTop.Name = "TopAccent"
+	outTop.Size = UDim2.new(1, 0, 0, 4)
+	outTop.BackgroundColor3 = Color3.fromRGB(224, 58, 68)
+	outTop.BorderSizePixel = 0
+	outTop.ZIndex = 37
+	outTop.Parent = outCard
+	outcomeTopBar = outTop
+
+	local outTitle = Instance.new("TextLabel")
+	outTitle.Name = "OutcomeTitle"
+	outTitle.Position = UDim2.new(0, 16, 0, 10)
+	outTitle.Size = UDim2.new(1, -56, 0, 22)
+	outTitle.BackgroundTransparency = 1
+	outTitle.Font = FONT_TITLE
+	outTitle.Text = "RAID BREACHED"
+	outTitle.TextSize = 15
+	outTitle.TextXAlignment = Enum.TextXAlignment.Left
+	outTitle.TextColor3 = Color3.fromRGB(255, 228, 148)
+	outTitle.ZIndex = 37
+	outTitle.Parent = outCard
+	outcomeTitleLabel = outTitle
+
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Name = "DismissBtn"
+	closeBtn.AnchorPoint = Vector2.new(1, 0)
+	closeBtn.Position = UDim2.new(1, -12, 0, 9)
+	closeBtn.Size = UDim2.fromOffset(22, 22)
+	closeBtn.BackgroundColor3 = Color3.fromRGB(34, 30, 42)
+	closeBtn.Font = FONT_TITLE
+	closeBtn.Text = "X"
+	closeBtn.TextSize = 11
+	closeBtn.TextColor3 = Color3.fromRGB(218, 214, 226)
+	closeBtn.ZIndex = 38
+	closeBtn.Parent = outCard
+	Instance.new("UICorner", closeBtn).CornerRadius = UDim.new(0, 5)
+	closeBtn.MouseButton1Click:Connect(hideOutcomeCard)
+
+	local pBadge = Instance.new("TextLabel")
+	pBadge.Name = "PenaltySummaryBadge"
+	pBadge.Position = UDim2.new(0, 16, 0, 38)
+	pBadge.Size = UDim2.new(1, -32, 0, 24)
+	pBadge.BackgroundColor3 = Color3.fromRGB(76, 22, 30)
+	pBadge.Font = FONT_BOLD
+	pBadge.Text = "-0 GOLD LOST (20%)"
+	pBadge.TextSize = 12
+	pBadge.TextColor3 = Color3.fromRGB(255, 242, 240)
+	pBadge.ZIndex = 37
+	pBadge.Parent = outCard
+	Instance.new("UICorner", pBadge).CornerRadius = UDim.new(0, 5)
+	local pStroke = Instance.new("UIStroke")
+	pStroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	pStroke.Color = Color3.fromRGB(224, 58, 68)
+	pStroke.Thickness = 1
+	pStroke.Parent = pBadge
+	outcomePrimaryBadge = pBadge
+
+	local sBadge = Instance.new("TextLabel")
+	sBadge.Name = "WarehouseTheftBadge"
+	sBadge.Position = UDim2.new(0, 16, 0, 67)
+	sBadge.Size = UDim2.new(1, -32, 0, 22)
+	sBadge.BackgroundColor3 = Color3.fromRGB(64, 42, 18)
+	sBadge.Font = FONT_BOLD
+	sBadge.Text = "WAREHOUSE STOLEN (0)"
+	sBadge.TextSize = 11
+	sBadge.TextTruncate = Enum.TextTruncate.AtEnd
+	sBadge.TextColor3 = Color3.fromRGB(252, 224, 152)
+	sBadge.ZIndex = 37
+	sBadge.Parent = outCard
+	Instance.new("UICorner", sBadge).CornerRadius = UDim.new(0, 5)
+	outcomeSecondaryBadge = sBadge
+
+	local fLbl = Instance.new("TextLabel")
+	fLbl.Name = "OutcomeFooter"
+	fLbl.Position = UDim2.new(0, 16, 0, 94)
+	fLbl.Size = UDim2.new(1, -32, 0, 16)
+	fLbl.BackgroundTransparency = 1
+	fLbl.Font = FONT_REG
+	fLbl.Text = "Robux items, Gamepasses & Warehouse levels remain 100% safe."
+	fLbl.TextSize = 11
+	fLbl.TextXAlignment = Enum.TextXAlignment.Left
+	fLbl.TextColor3 = Color3.fromRGB(186, 194, 212)
+	fLbl.ZIndex = 37
+	fLbl.Parent = outCard
+	outcomeFooterLabel = fLbl
 
 	-- Listen for server-authoritative owner-only NightRaidAlert events
 	task.spawn(function()

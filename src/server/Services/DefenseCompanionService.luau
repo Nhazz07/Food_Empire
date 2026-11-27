@@ -889,7 +889,7 @@ local function buildCompanionRig(
 	if spec.VisualKind == "NinjaGuard" then
 		return MafiaVisualBuilder.BuildSyndicateSpecialistRig(modelName, "NinjaMafia", spec.Scale, spawnCF, false)
 	elseif spec.VisualKind == "ApexAssassin" then
-		return MafiaVisualBuilder.BuildSyndicateSpecialistRig(modelName, "ApexAssassin", spec.Scale, spawnCF, false)
+		return MafiaVisualBuilder.BuildSyndicateSpecialistRig(modelName, "ApexAssassin", spec.Scale, spawnCF, false, true)
 	elseif spec.VisualKind == "HeavyGuard" then
 		return MafiaVisualBuilder.BuildBodyguardRig(modelName, "HeavyGuard", spec.Scale, spawnCF, nil, false)
 	else
@@ -1347,6 +1347,47 @@ function DefenseCompanionService.GetCost(companionType: CompanionTypeId, duratio
 		return spec.Cost10Min
 	end
 	return nil
+end
+
+function DefenseCompanionService.CanHireCompanion(
+	player: Player,
+	companionType: string,
+	durationMinutes: number
+): (boolean, string)
+	local cfg = getCfg()
+	if not cfg.Enabled then
+		return false, "Companion hiring is currently disabled."
+	end
+	local spec = cfg.Types[companionType :: CompanionTypeId]
+	if not spec then
+		return false, "Unknown companion type!"
+	end
+	if durationMinutes ~= 5 and durationMinutes ~= 10 then
+		return false, "Choose a 5-minute or 10-minute hiring contract!"
+	end
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local baseModel = if slot then BaseService.GetBaseModel(slot) else nil
+	if not slot or not baseModel then
+		return false, "Claim your Restaurant Base before hiring defense companions!"
+	end
+	local map = contractsByPlayer[player]
+	if map then
+		local existing = map[spec.Id]
+		if existing and existing.State ~= "Expired" then
+			local rem = math.max(0, math.ceil(existing.ExpiresAt - os.clock()))
+			return false, string.format("%s is already hired (%s remaining)!", spec.DisplayName, formatMMSS(rem))
+		end
+		local activeCount = 0
+		for _, c in pairs(map) do
+			if c.State ~= "Expired" then
+				activeCount += 1
+			end
+		end
+		if activeCount >= cfg.MaxActiveContractsPerPlayer then
+			return false, string.format("Max %d hired defense companions active!", cfg.MaxActiveContractsPerPlayer)
+		end
+	end
+	return true, "OK"
 end
 
 function DefenseCompanionService.TryHireCompanion(

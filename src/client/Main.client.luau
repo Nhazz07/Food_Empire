@@ -83,19 +83,15 @@ local function sendAction(action: string, arg: any?): ()
 	end
 end
 
-local function openAndVisitBlackMarket(): ()
+local function openMarket(): ()
 	WeaponController.ExitScope()
 	AudioController.PlayClick()
-	EmpireMenuController.ToggleTab("BlackMarket")
+	EmpireMenuController.ToggleTab("Market")
 end
 
 -- Initialize HUD, Tabbed Empire Menu, Minimap, Feedback VFX, Guide Arrow & Ambient Windmill/Boats
 local hudGui = HUDController.Init(function(tab)
 	WeaponController.ExitScope()
-	if tab == "BlackMarket" then
-		openAndVisitBlackMarket()
-		return
-	end
 	AudioController.PlayClick()
 	EmpireMenuController.ToggleTab(tab)
 end, function()
@@ -163,7 +159,7 @@ UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: 
 		AudioController.PlayClick()
 		EmpireMenuController.ToggleTab("Shop")
 	elseif input.KeyCode == Enum.KeyCode.M then
-		openAndVisitBlackMarket()
+		openMarket()
 	elseif input.KeyCode == Enum.KeyCode.N then
 		sendAction("SkipDayNight", nil)
 	elseif input.KeyCode == Enum.KeyCode.H then

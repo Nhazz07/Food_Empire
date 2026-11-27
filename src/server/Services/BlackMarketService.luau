@@ -1686,12 +1686,12 @@ function BlackMarketService.BuyWeaponMod(player: Player, weaponId: string, modId
 	return true, string.format("Installed %s on %s!", modSpec.DisplayName, spec.DisplayName)
 end
 
-function BlackMarketService.BuySmokeGrenades(player: Player): (boolean, string)
+function BlackMarketService.BuySmokeGrenades(player: Player, bypassGold: boolean?): (boolean, string)
 	local prof = PlayerDataService.GetProfile(player)
 	if (prof.SmokeGrenades or 0) >= 12 then
 		return false, "Smoke Grenades full (12/12)! Press [T] to deploy a tactical smoke screen."
 	end
-	if not PlayerDataService.SpendCoins(player, 900) then
+	if not bypassGold and not PlayerDataService.SpendCoins(player, 900) then
 		return false, "Need 900 Gold to buy 3x Tactical Smoke Grenades!"
 	end
 	local newCount = PlayerDataService.AddSmokeGrenades(player, 3)
@@ -1705,7 +1705,7 @@ function BlackMarketService.ThrowSmokeGrenade(player: Player): (boolean, string)
 		return false, "Character unavailable!"
 	end
 	if not PlayerDataService.ConsumeSmokeGrenade(player) then
-		return false, "Out of Smoke Grenades! Buy 3x (180G) in Black Market (M) -> Armor/Med."
+		return false, "Out of Smoke Grenades! Buy 3x (900G or 19 R$) in City Market [M] -> Ammo & Gear."
 	end
 
 	local dropPos = root.Position + root.CFrame.LookVector * 10 + Vector3.new(0, -1.5, 0)
@@ -1767,12 +1767,12 @@ local SHADOW_DASH_COOLDOWN = 5.0
 -- BLACK MARKET TIER 2 TACTICAL GADGETS: FLASHBANGS, C4 BREACH CHARGES & SHADOW SMOKE DASH
 -- ============================================================================
 
-function BlackMarketService.BuyFlashbangs(player: Player): (boolean, string)
+function BlackMarketService.BuyFlashbangs(player: Player, bypassGold: boolean?): (boolean, string)
 	local prof = PlayerDataService.GetProfile(player)
 	if (prof.Flashbangs or 0) >= 12 then
 		return false, "Flashbangs full (12/12)! Press [6] to stun rival squads."
 	end
-	if not PlayerDataService.SpendCoins(player, 1200) then
+	if not bypassGold and not PlayerDataService.SpendCoins(player, 1200) then
 		return false, "Need 1,200 Gold to buy 3x Tactical Flashbangs!"
 	end
 	local newCount = PlayerDataService.AddFlashbangs(player, 3)
@@ -1786,7 +1786,7 @@ function BlackMarketService.ThrowFlashbang(player: Player): (boolean, string)
 		return false, "Character unavailable!"
 	end
 	if not PlayerDataService.ConsumeFlashbang(player) then
-		return false, "Out of Flashbangs! Buy 3x (240G) in Black Market [M] -> Gear."
+		return false, "Out of Flashbangs! Buy 3x (1,200G or 25 R$) in Black Market -> Gadgets."
 	end
 
 	local startPos = root.Position + Vector3.new(0, 1.4, 0)
@@ -1936,12 +1936,12 @@ function BlackMarketService.ThrowFlashbang(player: Player): (boolean, string)
 	return true, string.format("Flashbang deployed! Stuns nearby rival squads for 4s (%d left).", rem)
 end
 
-function BlackMarketService.BuyC4Charges(player: Player): (boolean, string)
+function BlackMarketService.BuyC4Charges(player: Player, bypassGold: boolean?): (boolean, string)
 	local prof = PlayerDataService.GetProfile(player)
 	if (prof.C4Charges or 0) >= 8 then
 		return false, "C4 Breach Charges full (8/8)! Press [7] to plant & detonate."
 	end
-	if not PlayerDataService.SpendCoins(player, 1900) then
+	if not bypassGold and not PlayerDataService.SpendCoins(player, 1900) then
 		return false, "Need 1,900 Gold to buy 2x C4 Breach Charges!"
 	end
 	local newCount = PlayerDataService.AddC4Charges(player, 2)
@@ -1955,7 +1955,7 @@ function BlackMarketService.DeployC4Charge(player: Player): (boolean, string)
 		return false, "Character unavailable!"
 	end
 	if not PlayerDataService.ConsumeC4Charge(player) then
-		return false, "Out of C4 Breach Charges! Buy 2x (380G) in Black Market [M] -> Gear."
+		return false, "Out of C4 Breach Charges! Buy 2x (1,900G or 35 R$) in Black Market -> Gadgets."
 	end
 
 	local plantPos = root.Position + root.CFrame.LookVector * 6.5 + Vector3.new(0, -1.6, 0)
@@ -2143,11 +2143,11 @@ function BlackMarketService.DeployC4Charge(player: Player): (boolean, string)
 	return true, string.format("C4 Breach Charge armed — stand clear! (%d left)", rem)
 end
 
-function BlackMarketService.BuyShadowDash(player: Player): (boolean, string)
+function BlackMarketService.BuyShadowDash(player: Player, bypassGold: boolean?): (boolean, string)
 	if PlayerDataService.HasShadowDash(player) then
 		return false, "Shadow Smoke Dash already unlocked! Press [8] to dash & gain 1.5x backstab crits."
 	end
-	if not PlayerDataService.SpendCoins(player, 7000) then
+	if not bypassGold and not PlayerDataService.SpendCoins(player, 7000) then
 		return false, "Need 7,000 Gold to unlock permanent Shadow Smoke Dash!"
 	end
 	PlayerDataService.UnlockShadowDash(player)
@@ -2156,7 +2156,7 @@ end
 
 function BlackMarketService.TriggerShadowDash(player: Player): (boolean, string)
 	if not PlayerDataService.HasShadowDash(player) then
-		return false, "Unlock Shadow Smoke Dash (1,400G) in Black Market [M] -> Gear first!"
+		return false, "Unlock Shadow Smoke Dash (7,000G or 89 R$) in Black Market -> Gadgets first!"
 	end
 	local now = os.clock()
 	local lastAt = lastShadowDashAt[player] or 0

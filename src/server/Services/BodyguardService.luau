@@ -616,8 +616,8 @@ function BodyguardService.TryHireBodyguard(player: Player): (boolean, string)
 	return BodyguardService.TryRecruitClass(player, pick, nil)
 end
 
--- Buy a piece of Bodyguard Equipment (Server-Validated)
-function BodyguardService.TryBuyGear(player: Player, gearId: string): (boolean, string)
+-- Buy a piece of Bodyguard Equipment (Server-Validated, Dual-Currency Gold OR Robux!)
+function BodyguardService.TryBuyGear(player: Player, gearId: string, useRobux: boolean?): (boolean, string)
 	local gSpec = BodyguardConfig.GEAR[gearId]
 	if not gSpec then
 		return false, "Unknown Bodyguard equipment!"
@@ -630,6 +630,34 @@ function BodyguardService.TryBuyGear(player: Player, gearId: string): (boolean, 
 	if prof.OwnedGuardGear[gearId] then
 		return false, gSpec.DisplayName .. " is already owned! Equip it onto a compatible Bodyguard."
 	end
+
+	local function grantGearAndAutoEquip(): (boolean, string)
+		PlayerDataService.UnlockGuardGear(player, gearId)
+		-- Auto-equip onto the first compatible active bodyguard if that slot is currently empty!
+		for idx, classId in ipairs(prof.ActiveBodyguards) do
+			if BodyguardConfig.IsGearCompatible(classId :: BodyguardConfig.GuardClassId, gearId) then
+				local sk = tostring(idx)
+				local ld = prof.GuardLoadouts[sk]
+				if not ld or not ld[gSpec.Slot] then
+					PlayerDataService.SetGuardGearSlot(player, sk, gSpec.Slot, gearId)
+					BodyguardService.RebuildGuardsForPlayer(player)
+					return true, string.format("Unlocked & equipped %s on Guard #%d", gSpec.DisplayName, idx)
+				end
+			end
+		end
+		return true, string.format("Unlocked %s — equip onto a compatible Bodyguard", gSpec.DisplayName)
+	end
+
+	if useRobux == true and typeof(gSpec.RobuxPrice) == "number" and gSpec.RobuxPrice > 0 then
+		return MonetizationService.TryPromptDualPurchase(
+			player,
+			"GuardGear_" .. gearId,
+			gSpec.RobuxPrice,
+			gSpec.DisplayName,
+			grantGearAndAutoEquip
+		)
+	end
+
 	if prof.Level < gSpec.RequiredLevel then
 		return false, string.format("Requires Player Lv.%d for %s!", gSpec.RequiredLevel, gSpec.DisplayName)
 	end
@@ -637,22 +665,7 @@ function BodyguardService.TryBuyGear(player: Player, gearId: string): (boolean, 
 		return false, string.format("Need %d Gold to buy %s!", gSpec.Price, gSpec.DisplayName)
 	end
 
-	PlayerDataService.UnlockGuardGear(player, gearId)
-
-	-- Auto-equip onto the first compatible active bodyguard if that slot is currently empty!
-	for idx, classId in ipairs(prof.ActiveBodyguards) do
-		if BodyguardConfig.IsGearCompatible(classId :: BodyguardConfig.GuardClassId, gearId) then
-			local sk = tostring(idx)
-			local ld = prof.GuardLoadouts[sk]
-			if not ld or not ld[gSpec.Slot] then
-				PlayerDataService.SetGuardGearSlot(player, sk, gSpec.Slot, gearId)
-				BodyguardService.RebuildGuardsForPlayer(player)
-				return true, string.format("Purchased & equipped %s on Guard #%d", gSpec.DisplayName, idx)
-			end
-		end
-	end
-
-	return true, string.format("Purchased %s — equip onto a compatible Bodyguard", gSpec.DisplayName)
+	return grantGearAndAutoEquip()
 end
 
 -- Equip Owned Gear onto a Specific Bodyguard Slot (Strict Server Compatibility Check!)

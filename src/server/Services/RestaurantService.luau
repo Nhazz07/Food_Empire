@@ -3372,6 +3372,71 @@ local function setupRemotes(): ()
 					end)
 				elseif kind == "BuyBlackMarketItem" and typeof(subArg) == "string" then
 					ok, msg = BlackMarketService.BuyItem(player, subArg, true, false)
+				elseif kind == "BuyGuardGear" and typeof(subArg) == "string" then
+					ok, msg = BodyguardService.TryBuyGear(player, subArg, true)
+				elseif kind == "BuySmokeGrenades" then
+					local prof = PlayerDataService.GetProfile(player)
+					if (prof.SmokeGrenades or 0) >= 12 then
+						ok, msg = false, "Smoke Grenades full (12/12)!"
+					else
+						local opt = dualOpts.BuySmokeGrenades
+						ok, msg = MonetizationService.TryPromptDualPurchase(player, "BuySmokeGrenades", opt.RobuxPrice, opt.DisplayName, function()
+							return BlackMarketService.BuySmokeGrenades(player, true)
+						end)
+					end
+				elseif kind == "BuyFlashbangs" then
+					local prof = PlayerDataService.GetProfile(player)
+					if (prof.Flashbangs or 0) >= 12 then
+						ok, msg = false, "Flashbangs full (12/12)!"
+					else
+						local opt = dualOpts.BuyFlashbangs
+						ok, msg = MonetizationService.TryPromptDualPurchase(player, "BuyFlashbangs", opt.RobuxPrice, opt.DisplayName, function()
+							return BlackMarketService.BuyFlashbangs(player, true)
+						end)
+					end
+				elseif kind == "BuyC4Charges" then
+					local prof = PlayerDataService.GetProfile(player)
+					if (prof.C4Charges or 0) >= 8 then
+						ok, msg = false, "C4 Breach Charges full (8/8)!"
+					else
+						local opt = dualOpts.BuyC4Charges
+						ok, msg = MonetizationService.TryPromptDualPurchase(player, "BuyC4Charges", opt.RobuxPrice, opt.DisplayName, function()
+							return BlackMarketService.BuyC4Charges(player, true)
+						end)
+					end
+				elseif kind == "BuyShadowDash" then
+					if PlayerDataService.HasShadowDash(player) then
+						ok, msg = false, "Shadow Smoke Dash already unlocked!"
+					else
+						local opt = dualOpts.BuyShadowDash
+						ok, msg = MonetizationService.TryPromptDualPurchase(player, "BuyShadowDash", opt.RobuxPrice, opt.DisplayName, function()
+							return BlackMarketService.BuyShadowDash(player, true)
+						end)
+					end
+				elseif kind == "HireDefenseCompanion" and typeof(subArg) == "table" and typeof(subArg.CompanionType) == "string" then
+					local compType = subArg.CompanionType
+					local durMin = if typeof(subArg.DurationMinutes) == "number" and subArg.DurationMinutes == 10 then 10 else 5
+					local cSpec = RestaurantSecurityConfig.HiredCompanions.Types[compType :: RestaurantSecurityConfig.CompanionTypeId]
+					if not cSpec then
+						ok, msg = false, "Unknown defense companion!"
+					else
+						local canOk, canMsg = DefenseCompanionService.CanHireCompanion(player, compType, durMin)
+						if not canOk then
+							ok, msg = false, canMsg
+						else
+							local rPrice = if durMin == 10 then cSpec.Robux10Min else cSpec.Robux5Min
+							local pKey = string.format("HireCompanion_%s_%dm", compType, durMin)
+							ok, msg = MonetizationService.TryPromptDualPurchase(
+								player,
+								pKey,
+								rPrice,
+								string.format("%s (%dm Contract)", cSpec.DisplayName, durMin),
+								function()
+									return DefenseCompanionService.TryHireCompanion(player, compType, durMin, true)
+								end
+							)
+						end
+					end
 				end
 			elseif action == "ChooseBase" and typeof(arg) == "string" then
 				ok, msg = BaseService.ClaimBaseSlot(player, arg :: any)

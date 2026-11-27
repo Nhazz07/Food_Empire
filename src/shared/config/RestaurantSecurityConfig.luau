@@ -117,6 +117,8 @@ export type CompanionSpec = {
 	Scale: number,
 	Cost5Min: number,
 	Cost10Min: number,
+	Robux5Min: number,
+	Robux10Min: number,
 }
 
 export type CombatBalanceConfig = {
@@ -539,6 +541,8 @@ local RestaurantSecurityConfig: RestaurantSecurityConfigType = {
 				Scale = 0.98,
 				Cost5Min = 600,
 				Cost10Min = 1050,
+				Robux5Min = 19,
+				Robux10Min = 35,
 			},
 			Assassin = {
 				Id = "Assassin",
@@ -559,10 +563,12 @@ local RestaurantSecurityConfig: RestaurantSecurityConfigType = {
 				AssignedPost = "WarehouseFlank",
 				VisualKind = "ApexAssassin",
 				PreviewCategory = "Bodyguard",
-				PreviewId = "SniperGuard",
+				PreviewId = "CrimsonAssassin",
 				Scale = 1.0,
 				Cost5Min = 1450,
 				Cost10Min = 2550,
+				Robux5Min = 39,
+				Robux10Min = 69,
 			},
 			Bodyguard = {
 				Id = "Bodyguard",
@@ -587,6 +593,8 @@ local RestaurantSecurityConfig: RestaurantSecurityConfigType = {
 				Scale = 1.02,
 				Cost5Min = 750,
 				Cost10Min = 1300,
+				Robux5Min = 25,
+				Robux10Min = 45,
 			},
 			EliteBodyguard = {
 				Id = "EliteBodyguard",
@@ -611,6 +619,8 @@ local RestaurantSecurityConfig: RestaurantSecurityConfigType = {
 				Scale = 1.08,
 				Cost5Min = 1900,
 				Cost10Min = 3350,
+				Robux5Min = 49,
+				Robux10Min = 89,
 			},
 		},
 	},

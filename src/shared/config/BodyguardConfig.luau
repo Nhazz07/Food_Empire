@@ -14,6 +14,7 @@ export type GuardClassId =
 
 export type GuardGearSlot = "Armor" | "Helmet" | "Outfit" | "Weapon" | "Attachment" | "Tactical"
 export type GuardCombatStyle = "Melee" | "Shotgun" | "Rifle" | "Sniper" | "Support" | "BossHeavy"
+export type MarketTier = "Market" | "BlackMarket"
 
 export type BodyguardClassSpec = {
 	Id: GuardClassId,
@@ -21,6 +22,7 @@ export type BodyguardClassSpec = {
 	Icon: string,
 	Role: string,
 	Rarity: string,
+	MarketTier: MarketTier?,
 	Cost: number,
 	RobuxItemId: string?,
 	RobuxPrice: number?,
@@ -46,6 +48,7 @@ export type BodyguardGearSpec = {
 	Icon: string,
 	Slot: GuardGearSlot,
 	Rarity: string,
+	MarketTier: MarketTier?,
 	Price: number,
 	RobuxItemId: string?,
 	RobuxPrice: number?,
@@ -77,12 +80,14 @@ BodyguardConfig.CLASS_ORDER = {
 	"BossBodyguard",
 } :: { GuardClassId }
 
--- Featured 6-Guard Restaurant Defense Collection (shown in Syndicate Empire tab)
+-- Complete 8-Guard Restaurant Defense Collection (shown in Unified Security Hub)
 BodyguardConfig.RESTAURANT_DEFENSE_ORDER = {
 	"BasicGuard",
 	"TacticalGuard",
 	"HeavyGuard",
 	"NinjaGuard",
+	"AssaultGuard",
+	"SniperGuard",
 	"EliteGuard",
 	"BossBodyguard",
 } :: { GuardClassId }
@@ -807,6 +812,55 @@ function BodyguardConfig.GetCompatibleClassNames(gearId: string): { string }
 		end
 	end
 	return out
+end
+
+-- Regular City Market vs Underground Black Market classification (single source of truth!)
+local REGULAR_MARKET_CLASSES: { [string]: boolean } = {
+	BasicGuard = true,
+	TacticalGuard = true,
+	HeavyGuard = true,
+	AssaultGuard = true,
+	SniperGuard = true,
+}
+
+local REGULAR_MARKET_GEAR: { [string]: boolean } = {
+	GuardKevlarPlate = true,
+	GuardBallisticHelmet = true,
+	GuardReconVisor = true,
+	GuardShadowSuit = true,
+	GuardTacticalSMG = true,
+	GuardHeavyShotgun = true,
+	GuardHoloSight = true,
+	GuardSuppressor = true,
+	GuardFieldMedPack = true,
+}
+
+for cid, spec in pairs(BodyguardConfig.CLASSES) do
+	if spec.MarketTier == nil then
+		spec.MarketTier = if REGULAR_MARKET_CLASSES[cid] then "Market" else "BlackMarket"
+	end
+end
+
+for gid, spec in pairs(BodyguardConfig.GEAR) do
+	if spec.MarketTier == nil then
+		spec.MarketTier = if REGULAR_MARKET_GEAR[gid] then "Market" else "BlackMarket"
+	end
+end
+
+function BodyguardConfig.GetClassMarketTier(classId: string): MarketTier
+	local c = BodyguardConfig.CLASSES[classId :: GuardClassId]
+	if c and c.MarketTier then
+		return c.MarketTier
+	end
+	return if REGULAR_MARKET_CLASSES[classId] then "Market" else "BlackMarket"
+end
+
+function BodyguardConfig.GetGearMarketTier(gearId: string): MarketTier
+	local g = BodyguardConfig.GEAR[gearId]
+	if g and g.MarketTier then
+		return g.MarketTier
+	end
+	return if REGULAR_MARKET_GEAR[gearId] then "Market" else "BlackMarket"
 end
 
 return BodyguardConfig

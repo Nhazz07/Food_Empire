@@ -187,6 +187,20 @@ local DualRobuxOptions: { [string]: DualRobuxOptionSpec } = {
 	HireCourier = { Key = "HireCourier", DisplayName = "Hire Motorbike Courier", RobuxPrice = 49, AssetId = 0 },
 	BuyCentralParkBranch = { Key = "BuyCentralParkBranch", DisplayName = "Central Park Bistro Branch", RobuxPrice = 69, AssetId = 0 },
 	UpgradeDefenses = { Key = "UpgradeDefenses", DisplayName = "Base Defenses Upgrade", RobuxPrice = 59, AssetId = 0 },
+	-- Tactical Gadgets & Supplies Dual-Currency Options
+	BuySmokeGrenades = { Key = "BuySmokeGrenades", DisplayName = "3x Tactical Smoke Grenades", RobuxPrice = 19, AssetId = 0 },
+	BuyFlashbangs = { Key = "BuyFlashbangs", DisplayName = "3x Flashbang Stun Grenades", RobuxPrice = 25, AssetId = 0 },
+	BuyC4Charges = { Key = "BuyC4Charges", DisplayName = "2x C4 Breach Charges", RobuxPrice = 35, AssetId = 0 },
+	BuyShadowDash = { Key = "BuyShadowDash", DisplayName = "Shadow Smoke Dash (Permanent)", RobuxPrice = 89, AssetId = 0 },
+	-- Timed Restaurant Security Contracts Dual-Currency Options (5m & 10m)
+	HireCompanion_Ninja_5m = { Key = "HireCompanion_Ninja_5m", DisplayName = "Shadow Ninja (5m Contract)", RobuxPrice = 19, AssetId = 0 },
+	HireCompanion_Ninja_10m = { Key = "HireCompanion_Ninja_10m", DisplayName = "Shadow Ninja (10m Contract)", RobuxPrice = 35, AssetId = 0 },
+	HireCompanion_Bodyguard_5m = { Key = "HireCompanion_Bodyguard_5m", DisplayName = "Restaurant Bodyguard (5m Contract)", RobuxPrice = 25, AssetId = 0 },
+	HireCompanion_Bodyguard_10m = { Key = "HireCompanion_Bodyguard_10m", DisplayName = "Restaurant Bodyguard (10m Contract)", RobuxPrice = 45, AssetId = 0 },
+	HireCompanion_Assassin_5m = { Key = "HireCompanion_Assassin_5m", DisplayName = "Crimson Assassin (5m Contract)", RobuxPrice = 39, AssetId = 0 },
+	HireCompanion_Assassin_10m = { Key = "HireCompanion_Assassin_10m", DisplayName = "Crimson Assassin (10m Contract)", RobuxPrice = 69, AssetId = 0 },
+	HireCompanion_EliteBodyguard_5m = { Key = "HireCompanion_EliteBodyguard_5m", DisplayName = "Elite Bodyguard (5m Contract)", RobuxPrice = 49, AssetId = 0 },
+	HireCompanion_EliteBodyguard_10m = { Key = "HireCompanion_EliteBodyguard_10m", DisplayName = "Elite Bodyguard (10m Contract)", RobuxPrice = 89, AssetId = 0 },
 }
 
 local function getHQUpgradeRobuxPrice(nextLevel: number): number

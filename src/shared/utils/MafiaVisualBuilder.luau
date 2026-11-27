@@ -1901,16 +1901,18 @@ function MafiaVisualBuilder.BuildSyndicateSpecialistRig(
 	specialistKind: "SamuraiMafia" | "NinjaMafia" | "ApexWarlord" | "ApexAssassin",
 	scale: number,
 	spawnCF: CFrame,
-	forPreview: boolean?
+	forPreview: boolean?,
+	meleeKatanaOverride: boolean?
 ): RigHandle
-	local specCombatStyle = if specialistKind == "SamuraiMafia"
+	local useAssassinKatana = (specialistKind == "ApexAssassin" and meleeKatanaOverride == true)
+	local specCombatStyle = if specialistKind == "SamuraiMafia" or useAssassinKatana
 		then "Katana"
 		elseif specialistKind == "NinjaMafia" then "DualNinja"
 		else "Rifle"
 	local customRig, customTpl = MafiaVisualBuilder.TryBuildFromTemplate({ specialistKind }, modelName, scale, spawnCF, forPreview, specCombatStyle)
 	if customRig then
 		if customTpl and customTpl:GetAttribute("AttachDefaultWeapon") == true then
-			if specialistKind == "SamuraiMafia" then
+			if specialistKind == "SamuraiMafia" or useAssassinKatana then
 				attachNPCWeapon(customRig, "Katana", P.BrushedSteel)
 			elseif specialistKind == "NinjaMafia" then
 				attachNPCWeapon(customRig, "DualTantos", P.BrushedSteel)
@@ -2038,8 +2040,15 @@ function MafiaVisualBuilder.BuildSyndicateSpecialistRig(
 		addHairStyle(rig, "Slick", P.HairDark)
 		add(rig.Head, "AssassinMask", Vector3.new(1.22, 0.52, 0.46), CFrame.new(0, -0.24, -0.40), P.Obsidian, Enum.Material.Metal, nil, false)
 		add(rig.Head, "AssassinShades", Vector3.new(1.10, 0.24, 0.14), CFrame.new(0, 0.08, -0.57), P.Obsidian, Enum.Material.Glass, nil, false)
-		attachNPCWeapon(rig, "AssassinRifle", P.Gunmetal)
-		addCombatantDetail(rig, "Tactical", "Rifle", P.DeepRed)
+		if useAssassinKatana then
+			-- Crimson Assassin melee striker: Forged Shadow Katana + hip saya!
+			add(rig.LowerTorso, "SayaScabbard", Vector3.new(0.16, 0.20, 3.05), CFrame.new(-1.06, -0.08, 0.42) * CFrame.Angles(math.rad(-14), 0, 0), P.Obsidian, Enum.Material.SmoothPlastic, nil, false)
+			attachNPCWeapon(rig, "Katana", P.BrushedSteel)
+			addCombatantDetail(rig, "Tactical", "Katana", P.DeepRed)
+		else
+			attachNPCWeapon(rig, "AssassinRifle", P.Gunmetal)
+			addCombatantDetail(rig, "Tactical", "Rifle", P.DeepRed)
+		end
 	end
 
 	return rig
