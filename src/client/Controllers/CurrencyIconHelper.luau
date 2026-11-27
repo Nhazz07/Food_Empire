@@ -271,7 +271,7 @@ end
 
 function CurrencyIconHelper.CreateCategoryIcon(
 	parent: Instance,
-	kind: "Food" | "Fruit" | "Storage" | "Gun" | "Ninja" | "Empire" | "Ammo" | "Guard" | "Robux",
+	kind: "Food" | "Fruit" | "Storage" | "Market" | "Gun" | "Ninja" | "Empire" | "Ammo" | "Guard" | "Robux",
 	sizePx: number,
 	pos: UDim2?,
 	zIndex: number?
@@ -348,6 +348,24 @@ function CurrencyIconHelper.CreateCategoryIcon(
 		makeShape(root, UDim2.fromScale(0.50, 0.16), UDim2.fromScale(0.88, 0.14), Color3.fromRGB(244, 188, 108), 3, z + 6, 0, ink, st * 0.8)
 		local tag = makeShape(root, UDim2.fromScale(0.72, 0.36), UDim2.fromScale(0.28, 0.22), Color3.fromRGB(56, 194, 248), 3, z + 7, 0, ink, st * 0.7)
 		addVertGrad(tag, Color3.fromRGB(122, 224, 255), Color3.fromRGB(24, 146, 214))
+
+	elseif kind == "Market" then
+		-- CRISP CITY MARKET STOREFRONT (Striped Teal & Cream Awning + Warm Lit Display Window + Golden Shop Sign!)
+		local wall = makeShape(root, UDim2.fromScale(0.50, 0.65), UDim2.fromScale(0.76, 0.52), Color3.fromRGB(232, 238, 248), 4, z + 1, 0, ink, st)
+		addVertGrad(wall, Color3.fromRGB(246, 250, 255), Color3.fromRGB(186, 198, 218))
+		-- Glowing market display window + shop door
+		local win = makeShape(root, UDim2.fromScale(0.36, 0.67), UDim2.fromScale(0.30, 0.28), Color3.fromRGB(84, 212, 255), 3, z + 2, 0, ink, st * 0.7)
+		addVertGrad(win, Color3.fromRGB(168, 238, 255), Color3.fromRGB(42, 148, 214))
+		makeShape(root, UDim2.fromScale(0.69, 0.72), UDim2.fromScale(0.22, 0.36), Color3.fromRGB(168, 108, 48), 3, z + 2, 0, ink, st * 0.7)
+		makeShape(root, UDim2.fromScale(0.64, 0.73), UDim2.fromScale(0.05, 0.05), Color3.fromRGB(255, 218, 72), 4, z + 3)
+		-- Iconic Striped Market Awning Canopy (4 crisp alternating stripes!)
+		makeShape(root, UDim2.fromScale(0.50, 0.33), UDim2.fromScale(0.88, 0.24), Color3.fromRGB(20, 148, 178), 4, z + 3, 0, ink, st)
+		for i = 0, 3 do
+			local stripeCol = if i % 2 == 0 then Color3.fromRGB(24, 178, 206) else Color3.fromRGB(252, 246, 230)
+			makeShape(root, UDim2.fromScale(0.19 + i * 0.206, 0.33), UDim2.fromScale(0.21, 0.22), stripeCol, 2, z + 4, 0, ink, st * 0.5)
+		end
+		-- Top Golden Market Roof Sign
+		makeShape(root, UDim2.fromScale(0.50, 0.16), UDim2.fromScale(0.60, 0.12), Color3.fromRGB(255, 212, 54), 3, z + 5, 0, ink, st * 0.8)
 
 	elseif kind == "Fruit" then
 		-- REAL GLOSSY RED APPLE + EMERALD LEAF + CURVED GOLDEN BANANA!

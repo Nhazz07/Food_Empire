@@ -14,6 +14,7 @@ export type GuardClassId =
 
 export type GuardGearSlot = "Armor" | "Helmet" | "Outfit" | "Weapon" | "Attachment" | "Tactical"
 export type GuardCombatStyle = "Melee" | "Shotgun" | "Rifle" | "Sniper" | "Support" | "BossHeavy"
+export type MarketTier = "Market" | "BlackMarket"
 
 export type BodyguardClassSpec = {
 	Id: GuardClassId,
@@ -21,6 +22,7 @@ export type BodyguardClassSpec = {
 	Icon: string,
 	Role: string,
 	Rarity: string,
+	MarketTier: MarketTier?,
 	Cost: number,
 	RobuxItemId: string?,
 	RobuxPrice: number?,
@@ -46,6 +48,7 @@ export type BodyguardGearSpec = {
 	Icon: string,
 	Slot: GuardGearSlot,
 	Rarity: string,
+	MarketTier: MarketTier?,
 	Price: number,
 	RobuxItemId: string?,
 	RobuxPrice: number?,
@@ -77,12 +80,14 @@ BodyguardConfig.CLASS_ORDER = {
 	"BossBodyguard",
 } :: { GuardClassId }
 
--- Featured 6-Guard Restaurant Defense Collection (shown in Syndicate Empire tab)
+-- Complete 8-Guard Restaurant Defense Collection (shown in Unified Security Hub)
 BodyguardConfig.RESTAURANT_DEFENSE_ORDER = {
 	"BasicGuard",
 	"TacticalGuard",
 	"HeavyGuard",
 	"NinjaGuard",
+	"AssaultGuard",
+	"SniperGuard",
 	"EliteGuard",
 	"BossBodyguard",
 } :: { GuardClassId }
@@ -260,7 +265,7 @@ BodyguardConfig.CLASSES = {
 		Icon = "NIN",
 		Role = "Shinobi Interceptor",
 		Rarity = "Epic",
-		Cost = 5750,
+		Cost = 9500,
 		RobuxItemId = nil,
 		RobuxPrice = 89,
 		RequiredLevel = 3,
@@ -273,7 +278,7 @@ BodyguardConfig.CLASSES = {
 		Scale = 1.02,
 		AbilityName = "Shadow Intercept",
 		AbilityDesc = "Ultra-fast katana combos that swiftly intercept Mafia raiders around your restaurant.",
-		Description = "Lightning-fast shadow shinobi who pursues and slices down hostile Mafia inside your defense perimeter.",
+		Description = "Black Market shadow shinobi who pursues and slices down hostile Mafia inside your defense perimeter.",
 		CoatColor = Color3.fromRGB(22, 24, 34),
 		AccentColor = Color3.fromRGB(220, 38, 62),
 		CompatibleGearTags = {
@@ -291,7 +296,7 @@ BodyguardConfig.CLASSES = {
 		Icon = "ELT",
 		Role = "Spec-Ops Ace",
 		Rarity = "Legendary",
-		Cost = 9250,
+		Cost = 14500,
 		RobuxItemId = nil,
 		RobuxPrice = 129,
 		RequiredLevel = 4,
@@ -304,7 +309,7 @@ BodyguardConfig.CLASSES = {
 		Scale = 1.10,
 		AbilityName = "Armor-Piercing Ops",
 		AbilityDesc = "High-velocity rounds & compatible with ALL Black Market guard gear!",
-		Description = "High-end spec-ops veteran with superior armor, rapid rifle fire, and universal gear slots.",
+		Description = "Underground spec-ops veteran with superior armor, rapid rifle fire, and universal gear slots.",
 		CoatColor = Color3.fromRGB(24, 24, 34),
 		AccentColor = Color3.fromRGB(178, 86, 246),
 		CompatibleGearTags = {
@@ -333,7 +338,7 @@ BodyguardConfig.CLASSES = {
 		Icon = "CMD",
 		Role = "Defense Commander",
 		Rarity = "Mythic",
-		Cost = 16000,
+		Cost = 22000,
 		RobuxItemId = "BossBodyguardPass",
 		RobuxPrice = 199,
 		RequiredLevel = 5,
@@ -346,7 +351,7 @@ BodyguardConfig.CLASSES = {
 		Scale = 1.16,
 		AbilityName = "Empire Command Aura",
 		AbilityDesc = "Coordinates & boosts all nearby friendly bodyguards' damage by +20% with heavy golden tracers!",
-		Description = "Premium syndicate commander who leads your restaurant defense squad. Unlock with 16,000G (Lv.5+) or 199 R$.",
+		Description = "Black Market syndicate commander who leads your restaurant defense squad. Unlock with 22,000G (Lv.5+) or 199 R$.",
 		CoatColor = Color3.fromRGB(36, 24, 28),
 		AccentColor = Color3.fromRGB(255, 204, 48),
 		CompatibleGearTags = {
@@ -427,7 +432,7 @@ BodyguardConfig.GEAR = {
 		Icon = "JUG",
 		Slot = "Armor",
 		Rarity = "Epic",
-		Price = 4600,
+		Price = 8200,
 		RobuxItemId = nil,
 		RobuxPrice = 59,
 		RequiredLevel = 3,
@@ -439,7 +444,7 @@ BodyguardConfig.GEAR = {
 		CooldownMult = 1.0,
 		HealAuraBonus = 0,
 		StunEffect = false,
-		Description = "Full-plate ballistic suit (+230 Max HP). Heavy, Tactical, Elite & Boss Guards only.",
+		Description = "Contraband full-plate ballistic suit (+230 Max HP). Heavy, Tactical, Elite & Boss Guards only.",
 		VisualColor = Color3.fromRGB(68, 76, 92),
 	},
 
@@ -492,7 +497,7 @@ BodyguardConfig.GEAR = {
 		Icon = "TIT",
 		Slot = "Helmet",
 		Rarity = "Epic",
-		Price = 4400,
+		Price = 7200,
 		RobuxItemId = nil,
 		RobuxPrice = 59,
 		RequiredLevel = 4,
@@ -504,7 +509,7 @@ BodyguardConfig.GEAR = {
 		CooldownMult = 1.0,
 		HealAuraBonus = 0,
 		StunEffect = false,
-		Description = "Armored visor helm (+145 Max HP). Heavy, Elite & Boss Bodyguards only.",
+		Description = "Contraband armored visor helm (+145 Max HP). Heavy, Elite & Boss Bodyguards only.",
 		VisualColor = Color3.fromRGB(116, 98, 62),
 	},
 
@@ -536,7 +541,7 @@ BodyguardConfig.GEAR = {
 		Icon = "SYN",
 		Slot = "Outfit",
 		Rarity = "Legendary",
-		Price = 5250,
+		Price = 10500,
 		RobuxItemId = nil,
 		RobuxPrice = 69,
 		RequiredLevel = 4,
@@ -548,7 +553,7 @@ BodyguardConfig.GEAR = {
 		CooldownMult = 1.0,
 		HealAuraBonus = 0,
 		StunEffect = false,
-		Description = "Kevlar-woven mafia tailoring (+115 HP, +9 DMG, +1.5 Speed). Fits any bodyguard.",
+		Description = "Black Market kevlar-woven mafia tailoring (+115 HP, +9 DMG, +1.5 Speed). Fits any bodyguard.",
 		VisualColor = Color3.fromRGB(72, 26, 44),
 	},
 	GoldenEmperorSuit = {
@@ -601,7 +606,7 @@ BodyguardConfig.GEAR = {
 		Icon = "AR",
 		Slot = "Weapon",
 		Rarity = "Epic",
-		Price = 4800,
+		Price = 9200,
 		RobuxItemId = nil,
 		RobuxPrice = 59,
 		RequiredLevel = 3,
@@ -613,7 +618,7 @@ BodyguardConfig.GEAR = {
 		CooldownMult = 0.90,
 		HealAuraBonus = 0,
 		StunEffect = false,
-		Description = "Upgraded military carbine (+20 DMG, +22 Range). Assault, Tactical, Elite & Boss only.",
+		Description = "Smuggled military carbine (+20 DMG, +22 Range). Assault, Tactical, Elite & Boss only.",
 		VisualColor = Color3.fromRGB(58, 62, 70),
 	},
 	GuardHeavyShotgun = {
@@ -643,7 +648,7 @@ BodyguardConfig.GEAR = {
 		Icon = "SNP",
 		Slot = "Weapon",
 		Rarity = "Legendary",
-		Price = 6250,
+		Price = 12800,
 		RobuxItemId = nil,
 		RobuxPrice = 79,
 		RequiredLevel = 4,
@@ -655,7 +660,7 @@ BodyguardConfig.GEAR = {
 		CooldownMult = 0.90,
 		HealAuraBonus = 0,
 		StunEffect = false,
-		Description = "High-caliber .50 sniper upgrade (+48 DMG, +35 Range). Sniper, Elite & Boss only.",
+		Description = "Contraband .50 cal anti-materiel sniper (+48 DMG, +35 Range). Sniper, Elite & Boss only.",
 		VisualColor = Color3.fromRGB(44, 46, 54),
 	},
 
@@ -687,7 +692,7 @@ BodyguardConfig.GEAR = {
 		Icon = "MAG",
 		Slot = "Attachment",
 		Rarity = "Epic",
-		Price = 3400,
+		Price = 6800,
 		RobuxItemId = nil,
 		RobuxPrice = 49,
 		RequiredLevel = 3,
@@ -699,7 +704,7 @@ BodyguardConfig.GEAR = {
 		CooldownMult = 0.80,
 		HealAuraBonus = 0,
 		StunEffect = false,
-		Description = "+20% faster firing speed & +5 DMG. Heavy, Assault, Tactical, Elite & Boss only.",
+		Description = "Underground +20% faster firing speed & +5 DMG. Heavy, Assault, Tactical, Elite & Boss only.",
 		VisualColor = Color3.fromRGB(246, 198, 48),
 	},
 	GuardSuppressor = {
@@ -752,7 +757,7 @@ BodyguardConfig.GEAR = {
 		Icon = "STN",
 		Slot = "Tactical",
 		Rarity = "Epic",
-		Price = 3200,
+		Price = 6400,
 		RobuxItemId = nil,
 		RobuxPrice = 49,
 		RequiredLevel = 3,
@@ -764,7 +769,7 @@ BodyguardConfig.GEAR = {
 		CooldownMult = 1.0,
 		HealAuraBonus = 0,
 		StunEffect = true,
-		Description = "Slows & shocks enemy rivals on hit (+8 DMG, +25 HP). Fits all guard classes.",
+		Description = "Contraband shock rig slows & stuns enemy rivals on hit (+8 DMG, +25 HP). Fits all guard classes.",
 		VisualColor = Color3.fromRGB(78, 224, 255),
 	},
 	GuardRiotPlate = {
@@ -773,7 +778,7 @@ BodyguardConfig.GEAR = {
 		Icon = "SHD",
 		Slot = "Tactical",
 		Rarity = "Epic",
-		Price = 4450,
+		Price = 7800,
 		RobuxItemId = nil,
 		RobuxPrice = 59,
 		RequiredLevel = 3,
@@ -785,7 +790,7 @@ BodyguardConfig.GEAR = {
 		CooldownMult = 1.0,
 		HealAuraBonus = 0,
 		StunEffect = false,
-		Description = "Heavy ballistic front shield (+150 Max HP, +6 DMG). Heavy, Elite & Boss Guards only.",
+		Description = "Smuggled heavy ballistic front shield (+150 Max HP, +6 DMG). Heavy, Elite & Boss Guards only.",
 		VisualColor = Color3.fromRGB(232, 168, 42),
 	},
 } :: { [string]: BodyguardGearSpec }
@@ -807,6 +812,55 @@ function BodyguardConfig.GetCompatibleClassNames(gearId: string): { string }
 		end
 	end
 	return out
+end
+
+-- Regular City Market vs Underground Black Market classification (single source of truth!)
+local REGULAR_MARKET_CLASSES: { [string]: boolean } = {
+	BasicGuard = true,
+	TacticalGuard = true,
+	HeavyGuard = true,
+	AssaultGuard = true,
+	SniperGuard = true,
+}
+
+local REGULAR_MARKET_GEAR: { [string]: boolean } = {
+	GuardKevlarPlate = true,
+	GuardBallisticHelmet = true,
+	GuardReconVisor = true,
+	GuardShadowSuit = true,
+	GuardTacticalSMG = true,
+	GuardHeavyShotgun = true,
+	GuardHoloSight = true,
+	GuardSuppressor = true,
+	GuardFieldMedPack = true,
+}
+
+for cid, spec in pairs(BodyguardConfig.CLASSES) do
+	if spec.MarketTier == nil then
+		spec.MarketTier = if REGULAR_MARKET_CLASSES[cid] then "Market" else "BlackMarket"
+	end
+end
+
+for gid, spec in pairs(BodyguardConfig.GEAR) do
+	if spec.MarketTier == nil then
+		spec.MarketTier = if REGULAR_MARKET_GEAR[gid] then "Market" else "BlackMarket"
+	end
+end
+
+function BodyguardConfig.GetClassMarketTier(classId: string): MarketTier
+	local c = BodyguardConfig.CLASSES[classId :: GuardClassId]
+	if c and c.MarketTier then
+		return c.MarketTier
+	end
+	return if REGULAR_MARKET_CLASSES[classId] then "Market" else "BlackMarket"
+end
+
+function BodyguardConfig.GetGearMarketTier(gearId: string): MarketTier
+	local g = BodyguardConfig.GEAR[gearId]
+	if g and g.MarketTier then
+		return g.MarketTier
+	end
+	return if REGULAR_MARKET_GEAR[gearId] then "Market" else "BlackMarket"
 end
 
 return BodyguardConfig

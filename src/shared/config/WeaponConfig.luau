@@ -7,6 +7,7 @@ export type AmmoTypeId = "Pistol9mm" | "Shotgun12G" | "SMG45" | "Rifle556" | "Sn
 export type WeaponCategory = "Pistol" | "Shotgun" | "SMG" | "AssaultRifle" | "Sniper" | "Melee"
 export type ReloadType = "Magazine" | "ShellByShell"
 export type WeaponRarity = "Common" | "Uncommon" | "Rare" | "Epic" | "Legendary" | "Mythic"
+export type MarketTier = "Market" | "BlackMarket"
 
 export type AmmoPackOption = {
 	Quantity: number,
@@ -30,6 +31,7 @@ export type WeaponSpec = {
 	Icon: string,
 	Category: WeaponCategory,
 	Rarity: WeaponRarity,
+	MarketTier: MarketTier?, -- "Market" (regular city market) | "BlackMarket" (underground contraband)
 	Price: number,
 	RobuxItemId: string?, -- Non-nil for optional Robux GamePass weapons
 	RobuxPrice: number?,
@@ -262,11 +264,11 @@ WeaponConfig.WEAPONS = {
 		Icon = "CSG",
 		Category = "Shotgun",
 		Rarity = "Epic",
-		Price = 7250,
+		Price = 8500,
 		RobuxItemId = nil,
 		RobuxPrice = 89,
 		RequiredLevel = 4,
-		Description = "Rapid-cycle 8-shell tactical shotgun (5 pellets x 26 DMG!). Devastating in close raids.",
+		Description = "Underground rapid-cycle 8-shell tactical shotgun (5 pellets x 26 DMG!). Devastating in close raids.",
 		Damage = 26,
 		Pellets = 5,
 		Range = 68,
@@ -322,11 +324,11 @@ WeaponConfig.WEAPONS = {
 		Icon = "CAR",
 		Category = "AssaultRifle",
 		Rarity = "Epic",
-		Price = 8250,
+		Price = 11500,
 		RobuxItemId = nil,
 		RobuxPrice = 99,
 		RequiredLevel = 4,
-		Description = "Full-auto 5.56mm assault rifle (28-rd mag, 34 DMG, 138 range). Built for Elite & Boss wars.",
+		Description = "Smuggled full-auto 5.56mm assault rifle (28-rd mag, 34 DMG, 138 range). Built for Elite & Boss wars.",
 		Damage = 34,
 		Pellets = 1,
 		Range = 138,
@@ -352,11 +354,11 @@ WeaponConfig.WEAPONS = {
 		Icon = "SNP",
 		Category = "Sniper",
 		Rarity = "Legendary",
-		Price = 11000,
+		Price = 14500,
 		RobuxItemId = nil,
 		RobuxPrice = 129,
 		RequiredLevel = 5,
-		Description = "Precision long-range .308 bolt rifle (5-rd mag, 118 DMG, 210 range). Drops Bosses from afar.",
+		Description = "Contraband long-range .308 bolt rifle (5-rd mag, 118 DMG, 210 range). Drops Bosses from afar.",
 		Damage = 118,
 		Pellets = 1,
 		Range = 210,
@@ -473,7 +475,7 @@ WeaponConfig.WEAPONS = {
 		Icon = "KAT",
 		Category = "Melee",
 		Rarity = "Legendary",
-		Price = 9250,
+		Price = 9600,
 		RobuxItemId = nil,
 		RobuxPrice = 109,
 		RequiredLevel = 3,
@@ -504,7 +506,7 @@ WeaponConfig.WEAPONS = {
 		Icon = "DRUM",
 		Category = "SMG",
 		Rarity = "Legendary",
-		Price = 16000,
+		Price = 17500,
 		RobuxItemId = nil,
 		RobuxPrice = 159,
 		RequiredLevel = 4,
@@ -534,7 +536,7 @@ WeaponConfig.WEAPONS = {
 		Icon = "ASN",
 		Category = "Sniper",
 		Rarity = "Mythic",
-		Price = 21000,
+		Price = 24000,
 		RobuxItemId = nil,
 		RobuxPrice = 189,
 		RequiredLevel = 5,
@@ -684,5 +686,71 @@ function WeaponConfig.GetCompatibleWeaponsForAmmo(ammoId: AmmoTypeId): { string 
 	end
 	return names
 end
+
+-- Regular City Market vs Underground Black Market classification (single source of truth!)
+local REGULAR_MARKET_WEAPONS: { [string]: boolean } = {
+	MafiaKnife = true,
+	StreetPistol = true,
+	PepperShotgun = true,
+	SilencedDeagle = true,
+	TacticalSMG = true,
+}
+
+for wid, spec in pairs(WeaponConfig.WEAPONS) do
+	if spec.MarketTier == nil then
+		spec.MarketTier = if REGULAR_MARKET_WEAPONS[wid] then "Market" else "BlackMarket"
+	end
+end
+
+function WeaponConfig.GetMarketTier(weaponId: string): MarketTier
+	local w = WeaponConfig.WEAPONS[weaponId]
+	if w and w.MarketTier then
+		return w.MarketTier
+	end
+	return if REGULAR_MARKET_WEAPONS[weaponId] then "Market" else "BlackMarket"
+end
+
+-- Single source of truth for City Market vs Underground Black Market Gadget Gold Pricing (2.7x-4x Contraband Markup!)
+WeaponConfig.GADGET_PRICES = {
+	SmokeGrenade = 900, -- City Market everyday tactical cover
+	Flashbang = 2400, -- Black Market contraband (~2.7x Smoke Grenade)
+	C4Charge = 3600, -- Black Market contraband (4.0x Smoke Grenade — breaches vaults for cash!)
+	ShadowDash = 12500, -- Black Market contraband permanent shinobi blink
+}
+
+-- Don Vinnie's Rotating Underground Smuggler Quips & 5-Minute Flash Contraband Drop Pool (CCU retention + Food-Mafia humor!)
+WeaponConfig.SMUGGLER_DROP_INTERVAL_SEC = 300 -- Fresh Smuggler Drop every 5 minutes!
+WeaponConfig.SMUGGLER_DAY_DISCOUNT_PCT = 35 -- 35% OFF Gold during daytime
+WeaponConfig.SMUGGLER_NIGHT_DISCOUNT_PCT = 45 -- 45% OFF Gold during Night Market!
+
+WeaponConfig.SMUGGLER_QUIPS = {
+	"\"Fell off a noodle truck, boss. Don't ask why it smells like spicy ramen.\"",
+	"\"2x-4x contraband markup? Hey, bribing the Health Inspector ain't cheap!\"",
+	"\"City Market sells training wheels. Down here we sell 'instant rival retirement'.\"",
+	"\"No receipts, no refunds, no Yelp reviews. Just top-shelf Syndicate heat.\"",
+	"\"Grab the 5-min Smuggler Drop before I sell it to the Rival Samurai, chef!\"",
+	"\"Midnight tip: everything underground drops to 45% OFF when the streetlamps click on!\"",
+}
+
+export type SmugglerDealEntry = {
+	Category: "Weapon" | "GuardClass" | "GuardGear" | "ShadowDash",
+	ItemId: string,
+}
+
+WeaponConfig.SMUGGLER_DEAL_POOL = {
+	{ Category = "Weapon", ItemId = "AutoCombatShotgun" },
+	{ Category = "GuardClass", ItemId = "NinjaGuard" },
+	{ Category = "GuardGear", ItemId = "GuardJuggernautArmor" },
+	{ Category = "Weapon", ItemId = "SamuraiKatana" },
+	{ Category = "ShadowDash", ItemId = "ShadowDash" },
+	{ Category = "Weapon", ItemId = "SyndicateCarbine" },
+	{ Category = "GuardClass", ItemId = "EliteGuard" },
+	{ Category = "GuardGear", ItemId = "GuardSyndicateSuit" },
+	{ Category = "Weapon", ItemId = "ShadowSniper" },
+	{ Category = "GuardGear", ItemId = "GuardPrecisionSniper" },
+	{ Category = "Weapon", ItemId = "SyndicateTommyDrum" },
+	{ Category = "GuardClass", ItemId = "BossBodyguard" },
+	{ Category = "Weapon", ItemId = "PhantomAssassinRifle" },
+} :: { SmugglerDealEntry }
 
 return WeaponConfig

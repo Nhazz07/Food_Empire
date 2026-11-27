@@ -25,6 +25,7 @@ local MIN_SECONDS_AFTER_HIT = 3.0
 local HOSTILE_TAGS = {
 	"RivalAIUnit",
 	"MafiaUnit",
+	"NightRaidMafiaUnit",
 	"MafiaSyndicateUnit",
 	"TurfGuardUnit",
 	"ApexMafiaUnit",

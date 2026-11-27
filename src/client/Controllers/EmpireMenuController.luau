@@ -24,13 +24,19 @@ local WeaponConfig = require(
 local BodyguardConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("BodyguardConfig")
 )
+local RestaurantSecurityConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("RestaurantSecurityConfig")
+)
 local ModelPreviewHelper = require("./ModelPreviewHelper")
 local CurrencyIconHelper = require("./CurrencyIconHelper")
 local AudioController = require("./AudioController")
 
-export type MenuTab = "Kitchen" | "Warehouses" | "Upgrades" | "BlackMarket" | "Shop"
+export type MenuTab = "Kitchen" | "Warehouses" | "Upgrades" | "Market" | "BlackMarket" | "Shop"
 export type ActionCallback = (action: string, arg: any?) -> ()
-type BlackMarketSubTab = "Weapons" | "Ammo" | "Bodyguards" | "Mercenaries" | "Premium"
+type EmpireSubTab = "HQ" | "Security" | "Syndicate"
+type SecuritySubView = "Timed" | "Classes" | "Gear"
+type MarketSubTab = "Weapons" | "Supplies" | "Bodyguards" | "GuardGear"
+type BlackMarketSubTab = "Weapons" | "Gadgets" | "Bodyguards" | "Mercenaries" | "Premium"
 type WeaponFilter = "All" | "Melee" | "Pistol" | "Shotgun" | "SMG" | "AssaultRifle" | "Sniper" | "Gear"
 type GuardViewMode = "Classes" | "Gear"
 type GuardGearFilter = "All" | "Armor" | "Helmet" | "Outfit" | "Weapon" | "Attachment" | "Tactical"
@@ -51,6 +57,8 @@ local C_TEXT_MUTED = Color3.fromRGB(184, 196, 220)
 local C_TEXT_DIM = Color3.fromRGB(132, 148, 178)
 local C_OXBLOOD = Color3.fromRGB(220, 38, 62)
 local C_OXBLOOD_DARK = Color3.fromRGB(136, 24, 42)
+local C_TEAL = Color3.fromRGB(14, 158, 154)
+local C_TEAL_DARK = Color3.fromRGB(12, 88, 96)
 local C_BRASS = Color3.fromRGB(245, 168, 28)
 local C_GOLD_HI = Color3.fromRGB(255, 224, 94)
 local C_STEEL = Color3.fromRGB(37, 132, 236)
@@ -99,11 +107,17 @@ local TAB_THEMES: { [MenuTab]: { Accent: Color3, Dark: Color3, Title: string, Su
 		Title = "SYNDICATE EMPIRE",
 		Sub = "Upgrade HQ, hire crew & deploy Restaurant Defense Bodyguards!",
 	},
+	Market = {
+		Accent = Color3.fromRGB(14, 165, 160),
+		Dark = Color3.fromRGB(12, 88, 98),
+		Title = "CITY MARKET",
+		Sub = "Standard firearms, ammo crates, medkits & city bodyguards — shop from anywhere!",
+	},
 	BlackMarket = {
 		Accent = Color3.fromRGB(225, 29, 72),
-		Dark = Color3.fromRGB(128, 18, 42),
+		Dark = Color3.fromRGB(110, 14, 34),
 		Title = "BLACK MARKET",
-		Sub = "Tactical firearms, ammo, bodyguards & samurai/ninja squads!",
+		Sub = "Underground contraband weapons, C4 & stealth gadgets, elite enforcers & mafia squads!",
 	},
 	Shop = {
 		Accent = Color3.fromRGB(16, 185, 104),
@@ -134,6 +148,10 @@ local tabButtons: { [MenuTab]: TextButton } = {}
 local tabLabels: { [MenuTab]: TextLabel } = {}
 local tabActiveBars: { [MenuTab]: Frame } = {}
 local currentTab: MenuTab = "Kitchen"
+local currentEmpireSubTab: EmpireSubTab = "HQ"
+local currentSecuritySubView: SecuritySubView = "Timed"
+local currentMarketSubTab: MarketSubTab = "Weapons"
+local currentMarketWeaponFilter: WeaponFilter = "All"
 local currentBMSubTab: BlackMarketSubTab = "Weapons"
 local currentWeaponFilter: WeaponFilter = "All"
 local currentGuardView: GuardViewMode = "Classes"
@@ -265,10 +283,11 @@ local function makeBtn(parent: Instance, text: string, bg: Color3, pos: UDim2, s
 	btn.Parent = parent
 	makeCorner(btn, 8)
 
-	local isVivid = (bg == C_OXBLOOD or bg == C_ROBUX or bg == C_BRASS or bg == C_OWNED or bg == C_STEEL)
+	local isVivid = (bg == C_OXBLOOD or bg == C_ROBUX or bg == C_BRASS or bg == C_OWNED or bg == C_STEEL or bg == C_TEAL)
 	local baseStrokeCol = if bg == C_ROBUX
 		then Color3.fromRGB(10, 68, 36)
 		elseif bg == C_OXBLOOD then Color3.fromRGB(88, 12, 24)
+		elseif bg == C_TEAL then Color3.fromRGB(8, 66, 68)
 		elseif bg == C_BRASS then Color3.fromRGB(112, 62, 6)
 		elseif bg == C_OWNED then Color3.fromRGB(12, 74, 34)
 		else C_OUTLINE_DARK
@@ -444,6 +463,8 @@ local function makeStoreCollectibleCard(
 		Color3.fromRGB(18, 24, 38)
 	)
 	vp.BackgroundTransparency = 1
+	local vpSt = vp:FindFirstChildOfClass("UIStroke")
+	if vpSt then vpSt:Destroy() end
 
 	-- Crisp corner pill badges
 	makeTag(topBay, badgeText, themeCol:Lerp(C_OUTLINE_DARK, 0.25), UDim2.fromOffset(8, 7), UDim2.fromOffset(92, 17))
@@ -488,7 +509,216 @@ local function makeStoreCollectibleCard(
 	local btn = makeBtn(card, btnText, btnCol, UDim2.new(0, 10, 1, -46), UDim2.new(1, -20, 0, 36), onClick)
 	btn.TextSize = 13
 
+	-- Smooth AAA hover border highlight on store cards
+	local cardSt = card:FindFirstChildOfClass("UIStroke")
+	local origBg = card.BackgroundColor3
+	local origStCol = if cardSt then cardSt.Color else themeCol
+	card.MouseEnter:Connect(function()
+		TweenService:Create(card, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundColor3 = origBg:Lerp(themeCol, 0.14),
+		}):Play()
+		if cardSt then
+			TweenService:Create(cardSt, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Color = themeCol:Lerp(C_GOLD_HI, 0.45),
+				Thickness = 2.7,
+			}):Play()
+		end
+	end)
+	card.MouseLeave:Connect(function()
+		TweenService:Create(card, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundColor3 = origBg,
+		}):Play()
+		if cardSt then
+			TweenService:Create(cardSt, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Color = origStCol,
+				Thickness = 2.2,
+			}):Play()
+		end
+	end)
+
 	return card
+end
+
+-- Helper: Subtle AAA hover border highlight & tint lift on collectible cards!
+local function attachCardHoverGlow(card: Frame, glowCol: Color3): ()
+	local st = card:FindFirstChildOfClass("UIStroke")
+	local origBg = card.BackgroundColor3
+	local origStroke = if st then st.Color else glowCol
+	local origThick = if st then st.Thickness else 2.2
+	card.MouseEnter:Connect(function()
+		TweenService:Create(card, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundColor3 = origBg:Lerp(glowCol, 0.14),
+		}):Play()
+		if st then
+			TweenService:Create(st, TweenInfo.new(0.14, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Color = glowCol:Lerp(C_GOLD_HI, 0.45),
+				Thickness = origThick + 0.5,
+			}):Play()
+		end
+	end)
+	card.MouseLeave:Connect(function()
+		TweenService:Create(card, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+			BackgroundColor3 = origBg,
+		}):Play()
+		if st then
+			TweenService:Create(st, TweenInfo.new(0.16, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+				Color = origStroke,
+				Thickness = origThick,
+			}):Play()
+		end
+	end)
+end
+
+-- Helper: Creates a vibrant studio-lit Showcase Pedestal Bay at the top of any modern collectible card!
+local function createShowcasePedestalBay(
+	card: Frame,
+	bayHeight: number,
+	themeCol: Color3,
+	previewKind: string,
+	previewId: string,
+	isWideWeapon: boolean?
+): Frame
+	attachCardHoverGlow(card, themeCol)
+
+	local topBay = Instance.new("Frame")
+	topBay.Name = "ShowcaseBay"
+	topBay.Size = UDim2.new(1, 0, 0, bayHeight)
+	topBay.BackgroundColor3 = themeCol:Lerp(Color3.fromRGB(12, 18, 32), 0.44)
+	topBay.BorderSizePixel = 0
+	topBay.ClipsDescendants = true
+	topBay.Parent = card
+
+	local topGrad = Instance.new("UIGradient")
+	topGrad.Rotation = 135
+	topGrad.Color = ColorSequence.new({
+		ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+		ColorSequenceKeypoint.new(0.55, Color3.fromRGB(184, 194, 220)),
+		ColorSequenceKeypoint.new(1, Color3.fromRGB(108, 120, 152)),
+	})
+	topGrad.Parent = topBay
+
+	-- Crisp top glass rim reflection
+	local topGloss = Instance.new("Frame")
+	topGloss.Position = UDim2.fromOffset(10, 2)
+	topGloss.Size = UDim2.new(1, -20, 0, 2)
+	topGloss.BackgroundColor3 = Color3.new(1, 1, 1)
+	topGloss.BackgroundTransparency = 0.72
+	topGloss.BorderSizePixel = 0
+	topGloss.Parent = topBay
+	makeCorner(topGloss, 2)
+
+	-- Twin angled studio light beams
+	local ray = Instance.new("Frame")
+	ray.AnchorPoint = Vector2.new(0.5, 0.5)
+	ray.Position = UDim2.fromScale(0.30, 0.5)
+	ray.Size = UDim2.new(0, 44, 2.2, 0)
+	ray.Rotation = 22
+	ray.BackgroundColor3 = Color3.new(1, 1, 1)
+	ray.BackgroundTransparency = 0.89
+	ray.BorderSizePixel = 0
+	ray.Parent = topBay
+
+	local ray2 = Instance.new("Frame")
+	ray2.AnchorPoint = Vector2.new(0.5, 0.5)
+	ray2.Position = UDim2.fromScale(0.72, 0.5)
+	ray2.Size = UDim2.new(0, 20, 2.2, 0)
+	ray2.Rotation = 22
+	ray2.BackgroundColor3 = Color3.new(1, 1, 1)
+	ray2.BackgroundTransparency = 0.93
+	ray2.BorderSizePixel = 0
+	ray2.Parent = topBay
+
+	-- Double-ring glowing circular studio spotlight pedestal behind artwork icon
+	local auraSz = math.max(70, bayHeight - 10)
+	local aura = Instance.new("Frame")
+	aura.AnchorPoint = Vector2.new(0.5, 0.5)
+	aura.Position = UDim2.fromScale(0.5, 0.53)
+	aura.Size = UDim2.fromOffset(auraSz, auraSz)
+	aura.BackgroundColor3 = themeCol
+	aura.BackgroundTransparency = 0.64
+	aura.BorderSizePixel = 0
+	aura.Parent = topBay
+	makeCorner(aura, math.floor(auraSz * 0.5))
+	makeStroke(aura, Color3.new(1, 1, 1), 1.4, 0.58)
+
+	local innerAuraSz = math.max(46, auraSz - 20)
+	local innerAura = Instance.new("Frame")
+	innerAura.AnchorPoint = Vector2.new(0.5, 0.5)
+	innerAura.Position = UDim2.fromScale(0.5, 0.5)
+	innerAura.Size = UDim2.fromOffset(innerAuraSz, innerAuraSz)
+	innerAura.BackgroundColor3 = Color3.new(1, 1, 1)
+	innerAura.BackgroundTransparency = 0.84
+	innerAura.BorderSizePixel = 0
+	innerAura.Parent = aura
+	makeCorner(innerAura, math.floor(innerAuraSz * 0.5))
+
+	local vpSize: UDim2
+	local vpPos: UDim2
+	if isWideWeapon then
+		local h = bayHeight - 6
+		vpSize = UDim2.new(1, -20, 0, h)
+		vpPos = UDim2.new(0, 10, 0, 3)
+	else
+		local sz = bayHeight - 4
+		vpSize = UDim2.fromOffset(sz, sz)
+		vpPos = UDim2.new(0.5, -math.floor(sz * 0.5), 0.5, -math.floor(sz * 0.5) + 1)
+	end
+
+	local vp = ModelPreviewHelper.CreatePreview(
+		topBay,
+		previewKind :: any,
+		previewId,
+		vpSize,
+		vpPos,
+		Color3.fromRGB(16, 22, 36)
+	)
+	vp.BackgroundTransparency = 1
+	local vpStroke = vp:FindFirstChildOfClass("UIStroke")
+	if vpStroke then vpStroke:Destroy() end
+
+	-- Crisp glowing bottom accent trim separating bay from card body
+	local trim = Instance.new("Frame")
+	trim.AnchorPoint = Vector2.new(0, 1)
+	trim.Position = UDim2.fromScale(0, 1)
+	trim.Size = UDim2.new(1, 0, 0, 2)
+	trim.BackgroundColor3 = themeCol:Lerp(Color3.new(1, 1, 1), 0.25)
+	trim.BackgroundTransparency = 0.25
+	trim.BorderSizePixel = 0
+	trim.Parent = topBay
+
+	return topBay
+end
+
+local function makeSectionDivider(parent: Instance, titleText: string, accentCol: Color3): Frame
+	local bar = Instance.new("Frame")
+	bar.Name = "SectionDivider"
+	bar.Size = UDim2.new(1, -6, 0, 26)
+	bar.BackgroundColor3 = C_BG_CARD:Lerp(accentCol, 0.18)
+	bar.BorderSizePixel = 0
+	bar.Parent = parent
+	makeCorner(bar, 7)
+	makeStroke(bar, accentCol:Lerp(C_OUTLINE_DARK, 0.35), 1.4)
+
+	local pip = Instance.new("Frame")
+	pip.Position = UDim2.fromOffset(8, 5)
+	pip.Size = UDim2.fromOffset(4, 16)
+	pip.BackgroundColor3 = accentCol
+	pip.BorderSizePixel = 0
+	pip.Parent = bar
+	makeCorner(pip, 2)
+
+	local lbl = Instance.new("TextLabel")
+	lbl.Position = UDim2.fromOffset(18, 0)
+	lbl.Size = UDim2.new(1, -24, 1, 0)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamBlack
+	lbl.TextXAlignment = Enum.TextXAlignment.Left
+	lbl.TextSize = 11
+	lbl.TextColor3 = C_TEXT_PRIMARY
+	lbl.Text = titleText
+	lbl.Parent = bar
+	addTextOutline(lbl, 1.3)
+	return bar
 end
 
 local function hideConfirmDialog(): ()
@@ -515,6 +745,12 @@ local function showConfirmDialog(titleText: string, detailText: string, btnLabel
 end
 
 local render: () -> ()
+local renderBodyguardsForTier: (
+	state: { [string]: any },
+	targetTier: BodyguardConfig.MarketTier | "All",
+	forcedView: GuardViewMode?,
+	autoDefendHQ: boolean?
+) -> ()
 
 local function clearScroll(): ()
 	nextAutoOrder = 0
@@ -528,10 +764,11 @@ local function clearScroll(): ()
 	end
 end
 
-local TAB_ICON_MAP: { [MenuTab]: "Food" | "Storage" | "Empire" | "Gun" | "Robux" } = {
+local TAB_ICON_MAP: { [MenuTab]: "Food" | "Storage" | "Empire" | "Market" | "Gun" | "Robux" } = {
 	Kitchen = "Food",
 	Warehouses = "Storage",
 	Upgrades = "Empire",
+	Market = "Market",
 	BlackMarket = "Gun",
 	Shop = "Robux",
 }
@@ -601,56 +838,57 @@ local function renderKitchen(state: { [string]: any }): ()
 	local starTitle = if typeof(starInfo) == "table" and typeof(starInfo.Title) == "string" then starInfo.Title else "1-STAR STREET DINER"
 	local starBonus = if typeof(starInfo) == "table" and typeof(starInfo.BonusPct) == "number" then starInfo.BonusPct else 0
 
-	local starBar = makeCard(scrollFrame, 42, C_BRASS)
-	local starLbl = Instance.new("TextLabel")
-	starLbl.Position = UDim2.new(0, 16, 0, 6)
-	starLbl.Size = UDim2.new(1, -32, 1, -12)
-	starLbl.BackgroundTransparency = 1
-	starLbl.Font = Enum.Font.GothamBlack
-	starLbl.TextXAlignment = Enum.TextXAlignment.Left
-	starLbl.TextSize = 12
-	starLbl.TextColor3 = C_BRASS
-	starLbl.Text = string.format(
-		"RATING: %s (%d / 5 STARS)  |  +%d%% DISH GOLD & REP  |  VIP CRITICS AT 2+ STARS",
-		starTitle,
-		starCount,
-		starBonus
-	)
-	starLbl.Parent = starBar
-
-	-- Live City Craving (2.0x Gold Dish) & Menu Pricing Strategy Bar
 	local craving = state.CityCraving
 	local cravingId = if typeof(craving) == "table" then tostring(craving.RecipeId or "") else ""
 	local cravingName = if typeof(craving) == "table" then tostring(craving.DisplayName or "Sizzling Steak") else "Sizzling Steak"
 	local cravingRem = if typeof(craving) == "table" and typeof(craving.TimeRemaining) == "number" then craving.TimeRemaining else 120
 	local curPricing = tostring(state.MenuPricing or "Standard")
 
-	local econBar = makeCard(scrollFrame, 52, C_STEEL)
-	local cravLbl = Instance.new("TextLabel")
-	cravLbl.Position = UDim2.new(0, 14, 0, 6)
-	cravLbl.Size = UDim2.new(1, -286, 1, -12)
-	cravLbl.BackgroundTransparency = 1
-	cravLbl.Font = Enum.Font.GothamBlack
-	cravLbl.TextWrapped = true
-	cravLbl.TextXAlignment = Enum.TextXAlignment.Left
-	cravLbl.TextSize = 11
-	cravLbl.TextColor3 = C_TEXT_PRIMARY
-	cravLbl.Text = string.format("CITY CRAVING (2.0X GOLD): %s (%ds)\nMENU PRICING: %s", string.upper(cravingName), cravingRem, string.upper(curPricing))
-	cravLbl.Parent = econBar
+	-- Compact Unified Culinary Command Header (Star Rating + Live 2X City Craving + Menu Pricing in ONE sleek bar!)
+	local dashCard = makeCard(scrollFrame, 60, C_BRASS)
+	dashCard.Name = "KitchenCommandDashboard"
+
+	local starStars = string.rep("*", starCount)
+	local dashTop = Instance.new("TextLabel")
+	dashTop.Position = UDim2.new(0, 14, 0, 6)
+	dashTop.Size = UDim2.new(1, -290, 0, 18)
+	dashTop.BackgroundTransparency = 1
+	dashTop.Font = Enum.Font.GothamBlack
+	dashTop.TextXAlignment = Enum.TextXAlignment.Left
+	dashTop.TextTruncate = Enum.TextTruncate.AtEnd
+	dashTop.TextSize = 11
+	dashTop.TextColor3 = C_GOLD_HI
+	dashTop.Text = string.format("%s  (%d/5 %s)  •  +%d%% GOLD & REP", starTitle, starCount, starStars, starBonus)
+	dashTop.Parent = dashCard
+	addTextOutline(dashTop, 1.3)
+
+	local cravPill = Instance.new("TextLabel")
+	cravPill.Position = UDim2.new(0, 14, 0, 29)
+	cravPill.Size = UDim2.new(1, -296, 0, 22)
+	cravPill.BackgroundColor3 = Color3.fromRGB(48, 18, 28)
+	cravPill.Font = Enum.Font.GothamBlack
+	cravPill.TextXAlignment = Enum.TextXAlignment.Left
+	cravPill.TextTruncate = Enum.TextTruncate.AtEnd
+	cravPill.TextSize = 10
+	cravPill.TextColor3 = Color3.fromRGB(255, 226, 134)
+	cravPill.Text = string.format("  2.0X CITY CRAVING: %s  (%ds LEFT)", string.upper(cravingName), cravingRem)
+	cravPill.Parent = dashCard
+	makeCorner(cravPill, 6)
+	makeStroke(cravPill, C_OXBLOOD, 1.3)
 
 	local pOpts = {
-		{ Id = "Budget", Label = "BUDGET +25% REP" },
+		{ Id = "Budget", Label = "BUDGET +25%R" },
 		{ Id = "Standard", Label = "STANDARD" },
-		{ Id = "Luxury", Label = "LUXURY +35% G" },
+		{ Id = "Luxury", Label = "LUXURY +35%G" },
 	}
 	for i, po in ipairs(pOpts) do
 		local isSel = (curPricing == po.Id)
 		local pb = makeBtn(
-			econBar,
+			dashCard,
 			po.Label,
 			if isSel then C_OWNED else C_BG_SUBTLE,
-			UDim2.new(1, -276 + (i - 1) * 90, 0.5, -14),
-			UDim2.fromOffset(86, 28),
+			UDim2.new(1, -276 + (i - 1) * 90, 0.5, -16),
+			UDim2.fromOffset(86, 32),
 			function()
 				if dispatchAction then dispatchAction("SetMenuPricing", po.Id) end
 			end
@@ -658,19 +896,24 @@ local function renderKitchen(state: { [string]: any }): ()
 		pb.TextSize = 8
 	end
 
-	local banner = makeCard(scrollFrame, 58, C_BRASS)
+	-- Live Stove Line Control Strip (with glowing cook progress bar!)
+	local banner = makeCard(scrollFrame, 56, C_TEAL)
+	banner.Name = "KitchenStoveBar"
 	local statusLbl = Instance.new("TextLabel")
-	statusLbl.Position = UDim2.new(0, 16, 0, 8)
-	statusLbl.Size = UDim2.new(1, -296, 1, -16)
+	statusLbl.Position = UDim2.new(0, 14, 0, 7)
+	statusLbl.Size = UDim2.new(1, -294, 0, 20)
 	statusLbl.BackgroundTransparency = 1
-	statusLbl.Font = Enum.Font.GothamBold
+	statusLbl.Font = Enum.Font.GothamBlack
 	statusLbl.TextXAlignment = Enum.TextXAlignment.Left
-	statusLbl.TextWrapped = true
-	statusLbl.TextSize = 12
+	statusLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	statusLbl.TextSize = 11
 	statusLbl.TextColor3 = C_TEXT_PRIMARY
 	local stoveParts: { string } = {}
+	local activeCookPct = 0
 	if kitchen.IsCooking and kitchen.CurrentRecipeId then
 		local r1 = RecipeConfig.Recipes[kitchen.CurrentRecipeId]
+		local total1 = if r1 then math.max(1, r1.CookTime) else 10
+		activeCookPct = math.clamp(1 - ((tonumber(kitchen.TimeRemaining) or 0) / total1), 0.08, 1)
 		table.insert(stoveParts, string.format("STOVE #1: %s (%.1fs)%s", string.upper(if r1 then r1.DisplayName else kitchen.CurrentRecipeId), kitchen.TimeRemaining or 0, if kitchen.Boosted1 then " [SEARED]" else ""))
 	end
 	if kitchen.IsCooking2 and kitchen.CurrentRecipeId2 then
@@ -680,10 +923,26 @@ local function renderKitchen(state: { [string]: any }): ()
 	if #stoveParts > 0 then
 		statusLbl.Text = table.concat(stoveParts, "  |  ")
 	else
-		local dualTag = if kitchen.HasDualStove then "DUAL-STOVE READY" else "KITCHEN READY"
-		statusLbl.Text = string.format("%s  |  %d DISHES READY TO SERVE", dualTag, kitchen.ReadyTotal or 0)
+		local dualTag = if kitchen.HasDualStove then "DUAL-STOVE LINE READY" else "CHEF STOVE READY"
+		statusLbl.Text = string.format("%s  •  %d DISHES READY TO SERVE", dualTag, kitchen.ReadyTotal or 0)
 	end
 	statusLbl.Parent = banner
+	addTextOutline(statusLbl, 1.3)
+
+	local stoveTrack = Instance.new("Frame")
+	stoveTrack.Position = UDim2.new(0, 14, 0, 32)
+	stoveTrack.Size = UDim2.new(1, -300, 0, 12)
+	stoveTrack.BackgroundColor3 = Color3.fromRGB(10, 14, 24)
+	stoveTrack.BorderSizePixel = 0
+	stoveTrack.Parent = banner
+	makeCorner(stoveTrack, 6)
+	makeStroke(stoveTrack, C_BORDER, 1.2)
+	local stoveFill = Instance.new("Frame")
+	stoveFill.Size = UDim2.fromScale(if #stoveParts > 0 then activeCookPct elseif (kitchen.ReadyTotal or 0) > 0 then 1 else 0, 1)
+	stoveFill.BackgroundColor3 = if #stoveParts > 0 then C_BRASS else C_OWNED
+	stoveFill.BorderSizePixel = 0
+	stoveFill.Parent = stoveTrack
+	makeCorner(stoveFill, 6)
 
 	local canSear = (kitchen.IsCooking and not kitchen.Boosted1) or (kitchen.IsCooking2 and not kitchen.Boosted2)
 	makeBtn(
@@ -710,34 +969,42 @@ local function renderKitchen(state: { [string]: any }): ()
 		end
 	)
 
+	-- Active Customer Order Spotlight Card (with gleaming AAA Silver Cloche Icon!)
 	local waiting = state.WaitingCustomer
 	if typeof(waiting) == "table" and waiting.CustomerName then
 		local isCookingOrder = waiting.IsBeingCooked == true
-		local orderCard = makeCard(scrollFrame, 72, if isCookingOrder then C_BRASS else C_OWNED)
-		ModelPreviewHelper.CreatePreview(orderCard, "Dish", "ActiveOrder", UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 9), Color3.fromRGB(22, 24, 31), if isCookingOrder then C_BRASS else C_OWNED)
+		local orderAcc = if isCookingOrder then C_BRASS else C_OWNED
+		local orderCard = makeCard(scrollFrame, 74, orderAcc)
+		orderCard.Name = "ActiveOrderSpotlight"
+		orderCard.BackgroundColor3 = C_BG_CARD:Lerp(orderAcc, 0.22)
+		ModelPreviewHelper.CreatePreview(orderCard, "Dish", "ActiveOrder", UDim2.fromOffset(58, 58), UDim2.new(0, 14, 0.5, -29), Color3.fromRGB(16, 22, 36), orderAcc)
+
+		makeTag(orderCard, if isCookingOrder then "PREPARING" else "GUEST WAITING", orderAcc:Lerp(C_OUTLINE_DARK, 0.2), UDim2.fromOffset(80, 8), UDim2.fromOffset(96, 17))
 
 		local custTitle = Instance.new("TextLabel")
-		custTitle.Position = UDim2.new(0, 78, 0, 10)
-		custTitle.Size = UDim2.new(1, -242, 0, 20)
+		custTitle.Position = UDim2.new(0, 182, 0, 7)
+		custTitle.Size = UDim2.new(1, -340, 0, 19)
 		custTitle.BackgroundTransparency = 1
 		custTitle.Font = Enum.Font.GothamBlack
 		custTitle.TextXAlignment = Enum.TextXAlignment.Left
+		custTitle.TextTruncate = Enum.TextTruncate.AtEnd
 		custTitle.TextSize = 13
 		custTitle.TextColor3 = C_TEXT_PRIMARY
-		custTitle.Text = string.format("ACTIVE ORDER  |  %s", string.upper(tostring(waiting.CustomerName)))
+		custTitle.Text = string.upper(tostring(waiting.CustomerName))
 		custTitle.Parent = orderCard
+		addTextOutline(custTitle, 1.4)
 
 		local custDesc = Instance.new("TextLabel")
-		custDesc.Position = UDim2.new(0, 78, 0, 32)
-		custDesc.Size = UDim2.new(1, -242, 0, 28)
+		custDesc.Position = UDim2.new(0, 80, 0, 31)
+		custDesc.Size = UDim2.new(1, -242, 0, 34)
 		custDesc.BackgroundTransparency = 1
-		custDesc.Font = Enum.Font.Gotham
+		custDesc.Font = Enum.Font.GothamBold
 		custDesc.TextWrapped = true
 		custDesc.TextXAlignment = Enum.TextXAlignment.Left
 		custDesc.TextSize = 12
-		custDesc.TextColor3 = C_TEXT_MUTED
+		custDesc.TextColor3 = C_GOLD_HI
 		custDesc.Text = string.format(
-			"%s  |  +%d Gold  |  +%d Rep",
+			"%s   •   +%d GOLD   •   +%d REP",
 			tostring(waiting.DishName or "House Special"),
 			tonumber(waiting.BaseGold) or 25,
 			tonumber(waiting.BaseRep) or 5
@@ -748,8 +1015,8 @@ local function renderKitchen(state: { [string]: any }): ()
 			orderCard,
 			if isCookingOrder then "COOKING..." else "COOK & SERVE",
 			if isCookingOrder then C_DISABLED else C_OWNED,
-			UDim2.new(1, -148, 0.5, -17),
-			UDim2.fromOffset(136, 34),
+			UDim2.new(1, -148, 0.5, -18),
+			UDim2.fromOffset(136, 36),
 			function()
 				if not isCookingOrder and dispatchAction then
 					dispatchAction("ServeCustomerOrder", nil)
@@ -758,9 +1025,14 @@ local function renderKitchen(state: { [string]: any }): ()
 		)
 	end
 
+	makeSectionDivider(scrollFrame, "GOURMET MENU COLLECTION  •  READY DISHES FIRST", C_BRASS)
+
 	local whLevels = (state.Warehouse and state.Warehouse.Levels) or {}
 	local playerRep = (state.Profile and state.Profile.Reputation) or 0
-	local recipeGrid = makeGridContainer(scrollFrame, 2, 144, 8)
+	-- Modern AAA 2-Column Culinary Collectible Grid (matches Market/Black Market Showcase Quality!)
+	local recipeGrid = makeGridContainer(scrollFrame, 2, 224, 10)
+	recipeGrid.Name = "KitchenDishGrid"
+
 	-- Sort recipes smartly: 1. Ready to cook -> 2. Unlocked (needs stock) -> 3. Warehouse-locked -> 4. HQ/Rep locked
 	local sortedRecipes: { { Id: string, Tier: number, Reward: number } } = {}
 	for _, recipeId in ipairs(RecipeConfig.Order) do
@@ -819,73 +1091,69 @@ local function renderKitchen(state: { [string]: any }): ()
 			local hqLocked = (restLevel < recipe.RequiredRestaurantLevel)
 			local isCravingDish = (recipeId == cravingId)
 			local hasAllStock = true
-			local parts: { string } = {}
+			local ingRows: { { Name: string, Have: number, Need: number, Ok: boolean } } = {}
 			for ing, need in pairs(recipe.Ingredients) do
 				local have = stock[ing] or 0
-				if have < need then hasAllStock = false end
+				local ok = (have >= need)
+				if not ok then hasAllStock = false end
 				local ingName = WarehouseConfig.IngredientDisplayNames[ing] or ing
-				table.insert(parts, string.format("%s %d/%d", ingName, have, need))
+				table.insert(ingRows, { Name = ingName, Have = have, Need = need, Ok = ok })
 			end
-			table.sort(parts)
+			table.sort(ingRows, function(a, b) return a.Name < b.Name end)
 			local canCookNow = (not whLocked) and (not repLocked) and (not hqLocked) and hasAllStock
 
-			local accent = if whLocked
-				then Color3.fromRGB(168, 66, 74)
-				elseif isCravingDish then C_OXBLOOD
-				elseif canCookNow then C_BRASS
-				else C_BORDER_STRONG
+			local themeCol = if isCravingDish
+				then C_OXBLOOD
+				elseif canCookNow then C_OWNED
+				elseif whLocked then Color3.fromRGB(162, 54, 72)
+				elseif recipe.IsSecretSyndicate then Color3.fromRGB(168, 85, 247)
+				elseif recipe.CoinsReward >= 200 then C_BRASS
+				else C_STEEL
+
 			local card = Instance.new("Frame")
+			card.Name = "DishCard_" .. recipeId
 			card.LayoutOrder = recipeOrder
 			card.BackgroundColor3 = if whLocked
-				then Color3.fromRGB(22, 18, 24)
-				else C_BG_CARD:Lerp(accent, if isCravingDish then 0.22 else 0.12)
+				then Color3.fromRGB(22, 18, 28)
+				else C_BG_CARD:Lerp(themeCol, if isCravingDish then 0.22 else 0.14)
 			card.BorderSizePixel = 0
 			card.ClipsDescendants = true
 			card.Parent = recipeGrid
-			makeCorner(card, 10)
-			makeStroke(card, accent:Lerp(C_OUTLINE_DARK, 0.25), 2.0)
+			makeCorner(card, 12)
+			makeStroke(card, if isCravingDish then C_GOLD_HI else themeCol:Lerp(C_OUTLINE_DARK, 0.22), if isCravingDish then 2.6 else 2.2)
 
-			local topStrip = Instance.new("Frame")
-			topStrip.Size = UDim2.new(1, 0, 0, 26)
-			topStrip.BackgroundColor3 = if whLocked then Color3.fromRGB(48, 22, 28) else accent:Lerp(C_BG_MODAL, 0.45)
-			topStrip.BorderSizePixel = 0
-			topStrip.Parent = card
+			-- Radiant AAA Culinary Showcase Bay with huge floating hand-painted dish icon!
+			local topBay = createShowcasePedestalBay(card, 94, themeCol, "Dish", recipeId, false)
 
-			local nameLbl = Instance.new("TextLabel")
-			nameLbl.Position = UDim2.new(0, 10, 0, 0)
-			nameLbl.Size = UDim2.new(1, -96, 1, 0)
-			nameLbl.BackgroundTransparency = 1
-			nameLbl.Font = Enum.Font.GothamBlack
-			nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-			nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-			nameLbl.TextSize = 11
-			nameLbl.TextColor3 = if whLocked
-				then Color3.fromRGB(228, 174, 178)
-				elseif isCravingDish then C_GOLD_HI
-				else C_TEXT_PRIMARY
-			local suffix = if whLocked
-				then " [LOCKED]"
-				elseif isCravingDish then " [2X]"
-				elseif recipe.IsSecretSyndicate then " [VIP]"
-				else ""
-			nameLbl.Text = string.upper(recipe.DisplayName) .. suffix
-			nameLbl.Parent = topStrip
-			addTextOutline(nameLbl, 1.5)
+			local leftBadgeTxt = if isCravingDish
+				then "2X CRAVING!"
+				elseif whLocked then "LOCKED"
+				elseif canCookNow then "READY!"
+				elseif recipe.IsSecretSyndicate then "SECRET VIP"
+				elseif recipe.CoinsReward >= 200 then "GOURMET"
+				else table.concat(reqWhTags, "+")
+			local leftBadgeCol = if isCravingDish
+				then C_OXBLOOD
+				elseif whLocked then C_OXBLOOD_DARK
+				elseif canCookNow then C_OWNED
+				elseif recipe.IsSecretSyndicate then Color3.fromRGB(124, 58, 237)
+				else themeCol:Lerp(C_OUTLINE_DARK, 0.25)
+			makeTag(topBay, leftBadgeTxt, leftBadgeCol, UDim2.fromOffset(8, 7), UDim2.fromOffset(78, 17))
 
-			-- Gleaming Gold Payout Pill on top right
+			-- Gleaming 24K Gold Payout Pill in top-right of showcase bay!
 			local payPill = Instance.new("Frame")
-			payPill.AnchorPoint = Vector2.new(1, 0.5)
-			payPill.Position = UDim2.new(1, -6, 0.5, 0)
-			payPill.Size = UDim2.fromOffset(78, 18)
+			payPill.AnchorPoint = Vector2.new(1, 0)
+			payPill.Position = UDim2.new(1, -8, 0, 6)
+			payPill.Size = UDim2.fromOffset(78, 20)
 			payPill.BackgroundColor3 = Color3.fromRGB(26, 20, 10)
 			payPill.BorderSizePixel = 0
-			payPill.Parent = topStrip
-			makeCorner(payPill, 5)
-			makeStroke(payPill, C_BRASS, 1.2)
-			CurrencyIconHelper.CreateGoldCoin(payPill, 13, UDim2.new(0, 4, 0.5, -6), 3)
+			payPill.Parent = topBay
+			makeCorner(payPill, 6)
+			makeStroke(payPill, C_GOLD_HI, 1.4)
+			CurrencyIconHelper.CreateGoldCoin(payPill, 14, UDim2.new(0, 4, 0.5, -7), 3)
 			local payTxt = Instance.new("TextLabel")
-			payTxt.Position = UDim2.fromOffset(20, 0)
-			payTxt.Size = UDim2.new(1, -22, 1, 0)
+			payTxt.Position = UDim2.fromOffset(21, 0)
+			payTxt.Size = UDim2.new(1, -23, 1, 0)
 			payTxt.BackgroundTransparency = 1
 			payTxt.Font = Enum.Font.GothamBlack
 			payTxt.TextXAlignment = Enum.TextXAlignment.Left
@@ -893,46 +1161,77 @@ local function renderKitchen(state: { [string]: any }): ()
 			payTxt.TextColor3 = C_GOLD_HI
 			payTxt.Text = string.format("+%dG", recipe.CoinsReward)
 			payTxt.Parent = payPill
+			addTextOutline(payTxt, 1.2)
 
-			local vp = ModelPreviewHelper.CreatePreview(card, "Dish", recipeId, UDim2.fromOffset(66, 66), UDim2.new(0, 10, 0, 36), Color3.fromRGB(16, 22, 36), accent)
-			makeCorner(vp, 8)
+			-- Bottom-left cook time & bottom-right Rep tags inside bay
+			makeTag(topBay, string.format("%.0fs COOK", recipe.CookTime), Color3.fromRGB(16, 22, 36), UDim2.new(0, 8, 1, -22), UDim2.fromOffset(64, 15))
+			makeTag(topBay, string.format("+%d REP", recipe.ReputationReward), Color3.fromRGB(20, 32, 52), UDim2.new(1, -68, 1, -22), UDim2.fromOffset(60, 15))
 
-			local metaLbl = Instance.new("TextLabel")
-			metaLbl.Position = UDim2.new(0, 84, 0, 32)
-			metaLbl.Size = UDim2.new(1, -92, 0, 14)
-			metaLbl.BackgroundTransparency = 1
-			metaLbl.Font = Enum.Font.GothamBold
-			metaLbl.TextXAlignment = Enum.TextXAlignment.Left
-			metaLbl.TextTruncate = Enum.TextTruncate.AtEnd
-			metaLbl.TextSize = 10
-			metaLbl.TextColor3 = if whLocked then Color3.fromRGB(252, 152, 142) else C_GOLD_HI
-			metaLbl.Text = if whLocked
-				then ("WAREHOUSE: " .. table.concat(missingWhNames, " + "))
-				else string.format("%.0fs Cook  |  +%d Rep  |  %s", recipe.CookTime, recipe.ReputationReward, table.concat(reqWhTags, "+"))
-			metaLbl.Parent = card
+			-- Bold Outlined Dish Title
+			local nameLbl = Instance.new("TextLabel")
+			nameLbl.Position = UDim2.new(0, 10, 0, 99)
+			nameLbl.Size = UDim2.new(1, -20, 0, 20)
+			nameLbl.BackgroundTransparency = 1
+			nameLbl.Font = Enum.Font.GothamBlack
+			nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+			nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+			nameLbl.TextSize = 13
+			nameLbl.TextColor3 = if isCravingDish then C_GOLD_HI elseif whLocked then Color3.fromRGB(232, 182, 188) else C_TEXT_PRIMARY
+			nameLbl.Text = string.upper(recipe.DisplayName)
+			nameLbl.Parent = card
+			addTextOutline(nameLbl, 1.5)
 
-			local reqLbl = Instance.new("TextLabel")
-			reqLbl.Position = UDim2.new(0, 84, 0, 48)
-			reqLbl.Size = UDim2.new(1, -92, 0, 40)
-			reqLbl.BackgroundTransparency = 1
-			reqLbl.Font = Enum.Font.GothamMedium
-			reqLbl.TextWrapped = true
-			reqLbl.TextTruncate = Enum.TextTruncate.AtEnd
-			reqLbl.TextXAlignment = Enum.TextXAlignment.Left
-			reqLbl.TextYAlignment = Enum.TextYAlignment.Top
-			reqLbl.TextSize = 10
-			reqLbl.TextColor3 = if whLocked then Color3.fromRGB(196, 168, 174) else C_TEXT_MUTED
-			reqLbl.Text = if whLocked
-				then ("Unlock in Storage [B] • Needs: " .. table.concat(parts, ", "))
-				else table.concat(parts, ", ")
-			reqLbl.Parent = card
+			-- Visual Color-Coded Ingredient Stock Chips (or Crimson Warehouse Lock Banner)
+			if whLocked then
+				local lockPill = Instance.new("TextLabel")
+				lockPill.Position = UDim2.new(0, 10, 0, 122)
+				lockPill.Size = UDim2.new(1, -20, 0, 46)
+				lockPill.BackgroundColor3 = Color3.fromRGB(46, 18, 26)
+				lockPill.Font = Enum.Font.GothamBold
+				lockPill.TextWrapped = true
+				lockPill.TextTruncate = Enum.TextTruncate.AtEnd
+				lockPill.TextXAlignment = Enum.TextXAlignment.Left
+				lockPill.TextSize = 10
+				lockPill.TextColor3 = Color3.fromRGB(255, 196, 196)
+				lockPill.Text = "  LOCKED: Unlock " .. table.concat(missingWhNames, " + ") .. " in Storage [B]"
+				lockPill.Parent = card
+				makeCorner(lockPill, 6)
+				makeStroke(lockPill, C_OXBLOOD, 1.2)
+			else
+				local chipWrap = Instance.new("Frame")
+				chipWrap.Position = UDim2.new(0, 10, 0, 122)
+				chipWrap.Size = UDim2.new(1, -20, 0, 48)
+				chipWrap.BackgroundTransparency = 1
+				chipWrap.Parent = card
+				local chipGrid = Instance.new("UIGridLayout")
+				chipGrid.FillDirection = Enum.FillDirection.Horizontal
+				chipGrid.SortOrder = Enum.SortOrder.LayoutOrder
+				chipGrid.CellPadding = UDim2.fromOffset(5, 4)
+				local cols = if #ingRows <= 2 then math.max(1, #ingRows) else 2
+				chipGrid.CellSize = UDim2.new(1 / cols, if cols == 2 then -3 else 0, 0, 21)
+				chipGrid.Parent = chipWrap
+
+				for cIdx, ir in ipairs(ingRows) do
+					local chip = Instance.new("TextLabel")
+					chip.LayoutOrder = cIdx
+					chip.BackgroundColor3 = if ir.Ok then Color3.fromRGB(16, 56, 36) else Color3.fromRGB(28, 22, 34)
+					chip.Font = Enum.Font.GothamBold
+					chip.TextTruncate = Enum.TextTruncate.AtEnd
+					chip.TextSize = 9
+					chip.TextColor3 = if ir.Ok then Color3.fromRGB(142, 248, 178) else Color3.fromRGB(246, 182, 168)
+					chip.Text = string.format("%s %d/%d", ir.Name, ir.Have, ir.Need)
+					chip.Parent = chipWrap
+					makeCorner(chip, 5)
+					makeStroke(chip, if ir.Ok then C_OWNED else Color3.fromRGB(118, 56, 68), 1.1)
+				end
+			end
 
 			local allStovesBusy = kitchen.IsCooking and (not kitchen.HasDualStove or kitchen.IsCooking2)
 			local btnText = if whLocked
 				then "UNLOCK WAREHOUSE"
 				elseif repLocked then string.format("REQ %d REP", recipe.RequiredRep or 150)
-				elseif hqLocked then string.format("HQ LV.%d", recipe.RequiredRestaurantLevel)
-				elseif allStovesBusy then "BUSY"
+				elseif hqLocked then string.format("HQ LV.%d LOCK", recipe.RequiredRestaurantLevel)
+				elseif allStovesBusy then "STOVES BUSY"
 				elseif not hasAllStock then "NEED STOCK"
 				else "COOK DISH"
 			local btnColor = if whLocked
@@ -944,8 +1243,8 @@ local function renderKitchen(state: { [string]: any }): ()
 				card,
 				btnText,
 				btnColor,
-				UDim2.new(0, 84, 1, -38),
-				UDim2.new(1, -94, 0, 30),
+				UDim2.new(0, 10, 1, -46),
+				UDim2.new(1, -20, 0, 36),
 				function()
 					if whLocked then
 						EmpireMenuController.ToggleTab("Warehouses")
@@ -954,7 +1253,7 @@ local function renderKitchen(state: { [string]: any }): ()
 					end
 				end
 			)
-			cBtn.TextSize = 10
+			cBtn.TextSize = 11
 		end
 	end
 
@@ -1023,8 +1322,11 @@ local function renderWarehouses(state: { [string]: any }): ()
 		Fruit = Color3.fromRGB(245, 158, 11),
 	}
 
-	-- 2x2 Big Colorful Ingredient Warehouse Card Grid!
-	local grid = makeGridContainer(scrollFrame, 2, 240, 10)
+	makeSectionDivider(scrollFrame, "INGREDIENT SUPPLY WAREHOUSES  •  STEAL MAFIA SHIPMENTS TO FILL FAST", C_STEEL)
+
+	-- 2x2 Big AAA Isometric Warehouse Showcase Grid!
+	local grid = makeGridContainer(scrollFrame, 2, 272, 10)
+	grid.Name = "WarehouseCardGrid"
 	for idx, category in ipairs(WarehouseConfig.Categories) do
 		local spec = WarehouseConfig.Specs[category]
 		local level = levels[category] or 0
@@ -1034,69 +1336,51 @@ local function renderWarehouses(state: { [string]: any }): ()
 		local nextTier = WarehouseConfig.Tiers[level + 1]
 		local themeCol = if isLocked then C_BORDER_STRONG else (catColors[category] or C_STEEL)
 
-		local itemStrs: { string } = {}
-		for _, ing in ipairs(spec.Ingredients) do
-			local ingName = WarehouseConfig.IngredientDisplayNames[ing] or ing
-			table.insert(itemStrs, string.format("%s: %d", ingName, stock[ing] or 0))
-		end
-
 		local card = Instance.new("Frame")
+		card.Name = "WarehouseCard_" .. category
 		card.LayoutOrder = idx
-		card.BackgroundColor3 = C_BG_CARD:Lerp(themeCol, if isLocked then 0.06 else 0.16)
+		card.BackgroundColor3 = C_BG_CARD:Lerp(themeCol, if isLocked then 0.08 else 0.16)
 		card.BorderSizePixel = 0
 		card.ClipsDescendants = true
 		card.Parent = grid
 		makeCorner(card, 12)
 		makeStroke(card, themeCol:Lerp(C_OUTLINE_DARK, 0.2), 2.2)
 
-		-- Vibrant Category Banner Header
-		local topBanner = Instance.new("Frame")
-		topBanner.Size = UDim2.new(1, 0, 0, 34)
-		topBanner.BackgroundColor3 = themeCol:Lerp(C_BG_MODAL, 0.32)
-		topBanner.BorderSizePixel = 0
-		topBanner.Parent = card
+		-- Radiant AAA Isometric Warehouse Building Pedestal Bay!
+		local topBay = createShowcasePedestalBay(card, 102, themeCol, "Warehouse", category, false)
+		makeTag(topBay, spec.Tag, themeCol:Lerp(C_OUTLINE_DARK, 0.25), UDim2.fromOffset(8, 7), UDim2.fromOffset(56, 17))
+		makeTag(
+			topBay,
+			if isLocked then "LOCKED" else string.format("LV.%d / %d", level, WarehouseConfig.MaxLevel),
+			if isLocked then C_OXBLOOD_DARK else C_OWNED,
+			UDim2.new(1, -74, 0, 7),
+			UDim2.fromOffset(66, 17)
+		)
+		makeTag(
+			topBay,
+			if isLocked then "UNLOCK TO STEAL" else string.format("STOCK %d / %d", total, cap),
+			Color3.fromRGB(16, 22, 36),
+			UDim2.new(0, 8, 1, -22),
+			UDim2.fromOffset(108, 15)
+		)
 
 		local hLbl = Instance.new("TextLabel")
-		hLbl.Position = UDim2.new(0, 12, 0, 0)
-		hLbl.Size = UDim2.new(1, -80, 1, 0)
+		hLbl.Position = UDim2.new(0, 10, 0, 107)
+		hLbl.Size = UDim2.new(1, -20, 0, 19)
 		hLbl.BackgroundTransparency = 1
 		hLbl.Font = Enum.Font.GothamBlack
 		hLbl.TextXAlignment = Enum.TextXAlignment.Left
 		hLbl.TextTruncate = Enum.TextTruncate.AtEnd
-		hLbl.TextSize = 11
+		hLbl.TextSize = 13
 		hLbl.TextColor3 = C_TEXT_PRIMARY
 		hLbl.Text = string.upper(spec.DisplayName)
-		hLbl.Parent = topBanner
+		hLbl.Parent = card
 		addTextOutline(hLbl, 1.5)
-
-		makeTag(
-			topBanner,
-			if isLocked then "LOCKED" else string.format("LV.%d", level),
-			if isLocked then C_DISABLED else themeCol,
-			UDim2.new(1, -68, 0.5, -9),
-			UDim2.fromOffset(58, 18)
-		)
-
-		local vp = ModelPreviewHelper.CreatePreview(card, "Warehouse", category, UDim2.fromOffset(78, 78), UDim2.new(0, 12, 0, 44), Color3.fromRGB(16, 22, 36), themeCol)
-		makeCorner(vp, 9)
-
-		local capLbl = Instance.new("TextLabel")
-		capLbl.Position = UDim2.new(0, 100, 0, 42)
-		capLbl.Size = UDim2.new(1, -110, 0, 16)
-		capLbl.BackgroundTransparency = 1
-		capLbl.Font = Enum.Font.GothamBlack
-		capLbl.TextXAlignment = Enum.TextXAlignment.Left
-		capLbl.TextTruncate = Enum.TextTruncate.AtEnd
-		capLbl.TextSize = 11
-		capLbl.TextColor3 = if isLocked then Color3.fromRGB(246, 152, 146) else C_GOLD_HI
-		capLbl.Text = if isLocked then "LOCKED • CANNOT STEAL SHIPMENT" else string.format("STOCK: %d / %d", total, cap)
-		capLbl.Parent = card
-		addTextOutline(capLbl, 1.3)
 
 		-- Chunky Glossy Capacity Progress Bar
 		local barBg = Instance.new("Frame")
-		barBg.Position = UDim2.new(0, 100, 0, 62)
-		barBg.Size = UDim2.new(1, -112, 0, 10)
+		barBg.Position = UDim2.new(0, 10, 0, 129)
+		barBg.Size = UDim2.new(1, -20, 0, 10)
 		barBg.BackgroundColor3 = Color3.fromRGB(10, 14, 24)
 		barBg.BorderSizePixel = 0
 		barBg.Parent = card
@@ -1109,25 +1393,40 @@ local function renderWarehouses(state: { [string]: any }): ()
 		barFill.Parent = barBg
 		makeCorner(barFill, 5)
 
-		local detail = Instance.new("TextLabel")
-		detail.Position = UDim2.new(0, 100, 0, 77)
-		detail.Size = UDim2.new(1, -110, 0, 46)
-		detail.BackgroundTransparency = 1
-		detail.Font = Enum.Font.GothamMedium
-		detail.TextWrapped = true
-		detail.TextTruncate = Enum.TextTruncate.AtEnd
-		detail.TextXAlignment = Enum.TextXAlignment.Left
-		detail.TextYAlignment = Enum.TextYAlignment.Top
-		detail.TextSize = 10
-		detail.TextColor3 = C_TEXT_MUTED
-		detail.Text = if isLocked
-			then ("Ingredients: " .. spec.IngredientSummary .. "\nSteal: " .. spec.ShipmentName)
-			else table.concat(itemStrs, "  |  ")
-		detail.Parent = card
+		-- Individual Ingredient Stock Pill Chips!
+		local ingRow = Instance.new("Frame")
+		ingRow.Position = UDim2.new(0, 10, 0, 144)
+		ingRow.Size = UDim2.new(1, -20, 0, 22)
+		ingRow.BackgroundTransparency = 1
+		ingRow.Parent = card
+		local il = Instance.new("UIListLayout")
+		il.FillDirection = Enum.FillDirection.Horizontal
+		il.SortOrder = Enum.SortOrder.LayoutOrder
+		il.Padding = UDim.new(0, 4)
+		il.Parent = ingRow
+
+		local maxChips = math.min(#spec.Ingredients, 4)
+		for iIdx = 1, maxChips do
+			local ing = spec.Ingredients[iIdx]
+			local ingName = WarehouseConfig.IngredientDisplayNames[ing] or ing
+			local qty = stock[ing] or 0
+			local pill = Instance.new("TextLabel")
+			pill.LayoutOrder = iIdx
+			pill.Size = UDim2.new(1 / maxChips, -3, 1, 0)
+			pill.BackgroundColor3 = if not isLocked and qty > 0 then Color3.fromRGB(16, 48, 36) else Color3.fromRGB(16, 22, 34)
+			pill.Font = Enum.Font.GothamBold
+			pill.TextTruncate = Enum.TextTruncate.AtEnd
+			pill.TextSize = 9
+			pill.TextColor3 = if not isLocked and qty > 0 then Color3.fromRGB(154, 248, 188) else C_TEXT_MUTED
+			pill.Text = if isLocked then ingName else string.format("%s: %d", ingName, qty)
+			pill.Parent = ingRow
+			makeCorner(pill, 5)
+			makeStroke(pill, if not isLocked and qty > 0 then themeCol:Lerp(C_OUTLINE_DARK, 0.35) else C_BORDER, 1)
+		end
 
 		local dishLbl = Instance.new("TextLabel")
-		dishLbl.Position = UDim2.new(0, 14, 0, 130)
-		dishLbl.Size = UDim2.new(1, -28, 0, 50)
+		dishLbl.Position = UDim2.new(0, 10, 0, 171)
+		dishLbl.Size = UDim2.new(1, -20, 0, 42)
 		dishLbl.BackgroundTransparency = 1
 		dishLbl.Font = Enum.Font.GothamBold
 		dishLbl.TextWrapped = true
@@ -1135,22 +1434,22 @@ local function renderWarehouses(state: { [string]: any }): ()
 		dishLbl.TextXAlignment = Enum.TextXAlignment.Left
 		dishLbl.TextYAlignment = Enum.TextYAlignment.Top
 		dishLbl.TextSize = 10
-		dishLbl.TextColor3 = if isLocked then Color3.fromRGB(246, 206, 128) else Color3.fromRGB(168, 224, 188)
-		dishLbl.Text = string.format("UNLOCKS KITCHEN DISHES: %s\nCENTRAL PARK: %s", spec.FoodUnlockSummary, spec.ShipmentName)
+		dishLbl.TextColor3 = if isLocked then Color3.fromRGB(246, 206, 128) else Color3.fromRGB(172, 228, 196)
+		dishLbl.Text = string.format("DISHES: %s\nRAID: %s", spec.FoodUnlockSummary, spec.ShipmentShortName)
 		dishLbl.Parent = card
 
 		if isLocked then
 			local unlockRobux = MonetizationConfig.DualRobuxOptions.UnlockWarehouse.RobuxPrice
-			local gBtn = makeBtn(card, string.format("UNLOCK %sG", formatCommaInt(spec.UnlockCost)), C_OXBLOOD, UDim2.new(0, 12, 1, -46), UDim2.new(0.58, -15, 0, 36), function()
+			local gBtn = makeBtn(card, string.format("UNLOCK %sG", formatCommaInt(spec.UnlockCost)), C_OXBLOOD, UDim2.new(0, 10, 1, -46), UDim2.new(0.58, -12, 0, 36), function()
 				if dispatchAction then dispatchAction("UpgradeWarehouse", category) end
 			end)
 			gBtn.TextSize = 11
-			local rBtn = makeBtn(card, string.format("R$ %d", unlockRobux), C_ROBUX, UDim2.new(0.58, 3, 1, -46), UDim2.new(0.42, -15, 0, 36), function()
+			local rBtn = makeBtn(card, string.format("R$ %d", unlockRobux), C_ROBUX, UDim2.new(0.58, 2, 1, -46), UDim2.new(0.42, -12, 0, 36), function()
 				if dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "UpgradeWarehouse", Arg = category }) end
 			end)
 			rBtn.TextSize = 11
 		else
-			makeBtn(card, "MOVE", C_BG_SUBTLE, UDim2.new(0, 12, 1, -46), UDim2.fromOffset(64, 36), function()
+			makeBtn(card, "MOVE", C_BG_SUBTLE, UDim2.new(0, 10, 1, -46), UDim2.fromOffset(62, 36), function()
 				if dispatchAction then dispatchAction("MoveWarehouse", category) end
 			end)
 			if nextTier then
@@ -1159,8 +1458,8 @@ local function renderWarehouses(state: { [string]: any }): ()
 					card,
 					string.format("UPG %sG", formatCommaInt(nextTier.UpgradeCost)),
 					C_OWNED,
-					UDim2.new(0, 82, 1, -46),
-					UDim2.new(1, -182, 0, 36),
+					UDim2.new(0, 78, 1, -46),
+					UDim2.new(1, -174, 0, 36),
 					function()
 						if dispatchAction then dispatchAction("UpgradeWarehouse", category) end
 					end
@@ -1170,8 +1469,8 @@ local function renderWarehouses(state: { [string]: any }): ()
 					card,
 					string.format("R$ %d", upgRobux),
 					C_ROBUX,
-					UDim2.new(1, -94, 1, -46),
-					UDim2.fromOffset(82, 36),
+					UDim2.new(1, -90, 1, -46),
+					UDim2.fromOffset(80, 36),
 					function()
 						if dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "UpgradeWarehouse", Arg = category }) end
 					end
@@ -1182,12 +1481,266 @@ local function renderWarehouses(state: { [string]: any }): ()
 					card,
 					"MAX LEVEL",
 					C_DISABLED,
-					UDim2.new(0, 82, 1, -46),
-					UDim2.new(1, -94, 0, 36),
+					UDim2.new(0, 78, 1, -46),
+					UDim2.new(1, -88, 0, 36),
 					function() end
 				)
 			end
 		end
+	end
+end
+
+local function renderTimedSecurityContracts(state: { [string]: any }): ()
+	if not scrollFrame then return end
+	local profile = state.Profile or {}
+	local playerCoins = tonumber(profile.Coins) or 0
+	local hcCfg = RestaurantSecurityConfig.HiredCompanions
+	local hcState = if typeof(state.HiredCompanions) == "table" then state.HiredCompanions else {}
+	local hcContracts = if typeof(hcState.Contracts) == "table" then hcState.Contracts else {}
+	local hcActiveCount = tonumber(hcState.ActiveCount) or 0
+	local hcMax = tonumber(hcState.MaxActive) or hcCfg.MaxActiveContractsPerPlayer
+
+	makeSectionDivider(
+		scrollFrame,
+		string.format("TIMED RESTAURANT DEFENDERS (%d / %d ACTIVE)  •  5M / 10M CONTRACTS  •  AUTO-RESPAWNS IN %ds", hcActiveCount, hcMax, hcCfg.RespawnDelaySeconds),
+		C_GOLD_HI
+	)
+
+	-- Modern 2-Column Collectible Showcase Grid for all 4 Timed Defenders (Shadow Ninja, Crimson Assassin, Restaurant Bodyguard, Elite Bodyguard — Dual Gold & Robux!)
+	local grid = makeGridContainer(scrollFrame, 2, 286, 10)
+	grid.Name = "TimedDefenderGrid"
+
+	for idx, compType in ipairs(hcCfg.TypeOrder) do
+		local cSpec = hcCfg.Types[compType]
+		if not cSpec then continue end
+		local activeEntry = hcContracts[compType]
+		local isDeployed = typeof(activeEntry) == "table" and activeEntry.State ~= "Expired"
+		local isRespawning = isDeployed and activeEntry.State == "Respawning"
+		local remSec = if isDeployed then (tonumber(activeEntry.TimeRemaining) or 0) else 0
+		local respSec = if isRespawning then (tonumber(activeEntry.RespawnRemaining) or 0) else 0
+		local themeCol = if isRespawning then C_GOLD_HI elseif isDeployed then C_OWNED else cSpec.AccentColor
+
+		local card = Instance.new("Frame")
+		card.Name = "TimedDefenderCard_" .. compType
+		card.LayoutOrder = idx
+		card.BackgroundColor3 = C_BG_CARD:Lerp(themeCol, 0.14)
+		card.BorderSizePixel = 0
+		card.ClipsDescendants = true
+		card.Parent = grid
+		makeCorner(card, 12)
+		makeStroke(card, themeCol:Lerp(C_OUTLINE_DARK, 0.22), 2.2)
+
+		local topBay = createShowcasePedestalBay(card, 92, themeCol, cSpec.PreviewCategory, cSpec.PreviewId, false)
+		makeTag(topBay, cSpec.RoleTag, cSpec.AccentColor:Lerp(C_OUTLINE_DARK, 0.22), UDim2.fromOffset(8, 7), UDim2.fromOffset(118, 16))
+		local statusTagTxt = if isRespawning then "RESPAWNING" elseif isDeployed then "DEPLOYED" else "5M / 10M"
+		local statusTagCol = if isRespawning then C_BRASS elseif isDeployed then C_OWNED else Color3.fromRGB(16, 22, 36)
+		makeTag(topBay, statusTagTxt, statusTagCol, UDim2.new(1, -86, 0, 7), UDim2.fromOffset(78, 16))
+
+		local title = Instance.new("TextLabel")
+		title.Position = UDim2.new(0, 10, 0, 98)
+		title.Size = UDim2.new(1, -20, 0, 19)
+		title.BackgroundTransparency = 1
+		title.Font = Enum.Font.GothamBlack
+		title.TextXAlignment = Enum.TextXAlignment.Left
+		title.TextTruncate = Enum.TextTruncate.AtEnd
+		title.TextSize = 14
+		title.TextColor3 = C_TEXT_PRIMARY
+		title.Text = string.upper(cSpec.DisplayName)
+		title.Parent = card
+		addTextOutline(title, 1.5)
+
+		-- 4 Color-Coded Stat Pills (HP / DMG / SPD / STYLE)
+		local statRow = Instance.new("Frame")
+		statRow.Position = UDim2.new(0, 10, 0, 121)
+		statRow.Size = UDim2.new(1, -20, 0, 19)
+		statRow.BackgroundTransparency = 1
+		statRow.Parent = card
+		local statPills = {
+			{ Text = string.format("HP %d", cSpec.MaxHealth), Col = C_OWNED },
+			{ Text = string.format("DMG %d", cSpec.Damage), Col = C_OXBLOOD },
+			{ Text = string.format("SPD %.0f", cSpec.WalkSpeed), Col = C_BRASS },
+			{ Text = if cSpec.CombatStyle == "Melee" then "BLADE" else "RANGED", Col = cSpec.AccentColor },
+		}
+		for sIdx, sp in ipairs(statPills) do
+			local pill = Instance.new("TextLabel")
+			pill.Position = UDim2.new((sIdx - 1) * 0.255, 0, 0, 0)
+			pill.Size = UDim2.new(0.24, 0, 1, 0)
+			pill.BackgroundColor3 = Color3.fromRGB(14, 18, 28)
+			pill.Font = Enum.Font.GothamBold
+			pill.TextSize = 9
+			pill.TextColor3 = sp.Col:Lerp(Color3.new(1, 1, 1), 0.35)
+			pill.Text = sp.Text
+			pill.Parent = statRow
+			makeCorner(pill, 4)
+			makeStroke(pill, sp.Col:Lerp(C_OUTLINE_DARK, 0.45), 1)
+		end
+
+		local desc = Instance.new("TextLabel")
+		desc.Position = UDim2.new(0, 10, 0, 145)
+		desc.Size = UDim2.new(1, -20, 0, 46)
+		desc.BackgroundTransparency = 1
+		desc.Font = Enum.Font.GothamMedium
+		desc.TextWrapped = true
+		desc.TextTruncate = Enum.TextTruncate.AtEnd
+		desc.TextXAlignment = Enum.TextXAlignment.Left
+		desc.TextYAlignment = Enum.TextYAlignment.Top
+		desc.TextSize = 10
+		desc.TextColor3 = C_TEXT_MUTED
+		desc.Text = cSpec.Description
+		desc.Parent = card
+
+		if isDeployed then
+			local m = math.floor(remSec / 60)
+			local s = remSec % 60
+			local statusBadge = Instance.new("TextLabel")
+			statusBadge.Position = UDim2.new(0, 10, 1, -56)
+			statusBadge.Size = UDim2.new(1, -20, 0, 44)
+			statusBadge.BackgroundColor3 = if isRespawning then Color3.fromRGB(78, 52, 16) else Color3.fromRGB(22, 68, 42)
+			statusBadge.Font = Enum.Font.GothamBlack
+			statusBadge.TextWrapped = true
+			statusBadge.TextSize = 11
+			statusBadge.TextColor3 = if isRespawning then Color3.fromRGB(255, 224, 128) else Color3.fromRGB(168, 245, 194)
+			statusBadge.Text = if isRespawning
+				then string.format("RESPAWNING IN %ds  •  %02d:%02d LEFT", respSec, m, s)
+				else string.format("DEFENDING HQ  •  %02d:%02d LEFT", m, s)
+			statusBadge.Parent = card
+			makeCorner(statusBadge, 8)
+			makeStroke(statusBadge, if isRespawning then C_GOLD_HI else C_OWNED, 1.5)
+		else
+			-- Row 1: Gold 5m & 10m Options
+			local b5 = makeBtn(
+				card,
+				string.format("5M %sG", formatCommaInt(cSpec.Cost5Min)),
+				if playerCoins >= cSpec.Cost5Min then C_TEAL else C_DISABLED,
+				UDim2.new(0, 10, 1, -84),
+				UDim2.new(0.5, -13, 0, 34),
+				function()
+					if dispatchAction then
+						dispatchAction("HireDefenseCompanion", { CompanionType = cSpec.Id, DurationMinutes = 5 })
+					end
+				end
+			)
+			b5.TextSize = 10
+
+			local b10 = makeBtn(
+				card,
+				string.format("10M %sG", formatCommaInt(cSpec.Cost10Min)),
+				if playerCoins >= cSpec.Cost10Min then C_BRASS else C_DISABLED,
+				UDim2.new(0.5, 3, 1, -84),
+				UDim2.new(0.5, -13, 0, 34),
+				function()
+					if dispatchAction then
+						dispatchAction("HireDefenseCompanion", { CompanionType = cSpec.Id, DurationMinutes = 10 })
+					end
+				end
+			)
+			b10.TextSize = 10
+
+			-- Row 2: Robux 5m & 10m Dual-Currency Options
+			local r5 = makeBtn(
+				card,
+				string.format("5M R$ %d", cSpec.Robux5Min),
+				C_ROBUX,
+				UDim2.new(0, 10, 1, -44),
+				UDim2.new(0.5, -13, 0, 34),
+				function()
+					if dispatchAction then
+						dispatchAction("BuyWithRobuxOption", { Kind = "HireDefenseCompanion", Arg = { CompanionType = cSpec.Id, DurationMinutes = 5 } })
+					end
+				end
+			)
+			r5.TextSize = 10
+
+			local r10 = makeBtn(
+				card,
+				string.format("10M R$ %d", cSpec.Robux10Min),
+				C_ROBUX,
+				UDim2.new(0.5, 3, 1, -44),
+				UDim2.new(0.5, -13, 0, 34),
+				function()
+					if dispatchAction then
+						dispatchAction("BuyWithRobuxOption", { Kind = "HireDefenseCompanion", Arg = { CompanionType = cSpec.Id, DurationMinutes = 10 } })
+					end
+				end
+			)
+			r10.TextSize = 10
+		end
+	end
+end
+
+local function renderSecurityHub(state: { [string]: any }): ()
+	if not scrollFrame then return end
+	local profile = state.Profile or {}
+	local defLv = tonumber(profile.DefenseLevel) or 1
+	local bgState = if typeof(state.Bodyguards) == "table" then state.Bodyguards else {}
+	local activeSquad = if typeof(bgState.ActiveSquad) == "table" then bgState.ActiveSquad else {}
+	local hcState = if typeof(state.HiredCompanions) == "table" then state.HiredCompanions else {}
+	local hcActiveCount = tonumber(hcState.ActiveCount) or 0
+	local hcMax = tonumber(hcState.MaxActive) or RestaurantSecurityConfig.HiredCompanions.MaxActiveContractsPerPlayer
+
+	local hubBanner = makeCard(scrollFrame, 56, C_TEAL)
+	hubBanner.Name = "SecurityHubBanner"
+	local hLbl = Instance.new("TextLabel")
+	hLbl.Position = UDim2.new(0, 14, 0, 6)
+	hLbl.Size = UDim2.new(1, -28, 1, -12)
+	hLbl.BackgroundTransparency = 1
+	hLbl.Font = Enum.Font.GothamBold
+	hLbl.TextWrapped = true
+	hLbl.TextXAlignment = Enum.TextXAlignment.Left
+	hLbl.TextSize = 11
+	hLbl.TextColor3 = C_TEXT_PRIMARY
+	hLbl.Text = string.format(
+		"UNIFIED RESTAURANT SECURITY & BODYGUARD HUB  |  PERMANENT SQUAD: %d / %d  •  TIMED DEFENDERS: %d / %d  •  TURRETS TIER %d / 3\nCommand all 8 permanent Bodyguard classes, outfit all 18 Guard Gear items, or deploy 5m/10m Timed Defenders.",
+		#activeSquad,
+		BodyguardConfig.MAX_ACTIVE_GUARDS,
+		hcActiveCount,
+		hcMax,
+		defLv
+	)
+	hLbl.Parent = hubBanner
+
+	-- 3 Clean Security Hub Category Pills (Timed Contracts | All 8 Bodyguards | All 18 Guard Gear)
+	local viewBar = Instance.new("Frame")
+	viewBar.Name = "SecurityViewBar"
+	viewBar.Size = UDim2.new(1, -6, 0, 34)
+	viewBar.BackgroundTransparency = 1
+	viewBar.Parent = scrollFrame
+	local vl = Instance.new("UIListLayout")
+	vl.FillDirection = Enum.FillDirection.Horizontal
+	vl.SortOrder = Enum.SortOrder.LayoutOrder
+	vl.Padding = UDim.new(0, 6)
+	vl.Parent = viewBar
+
+	local secViews: { { Id: SecuritySubView, Label: string, Col: Color3 } } = {
+		{ Id = "Timed", Label = string.format("TIMED DEFENDERS (%d)", #RestaurantSecurityConfig.HiredCompanions.TypeOrder), Col = C_BRASS },
+		{ Id = "Classes", Label = string.format("ALL BODYGUARDS (%d)", #BodyguardConfig.CLASS_ORDER), Col = C_TEAL },
+		{ Id = "Gear", Label = string.format("ALL GUARD GEAR (%d)", #BodyguardConfig.GEAR_ORDER), Col = C_STEEL },
+	}
+	for vIdx, sv in ipairs(secViews) do
+		local active = (currentSecuritySubView == sv.Id)
+		local vb = makeBtn(viewBar, sv.Label, if active then sv.Col else C_BG_CARD_ALT, UDim2.new(), UDim2.new(1 / 3, -4, 0, 32), function()
+			AudioController.PlayClick()
+			currentSecuritySubView = sv.Id
+			render()
+		end)
+		vb.Name = "SecurityView_" .. sv.Id
+		vb.LayoutOrder = vIdx
+		vb.TextSize = 10
+		if active then
+			local st = vb:FindFirstChildOfClass("UIStroke")
+			if st then
+				st.Color = C_GOLD_HI
+				st.Thickness = 1.8
+			end
+		end
+	end
+
+	if currentSecuritySubView == "Timed" then
+		renderTimedSecurityContracts(state)
+	elseif currentSecuritySubView == "Classes" then
+		renderBodyguardsForTier(state, "All", "Classes", true)
+	else
+		renderBodyguardsForTier(state, "All", "Gear", true)
 	end
 end
 
@@ -1199,6 +1752,70 @@ local function renderUpgrades(state: { [string]: any }): ()
 	local crewCount = profile.CrewCount or 0
 	local maxCrew = state.MaxCrew or 2
 	local nextCrewCost = state.NextCrewCost or 180
+
+	-- Top 3-Tab Empire Navigation Bar: HQ & STAFF | SECURITY HUB | SYNDICATE OPS (cleanly eliminates 35-row endless scroll!)
+	local empSubBar = Instance.new("Frame")
+	empSubBar.Name = "EmpireSubTabBar"
+	empSubBar.Size = UDim2.new(1, -6, 0, 38)
+	empSubBar.BackgroundTransparency = 1
+	empSubBar.Parent = scrollFrame
+	local esl = Instance.new("UIListLayout")
+	esl.FillDirection = Enum.FillDirection.Horizontal
+	esl.SortOrder = Enum.SortOrder.LayoutOrder
+	esl.Padding = UDim.new(0, 6)
+	esl.Parent = empSubBar
+
+	local bgStateTop = if typeof(state.Bodyguards) == "table" then state.Bodyguards else {}
+	local sqCountTop = if typeof(bgStateTop.ActiveSquad) == "table" then #bgStateTop.ActiveSquad else 0
+	local hcCountTop = if typeof(state.HiredCompanions) == "table" then (tonumber(state.HiredCompanions.ActiveCount) or 0) else 0
+	local totalSecActive = sqCountTop + hcCountTop
+
+	local empTabs: { { Id: EmpireSubTab, Label: string, ActiveCol: Color3, Icon: "Empire" | "Guard" | "Ninja" } } = {
+		{ Id = "HQ", Label = "HQ & STAFF", ActiveCol = C_BRASS, Icon = "Empire" },
+		{ Id = "Security", Label = if totalSecActive > 0 then string.format("SECURITY HUB (%d)", totalSecActive) else "SECURITY HUB", ActiveCol = C_TEAL, Icon = "Guard" },
+		{ Id = "Syndicate", Label = "SYNDICATE OPS", ActiveCol = C_OXBLOOD, Icon = "Ninja" },
+	}
+	for tIdx, et in ipairs(empTabs) do
+		local active = (currentEmpireSubTab == et.Id)
+		local btn = makeBtn(empSubBar, "", if active then et.ActiveCol else C_BG_CARD_ALT, UDim2.new(), UDim2.new(1 / 3, -4, 0, 36), function()
+			AudioController.PlayClick()
+			currentEmpireSubTab = et.Id
+			if scrollFrame then
+				scrollFrame.CanvasPosition = Vector2.new(0, 0)
+			end
+			render()
+		end)
+		btn.Name = "EmpireSubTab_" .. et.Id
+		btn.LayoutOrder = tIdx
+		CurrencyIconHelper.CreateCategoryIcon(btn, et.Icon, 24, UDim2.new(0, 10, 0.5, -12), btn.ZIndex + 2)
+		local lbl = Instance.new("TextLabel")
+		lbl.Name = "SubTabLabel"
+		lbl.Position = UDim2.fromOffset(40, 0)
+		lbl.Size = UDim2.new(1, -44, 1, 0)
+		lbl.BackgroundTransparency = 1
+		lbl.Font = Enum.Font.GothamBlack
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.TextTruncate = Enum.TextTruncate.AtEnd
+		lbl.Text = et.Label
+		lbl.TextSize = 11
+		lbl.TextColor3 = if active then Color3.new(1, 1, 1) else C_TEXT_PRIMARY
+		lbl.ZIndex = btn.ZIndex + 2
+		lbl.Active = false
+		lbl.Parent = btn
+		addTextOutline(lbl, 1.4)
+		if active then
+			local st = btn:FindFirstChildOfClass("UIStroke")
+			if st then
+				st.Color = C_GOLD_HI
+				st.Thickness = 1.8
+			end
+		end
+	end
+
+	if currentEmpireSubTab == "Security" then
+		renderSecurityHub(state)
+		return
+	end
 
 	local function addUpgradeRow(
 		code: string,
@@ -1252,7 +1869,8 @@ local function renderUpgrades(state: { [string]: any }): ()
 	end
 
 	local dualOpts = MonetizationConfig.DualRobuxOptions
-	local nextTier = RecipeConfig.RestaurantTiers[restLv + 1]
+	if currentEmpireSubTab == "HQ" then
+		local nextTier = RecipeConfig.RestaurantTiers[restLv + 1]
 	local expInfo = state.Expansion
 	local expName = if typeof(expInfo) == "table" and typeof(expInfo.DisplayName) == "string" then expInfo.DisplayName else "Starter Bistro"
 	local frontWoodName = if typeof(expInfo) == "table" and typeof(expInfo.FrontPavilionName) == "string" and expInfo.FrontPavilionName ~= ""
@@ -1547,254 +2165,26 @@ local function renderUpgrades(state: { [string]: any }): ()
 		if nextDefCost then function() if dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "UpgradeDefenses" }) end end else nil
 	)
 
-	-- =========================================================================
-	-- RESTAURANT DEFENSE BODYGUARD COLLECTION (Replaces Vehicles — Protects HQ vs Mafia Attacks!)
-	-- =========================================================================
-	local bgState = state.Bodyguards
-	local activeSquad = if typeof(bgState) == "table" and typeof(bgState.ActiveSquad) == "table" then bgState.ActiveSquad else {}
-	local unlockedGuards = if typeof(bgState) == "table" and typeof(bgState.UnlockedClasses) == "table" then bgState.UnlockedClasses else {}
-	local curStance = if typeof(bgState) == "table" and typeof(bgState.Stance) == "string" then bgState.Stance else "PatrolBase"
-	local curStanceLbl = if typeof(bgState) == "table" and typeof(bgState.StanceLabel) == "string" then bgState.StanceLabel else "DEFEND RESTAURANT HQ"
-	local ownedPasses = if typeof(state.OwnedPasses) == "table" then state.OwnedPasses else {}
-	local playerLv = tonumber(profile.Level) or 1
-
-	local defHeader = makeCard(scrollFrame :: ScrollingFrame, 76, C_BRASS)
-	local dhTitle = Instance.new("TextLabel")
-	dhTitle.Position = UDim2.new(0, 14, 0, 7)
-	dhTitle.Size = UDim2.new(1, -280, 0, 18)
-	dhTitle.BackgroundTransparency = 1
-	dhTitle.Font = Enum.Font.GothamBlack
-	dhTitle.TextXAlignment = Enum.TextXAlignment.Left
-	dhTitle.TextSize = 13
-	dhTitle.TextColor3 = C_BRASS
-	dhTitle.Text = string.format("RESTAURANT DEFENSE BODYGUARDS  |  SQUAD %d / %d", #activeSquad, BodyguardConfig.MAX_ACTIVE_GUARDS)
-	dhTitle.Parent = defHeader
-
-	local dhSub = Instance.new("TextLabel")
-	dhSub.Position = UDim2.new(0, 14, 0, 26)
-	dhSub.Size = UDim2.new(1, -280, 0, 14)
-	dhSub.BackgroundTransparency = 1
-	dhSub.Font = Enum.Font.GothamBold
-	dhSub.TextXAlignment = Enum.TextXAlignment.Left
-	dhSub.TextSize = 10
-	dhSub.TextColor3 = C_TEXT_MUTED
-	dhSub.Text = string.format("MODE: %s  •  DEPLOY SLOT #%d  •  DEFENDS ENTRANCE & WAREHOUSE", curStanceLbl, selectedGuardSlot)
-	dhSub.Parent = defHeader
-
-	-- Squad Slot Selector (#1 - #4)
-	local slotRow = Instance.new("Frame")
-	slotRow.Position = UDim2.new(0, 14, 0, 44)
-	slotRow.Size = UDim2.new(1, -280, 0, 24)
-	slotRow.BackgroundTransparency = 1
-	slotRow.Parent = defHeader
-	local slotLay = Instance.new("UIListLayout")
-	slotLay.FillDirection = Enum.FillDirection.Horizontal
-	slotLay.Padding = UDim.new(0, 5)
-	slotLay.Parent = slotRow
-	for sIdx = 1, BodyguardConfig.MAX_ACTIVE_GUARDS do
-		local eqId = activeSquad[sIdx]
-		local eqSpec = if typeof(eqId) == "string" then BodyguardConfig.CLASSES[eqId :: BodyguardConfig.GuardClassId] else nil
-		local isSel = (selectedGuardSlot == sIdx)
-		local sBtn = makeBtn(
-			slotRow,
-			if eqSpec then string.format("#%d %s", sIdx, eqSpec.Icon) else string.format("#%d OPEN", sIdx),
-			if isSel then C_BRASS elseif eqSpec then C_OWNED else C_BG_SUBTLE,
-			UDim2.new(),
-			UDim2.fromOffset(72, 24),
-			function()
-				selectedGuardSlot = sIdx
-				lastRenderedTabSig = ""
-				render()
-			end
-		)
-		sBtn.TextSize = 9
-	end
-
-	-- One-click DEFEND HQ / FOLLOW ME stance toggle buttons
-	makeBtn(
-		defHeader,
-		"DEFEND HQ",
-		if curStance == "PatrolBase" then C_OWNED else C_OXBLOOD,
-		UDim2.new(1, -256, 0.5, -16),
-		UDim2.fromOffset(122, 32),
+	-- Quick-link Card into the Unified Restaurant Security & Bodyguard Hub!
+	addUpgradeRow(
+		"GRD",
+		string.format("RESTAURANT SECURITY HUB  |  %d ACTIVE DEFENDERS", totalSecActive),
+		"Open the Unified Security Hub to hire 5m/10m Timed Defenders, manage all 8 Bodyguard Classes & equip all 18 Gear upgrades!",
+		"OPEN SECURITY HUB",
+		C_TEAL,
 		function()
-			if dispatchAction then dispatchAction("SetGuardStance", "PatrolBase") end
+			AudioController.PlayClick()
+			currentEmpireSubTab = "Security"
+			if scrollFrame then scrollFrame.CanvasPosition = Vector2.new(0, 0) end
+			render()
 		end
 	)
-	makeBtn(
-		defHeader,
-		"FOLLOW ME",
-		if curStance == "Follow" then C_OWNED else C_STEEL,
-		UDim2.new(1, -128, 0.5, -16),
-		UDim2.fromOffset(116, 32),
-		function()
-			if dispatchAction then dispatchAction("SetGuardStance", "Follow") end
-		end
-	)
-
-	-- 6 Balanced Restaurant Defense Bodyguard Cards (Basic, Tactical, Heavy, Ninja, Elite, Commander)
-	local RARITY_ACCENT: { [string]: Color3 } = {
-		Common = Color3.fromRGB(96, 165, 250),
-		Uncommon = Color3.fromRGB(52, 211, 153),
-		Rare = Color3.fromRGB(56, 189, 248),
-		Epic = Color3.fromRGB(239, 68, 68),
-		Legendary = Color3.fromRGB(168, 85, 247),
-		Mythic = Color3.fromRGB(245, 186, 48),
-	}
-
-	for _, classId in ipairs(BodyguardConfig.RESTAURANT_DEFENSE_ORDER) do
-		local spec = BodyguardConfig.CLASSES[classId]
-		if not spec then continue end
-		local hasPass = spec.RobuxItemId ~= nil and ownedPasses[spec.RobuxItemId] == true
-		local isUnlocked = hasPass or (unlockedGuards[spec.Id] == true)
-		local deployedSlot: number? = nil
-		for sIdx, eqId in ipairs(activeSquad) do
-			if eqId == spec.Id then
-				deployedSlot = sIdx
-				break
-			end
-		end
-		local meetsLv = playerLv >= spec.RequiredLevel
-		local accentCol = RARITY_ACCENT[spec.Rarity] or C_BRASS
-		local card = makeCard(scrollFrame :: ScrollingFrame, 102, if deployedSlot then C_OWNED else accentCol)
-
-		-- Crisp 3D Bodyguard Character Preview (distinct model for Basic, Tactical, Heavy, Ninja, Elite, Commander!)
-		ModelPreviewHelper.CreatePreview(card, "Bodyguard", spec.Id, UDim2.fromOffset(72, 72), UDim2.new(0, 11, 0.5, -36), Color3.fromRGB(16, 22, 36), accentCol)
-
-		local gName = Instance.new("TextLabel")
-		gName.Position = UDim2.new(0, 90, 0, 8)
-		gName.Size = UDim2.new(1, -264, 0, 20)
-		gName.BackgroundTransparency = 1
-		gName.Font = Enum.Font.GothamBlack
-		gName.TextXAlignment = Enum.TextXAlignment.Left
-		gName.TextSize = 13
-		gName.TextColor3 = C_TEXT_PRIMARY
-		local statusTag = if deployedSlot
-			then string.format("ACTIVE #%d", deployedSlot)
-			elseif isUnlocked then "OWNED"
-			elseif meetsLv then string.upper(spec.Rarity)
-			else string.format("REQ LV.%d", spec.RequiredLevel)
-		gName.Text = string.format("%s  |  %s  |  %s", string.upper(spec.DisplayName), string.upper(spec.Role), statusTag)
-		gName.Parent = card
-
-		local gStats = Instance.new("TextLabel")
-		gStats.Position = UDim2.new(0, 90, 0, 30)
-		gStats.Size = UDim2.new(1, -264, 0, 15)
-		gStats.BackgroundTransparency = 1
-		gStats.Font = Enum.Font.GothamBold
-		gStats.TextXAlignment = Enum.TextXAlignment.Left
-		gStats.TextSize = 10
-		gStats.TextColor3 = accentCol
-		gStats.Text = string.format(
-			"HP %d   •   DMG %d   •   SPD %.0f   •   RNG %d   •   %s",
-			spec.MaxHP,
-			spec.Damage,
-			spec.WalkSpeed,
-			spec.AttackRange,
-			spec.AbilityName
-		)
-		gStats.Parent = card
-
-		local gDesc = Instance.new("TextLabel")
-		gDesc.Position = UDim2.new(0, 90, 0, 48)
-		gDesc.Size = UDim2.new(1, -264, 0, 44)
-		gDesc.BackgroundTransparency = 1
-		gDesc.Font = Enum.Font.Gotham
-		gDesc.TextWrapped = true
-		gDesc.TextXAlignment = Enum.TextXAlignment.Left
-		gDesc.TextYAlignment = Enum.TextYAlignment.Top
-		gDesc.TextSize = 11
-		gDesc.TextColor3 = C_TEXT_MUTED
-		gDesc.Text = spec.Description
-		gDesc.Parent = card
-
-		local isRobuxOnly = (not isUnlocked) and spec.Cost <= 0 and typeof(spec.RobuxPrice) == "number" and spec.RobuxPrice > 0
-		local hasDualRobux = (not isUnlocked) and spec.Cost > 0 and typeof(spec.RobuxPrice) == "number" and spec.RobuxPrice > 0
-		if isRobuxOnly then
-			makeBtn(
-				card,
-				string.format("R$ %d", spec.RobuxPrice :: number),
-				C_ROBUX,
-				UDim2.new(1, -162, 0.5, -18),
-				UDim2.fromOffset(150, 36),
-				function()
-					if dispatchAction then
-						dispatchAction("RecruitBodyguard", {
-							ClassId = spec.Id,
-							SlotIndex = selectedGuardSlot,
-							UseRobux = true,
-							AutoDefendHQ = true,
-						})
-					end
-				end
-			)
-		elseif hasDualRobux then
-			-- Dual Currency Buttons: BUY WITH GOLD + BUY WITH ROBUX!
-			makeBtn(
-				card,
-				if meetsLv then string.format("BUY %sG", formatCommaInt(spec.Cost)) else string.format("LV.%d  %sG", spec.RequiredLevel, formatCommaInt(spec.Cost)),
-				if meetsLv then C_OXBLOOD else C_DISABLED,
-				UDim2.new(1, -162, 0, 12),
-				UDim2.fromOffset(150, 34),
-				function()
-					if dispatchAction then
-						dispatchAction("RecruitBodyguard", {
-							ClassId = spec.Id,
-							SlotIndex = selectedGuardSlot,
-							UseRobux = false,
-							AutoDefendHQ = true,
-						})
-					end
-				end
-			)
-			makeBtn(
-				card,
-				string.format("R$ %d", spec.RobuxPrice :: number),
-				C_ROBUX,
-				UDim2.new(1, -162, 0, 54),
-				UDim2.fromOffset(150, 34),
-				function()
-					if dispatchAction then
-						dispatchAction("RecruitBodyguard", {
-							ClassId = spec.Id,
-							SlotIndex = selectedGuardSlot,
-							UseRobux = true,
-							AutoDefendHQ = true,
-						})
-					end
-				end
-			)
-		else
-			local btnLabel = if deployedSlot == selectedGuardSlot
-				then string.format("DEPLOYED #%d", deployedSlot)
-				elseif isUnlocked then string.format("DEPLOY #%d", selectedGuardSlot)
-				elseif meetsLv then string.format("BUY %sG", formatCommaInt(spec.Cost))
-				else string.format("LV.%d • %sG", spec.RequiredLevel, formatCommaInt(spec.Cost))
-			local btnColor = if deployedSlot == selectedGuardSlot
-				then C_OWNED
-				elseif isUnlocked then C_STEEL
-				elseif meetsLv then C_OXBLOOD
-				else C_DISABLED
-			makeBtn(
-				card,
-				btnLabel,
-				btnColor,
-				UDim2.new(1, -162, 0.5, -18),
-				UDim2.fromOffset(150, 36),
-				function()
-					if dispatchAction then
-						dispatchAction("RecruitBodyguard", {
-							ClassId = spec.Id,
-							SlotIndex = selectedGuardSlot,
-							UseRobux = false,
-							AutoDefendHQ = true,
-						})
-					end
-				end
-			)
-		end
+	return
 	end
 
+	-- =========================================================================
+	-- SYNDICATE OPS SUB-TAB (Prestige, Families, Vault Heists, Mafia Restaurants & Contracts)
+	-- =========================================================================
 	-- 7-Day Daily Syndicate Vault & Godfather Prestige Rebirth
 	local pv = state.PrestigeVault
 	if typeof(pv) == "table" then
@@ -1815,7 +2205,7 @@ local function renderUpgrades(state: { [string]: any }): ()
 		addUpgradeRow(
 			"PRS",
 			string.format("GODFATHER PRESTIGE  |  CURRENT: P%d (+%d%% GOLD & REP)", pLv, pLv * 25),
-			"At HQ Lv.10 or 2,000 Rep, rebirth your HQ for a permanent +25% lifetime multiplier while keeping all weapons, vehicles & bodyguards!",
+			"At HQ Lv.10 or 2,000 Rep, rebirth your HQ for a permanent +25% lifetime multiplier while keeping all weapons, gear & bodyguards!",
 			if canP then "PRESTIGE NOW" else "REQ LV.10 / 2K REP",
 			if canP then C_BRASS else C_DISABLED,
 			function()
@@ -2076,12 +2466,13 @@ local function renderUpgrades(state: { [string]: any }): ()
 	addUpgradeRow(
 		"GRD",
 		string.format("BODYGUARD SQUAD  |  %d / %d", guardCount, maxGuards),
-		"Recruit up to 4 guards across 7 specialized classes and outfit them with compatible gear in the Black Market.",
-		"MANAGE SQUAD",
-		C_STEEL,
+		"Recruit up to 4 guards across all 8 specialized classes, outfit all 18 gear items, or deploy timed 5m/10m defenders in the Security Hub.",
+		"SECURITY HUB",
+		C_TEAL,
 		function()
-			currentTab = "BlackMarket"
-			currentBMSubTab = "Bodyguards"
+			currentTab = "Upgrades"
+			currentEmpireSubTab = "Security"
+			currentSecuritySubView = "Classes"
 			render()
 		end
 	)
@@ -2248,6 +2639,8 @@ local function renderShop(state: { [string]: any }): ()
 
 		local heroVp = ModelPreviewHelper.CreatePreview(heroCard, "Premium", heroId, UDim2.fromOffset(104, 104), UDim2.fromOffset(17, 15), Color3.fromRGB(14, 24, 34))
 		heroVp.BackgroundTransparency = 1
+		local heroVpSt = heroVp:FindFirstChildOfClass("UIStroke")
+		if heroVpSt then heroVpSt:Destroy() end
 
 		makeTag(heroCard, "MOST POPULAR  |  VIP", C_BRASS, UDim2.fromOffset(136, 14), UDim2.fromOffset(146, 20))
 		makeTag(heroCard, "PERMANENT PASS", C_STEEL, UDim2.fromOffset(288, 14), UDim2.fromOffset(108, 20))
@@ -2345,8 +2738,10 @@ local function renderShop(state: { [string]: any }): ()
 	end
 end
 
-local function renderBlackMarketWeapons(state: { [string]: any }): ()
+local function renderWeaponsForTier(state: { [string]: any }, targetTier: WeaponConfig.MarketTier): ()
 	if not scrollFrame then return end
+	local isBlackMarket = (targetTier == "BlackMarket")
+	local accentCol = if isBlackMarket then C_OXBLOOD else C_TEAL
 	local profile = state.Profile or {}
 	local playerLevel = tonumber(profile.Level) or 1
 	local playerCoins = tonumber(profile.Coins) or 0
@@ -2356,212 +2751,209 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 	local ammoInv = bm.AmmoInventory or {}
 	local weaponKills = if typeof(bm.WeaponKills) == "table" then bm.WeaponKills else {}
 	local weaponSkins = if typeof(bm.WeaponSkins) == "table" then bm.WeaponSkins else {}
-	local currentArmor = if typeof(bm.Armor) == "number" then bm.Armor else 0
 
-	-- Restrained Weapon Category Filter Bar (exact fit — zero right-edge clipping!)
+	local activeFilter = if isBlackMarket then currentWeaponFilter else currentMarketWeaponFilter
+	if activeFilter == "Gear" then
+		activeFilter = "All"
+	end
+
+	-- Sleek Weapon Category Filter Bar tailored to this store's inventory
 	local filterRow = Instance.new("Frame")
-	filterRow.Size = UDim2.new(1, -6, 0, 32)
+	filterRow.Name = "WeaponFilterRow"
+	filterRow.Size = UDim2.new(1, -6, 0, 30)
 	filterRow.BackgroundTransparency = 1
 	filterRow.Parent = scrollFrame
 	local fl = Instance.new("UIListLayout")
 	fl.FillDirection = Enum.FillDirection.Horizontal
-	fl.Padding = UDim.new(0, 4)
+	fl.Padding = UDim.new(0, 5)
 	fl.Parent = filterRow
 
-	local filters: { { Id: WeaponFilter, Label: string } } = {
-		{ Id = "All", Label = "ALL" },
-		{ Id = "Melee", Label = "BLADES" },
-		{ Id = "Pistol", Label = "PISTOLS" },
-		{ Id = "Shotgun", Label = "SHOTGUNS" },
-		{ Id = "SMG", Label = "SMG" },
-		{ Id = "AssaultRifle", Label = "RIFLES" },
-		{ Id = "Sniper", Label = "SNIPER" },
-		{ Id = "Gear", Label = "GADGETS" },
-	}
+	local filters: { { Id: WeaponFilter, Label: string } } = if isBlackMarket
+		then {
+			{ Id = "All", Label = "ALL CONTRABAND" },
+			{ Id = "Melee", Label = "BLADES" },
+			{ Id = "Shotgun", Label = "SHOTGUNS" },
+			{ Id = "SMG", Label = "SMG" },
+			{ Id = "AssaultRifle", Label = "RIFLES" },
+			{ Id = "Sniper", Label = "SNIPER" },
+		}
+		else {
+			{ Id = "All", Label = "ALL STANDARD" },
+			{ Id = "Melee", Label = "BLADES" },
+			{ Id = "Pistol", Label = "PISTOLS" },
+			{ Id = "Shotgun", Label = "SHOTGUNS" },
+			{ Id = "SMG", Label = "SMG" },
+		}
+
 	for _, f in ipairs(filters) do
-		local active = (currentWeaponFilter == f.Id)
+		local active = (activeFilter == f.Id)
 		local b = makeBtn(
 			filterRow,
 			f.Label,
-			if active then C_OXBLOOD else C_BG_CARD_ALT,
+			if active then accentCol else C_BG_CARD_ALT,
 			UDim2.new(),
 			UDim2.new(1 / #filters, -4, 0, 28),
 			function()
-				currentWeaponFilter = f.Id
+				if isBlackMarket then
+					currentWeaponFilter = f.Id
+				else
+					currentMarketWeaponFilter = f.Id
+				end
 				render()
 			end
 		)
 		b.TextSize = 10
 	end
 
-	-- Gold Firearms Catalog with Live 3D ViewportFrame Previews & Per-Weapon Compatible Ammo Buttons
-	if currentWeaponFilter ~= "Gear" then
-		for _, wid in ipairs(WeaponConfig.WEAPON_ORDER) do
-			local w = WeaponConfig.WEAPONS[wid]
-			if w and not w.RobuxItemId and (currentWeaponFilter == "All" or currentWeaponFilter == w.Category) then
-				local isOwned = ownedWeapons[wid] == true
-				local locked = playerLevel < w.RequiredLevel
-				local canAfford = playerCoins >= w.Price
-				local ammoSpec = WeaponConfig.AMMO_TYPES[w.AmmoType]
-				local curAmmo = tonumber(ammoInv[w.AmmoType]) or 0
-				local maxAmmo = if ammoSpec then ammoSpec.MaxReserve else 96
-				local quickPack = if ammoSpec then ammoSpec.Packs[1] else nil
-				local rarityCol = RARITY_MUTED_COLORS[w.Rarity] or C_STEEL
+	-- Modern 2-Column Collectible Weapon Showcase Grid (compact 252px height so full row + Buy buttons sit cleanly above the fold!)
+	local grid = makeGridContainer(scrollFrame, 2, 252, 10)
+	grid.Name = "WeaponCardGrid"
+	local cardOrder = 0
 
-				local cardHeight = if w.IsMelee then 148 else 180
-				local card = makeCard(scrollFrame, cardHeight, if isOwned then C_OWNED else rarityCol)
-				ModelPreviewHelper.CreatePreview(card, "Weapon", wid, UDim2.fromOffset(82, 82), UDim2.new(0, 14, 0, 16), Color3.fromRGB(24, 26, 33))
+	local activeDeal = if typeof(bm.SmugglerDeal) == "table" then bm.SmugglerDeal else nil
 
-				local nameLbl = Instance.new("TextLabel")
-				nameLbl.Position = UDim2.new(0, 108, 0, 10)
-				nameLbl.Size = UDim2.new(1, -278, 0, 20)
-				nameLbl.BackgroundTransparency = 1
-				nameLbl.Font = Enum.Font.GothamBlack
-				nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-				nameLbl.TextSize = 14
-				nameLbl.TextColor3 = C_TEXT_PRIMARY
-				nameLbl.Text = string.upper(w.DisplayName)
-				nameLbl.Parent = card
+	for _, wid in ipairs(WeaponConfig.WEAPON_ORDER) do
+		local w = WeaponConfig.WEAPONS[wid]
+		if w and not w.RobuxItemId and WeaponConfig.GetMarketTier(wid) == targetTier and (activeFilter == "All" or activeFilter == w.Category) then
+			cardOrder += 1
+			local isOwned = ownedWeapons[wid] == true
+			local isSmugglerDeal = isBlackMarket and (not isOwned) and activeDeal ~= nil and activeDeal.Category == "Weapon" and activeDeal.ItemId == wid
+			local dealDiscPct = if isSmugglerDeal then (tonumber(activeDeal.DiscountPct) or 35) else 0
+			local effectivePrice = if isSmugglerDeal and typeof(activeDeal.DealPrice) == "number" then activeDeal.DealPrice else w.Price
+			local locked = playerLevel < w.RequiredLevel
+			local canAfford = playerCoins >= effectivePrice
+			local ammoSpec = WeaponConfig.AMMO_TYPES[w.AmmoType]
+			local curAmmo = tonumber(ammoInv[w.AmmoType]) or 0
+			local maxAmmo = if ammoSpec then ammoSpec.MaxReserve else 96
+			local quickPack = if ammoSpec then ammoSpec.Packs[1] else nil
+			local rarityCol = RARITY_MUTED_COLORS[w.Rarity] or C_STEEL
+			local themeCol = if isOwned then C_OWNED elseif isSmugglerDeal then C_GOLD_HI else rarityCol
 
-				makeTag(card, string.upper(w.Rarity), rarityCol, UDim2.new(0, 108, 0, 32), UDim2.fromOffset(68, 16))
+			local card = Instance.new("Frame")
+			card.Name = "WeaponCard_" .. wid
+			card.LayoutOrder = cardOrder
+			card.BackgroundColor3 = C_BG_CARD:Lerp(themeCol, if isSmugglerDeal then 0.20 else 0.14)
+			card.BorderSizePixel = 0
+			card.ClipsDescendants = true
+			card.Parent = grid
+			makeCorner(card, 12)
+			makeStroke(card, if isSmugglerDeal then C_GOLD_HI else themeCol:Lerp(C_OUTLINE_DARK, 0.22), if isSmugglerDeal then 2.6 else 2.2)
+
+			local topBay = createShowcasePedestalBay(card, 88, themeCol, "Weapon", wid, true)
+
+			-- Crisp corner pill tags inside Showcase Bay
+			makeTag(topBay, string.upper(w.Rarity), rarityCol, UDim2.fromOffset(8, 6), UDim2.fromOffset(70, 16))
+			if isOwned then
+				makeTag(topBay, "OWNED", C_OWNED, UDim2.new(1, -68, 0, 6), UDim2.fromOffset(60, 16))
+			elseif isSmugglerDeal then
+				makeTag(topBay, string.format("-%d%% DROP", dealDiscPct), C_BRASS, UDim2.new(1, -86, 0, 6), UDim2.fromOffset(78, 16))
+			elseif isBlackMarket then
+				makeTag(topBay, "BM EXCLUSIVE", C_OXBLOOD_DARK, UDim2.new(1, -98, 0, 6), UDim2.fromOffset(90, 16))
+			else
 				makeTag(
-					card,
+					topBay,
 					if locked then string.format("REQ LV.%d", w.RequiredLevel) else string.format("LV.%d+", w.RequiredLevel),
-					if locked then C_OXBLOOD_DARK else C_BG_SUBTLE,
-					UDim2.new(0, 182, 0, 32),
-					UDim2.fromOffset(58, 16)
+					if locked then C_OXBLOOD_DARK else C_TEAL_DARK,
+					UDim2.new(1, -68, 0, 6),
+					UDim2.fromOffset(60, 16)
 				)
-				makeTag(
-					card,
-					if w.ReloadType == "ShellByShell" then "SHELL RELOAD" else "MAGAZINE",
-					C_BG_SUBTLE,
-					UDim2.new(0, 246, 0, 32),
-					UDim2.fromOffset(84, 16)
-				)
+			end
+			-- Bottom-left bay badge: Level req (for Black Market) + Reload/Melee type
+			local leftMeta = if isBlackMarket and not isOwned
+				then string.format("LV.%d+ • %s", w.RequiredLevel, if w.IsMelee then "MELEE" else string.upper(w.Category))
+				elseif w.IsMelee then "MELEE BLADE"
+				elseif w.ReloadType == "ShellByShell" then string.format("SHELL • %d RD", w.MagSize)
+				else string.format("MAG %d", w.MagSize)
+			makeTag(topBay, leftMeta, Color3.fromRGB(16, 22, 36), UDim2.new(0, 8, 1, -21), UDim2.fromOffset(102, 15))
 
-				local dmgText = if w.Pellets > 1 then string.format("%dx%d", w.Pellets, w.Damage) else tostring(w.Damage)
-				local rofVal = 1 / math.max(0.05, w.Cooldown)
-				local fireRate = string.format("%.1f/s", rofVal)
-				local statsLbl = Instance.new("TextLabel")
-				statsLbl.Position = UDim2.new(0, 108, 0, 51)
-				statsLbl.Size = UDim2.new(1, -274, 0, 14)
-				statsLbl.BackgroundTransparency = 1
-				statsLbl.Font = Enum.Font.Code
-				statsLbl.TextXAlignment = Enum.TextXAlignment.Left
-				statsLbl.TextSize = 10
-				statsLbl.TextColor3 = C_GOLD_HI
-				statsLbl.Text = string.format(
-					"DMG %s  |  ROF %s  |  RNG %d  |  MAG %d  |  %s (%d/%d)",
-					dmgText,
-					fireRate,
-					w.Range,
-					w.MagSize,
-					if ammoSpec then ammoSpec.ShortName else w.AmmoType,
-					curAmmo,
-					maxAmmo
-				)
-				statsLbl.Parent = card
+			-- Title & Ammo Reserve Pill
+			local nameLbl = Instance.new("TextLabel")
+			nameLbl.Position = UDim2.new(0, 10, 0, 93)
+			nameLbl.Size = UDim2.new(1, -92, 0, 19)
+			nameLbl.BackgroundTransparency = 1
+			nameLbl.Font = Enum.Font.GothamBlack
+			nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+			nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+			nameLbl.TextSize = 13
+			nameLbl.TextColor3 = C_TEXT_PRIMARY
+			nameLbl.Text = string.upper(w.DisplayName)
+			nameLbl.Parent = card
+			addTextOutline(nameLbl, 1.5)
 
-				-- Crisp AAA Mini Visual Stat Bars (DMG / ROF / RNG)
-				local barRow = Instance.new("Frame")
-				barRow.Position = UDim2.new(0, 108, 0, 67)
-				barRow.Size = UDim2.new(1, -278, 0, 7)
-				barRow.BackgroundTransparency = 1
-				barRow.Parent = card
-				local statSpecs = {
-					{ Pct = math.clamp((w.Damage * math.max(1, w.Pellets)) / 110, 0.14, 1), Col = C_OXBLOOD },
-					{ Pct = math.clamp(rofVal / 10, 0.14, 1), Col = C_BRASS },
-					{ Pct = math.clamp(w.Range / 220, 0.12, 1), Col = Color3.fromRGB(74, 142, 198) },
-				}
-				for sIdx, ss in ipairs(statSpecs) do
-					local bg = Instance.new("Frame")
-					bg.Position = UDim2.new((sIdx - 1) * 0.34, 0, 0, 0)
-					bg.Size = UDim2.new(0.31, 0, 1, 0)
-					bg.BackgroundColor3 = Color3.fromRGB(11, 13, 18)
-					bg.BorderSizePixel = 0
-					bg.Parent = barRow
-					makeCorner(bg, 3)
-					local fill = Instance.new("Frame")
-					fill.Size = UDim2.fromScale(ss.Pct, 1)
-					fill.BackgroundColor3 = ss.Col
-					fill.BorderSizePixel = 0
-					fill.Parent = bg
-					makeCorner(fill, 3)
-				end
+			local ammoPillText = if w.IsMelee
+				then "NO AMMO"
+				else string.format("%s %d/%d", if ammoSpec then ammoSpec.ShortName else w.AmmoType, curAmmo, maxAmmo)
+			local ammoPill = Instance.new("TextLabel")
+			ammoPill.Position = UDim2.new(1, -84, 0, 94)
+			ammoPill.Size = UDim2.fromOffset(74, 16)
+			ammoPill.BackgroundColor3 = Color3.fromRGB(14, 18, 28)
+			ammoPill.Font = Enum.Font.GothamBold
+			ammoPill.Text = ammoPillText
+			ammoPill.TextSize = 9
+			ammoPill.TextColor3 = C_GOLD_HI
+			ammoPill.TextTruncate = Enum.TextTruncate.AtEnd
+			ammoPill.Parent = card
+			makeCorner(ammoPill, 4)
+			makeStroke(ammoPill, C_BORDER, 1)
 
-				local descLbl = Instance.new("TextLabel")
-				descLbl.Position = UDim2.new(0, 108, 0, 77)
-				descLbl.Size = UDim2.new(1, -274, 0, 30)
-				descLbl.BackgroundTransparency = 1
-				descLbl.Font = Enum.Font.Gotham
-				descLbl.TextWrapped = true
-				descLbl.TextXAlignment = Enum.TextXAlignment.Left
-				descLbl.TextYAlignment = Enum.TextYAlignment.Top
-				descLbl.TextSize = 11
-				descLbl.TextColor3 = C_TEXT_MUTED
-				descLbl.Text = w.Description
-				descLbl.Parent = card
+			-- Clean 3-Column Labeled Visual Stat Meters (DMG / ROF / RNG)
+			local dmgText = if w.Pellets > 1 then string.format("%dx%d", w.Pellets, w.Damage) else tostring(w.Damage)
+			local rofVal = 1 / math.max(0.05, w.Cooldown)
+			local fireRate = string.format("%.1f/s", rofVal)
+			local statSpecs = {
+				{ Label = "DMG " .. dmgText, Pct = math.clamp((w.Damage * math.max(1, w.Pellets)) / 110, 0.16, 1), Col = accentCol },
+				{ Label = (if w.IsMelee then "SWG " else "ROF ") .. fireRate, Pct = math.clamp(rofVal / 10, 0.16, 1), Col = C_BRASS },
+				{ Label = string.format("RNG %d", w.Range), Pct = math.clamp(w.Range / 220, 0.14, 1), Col = C_STEEL },
+			}
+			local statsHolder = Instance.new("Frame")
+			statsHolder.Position = UDim2.new(0, 10, 0, 115)
+			statsHolder.Size = UDim2.new(1, -20, 0, 24)
+			statsHolder.BackgroundTransparency = 1
+			statsHolder.Parent = card
+			for sIdx, ss in ipairs(statSpecs) do
+				local colFrame = Instance.new("Frame")
+				colFrame.Position = UDim2.new((sIdx - 1) * 0.34, 0, 0, 0)
+				colFrame.Size = UDim2.new(0.32, 0, 1, 0)
+				colFrame.BackgroundTransparency = 1
+				colFrame.Parent = statsHolder
 
-				local buyText = if isOwned
-					then "OWNED  |  EQUIP"
-					elseif locked then string.format("LOCKED  LV.%d", w.RequiredLevel)
-					else string.format("BUY %sG", formatCommaInt(w.Price))
-				local buyCol = if isOwned
-					then C_OWNED
-					elseif locked or not canAfford then C_DISABLED
-					else C_OXBLOOD
+				local sTxt = Instance.new("TextLabel")
+				sTxt.Size = UDim2.new(1, 0, 0, 12)
+				sTxt.BackgroundTransparency = 1
+				sTxt.Font = Enum.Font.GothamBold
+				sTxt.TextXAlignment = Enum.TextXAlignment.Left
+				sTxt.TextSize = 9
+				sTxt.TextColor3 = C_TEXT_MUTED
+				sTxt.Text = ss.Label
+				sTxt.Parent = colFrame
 
-				local buyBtn = makeBtn(card, buyText, buyCol, UDim2.new(1, -158, 0, 16), UDim2.fromOffset(146, 36), function()
-					if locked or isOwned then
-						if dispatchAction then dispatchAction("BuyBlackMarketItem", wid) end
-						return
-					end
-					if w.Price >= 2500 then
-						showConfirmDialog(
-							"CONFIRM WEAPON PURCHASE",
-							string.format("Acquire %s (%s %s) for %s Gold?\nStats: %s DMG  |  %d Range  |  %d Mag", w.DisplayName, w.Rarity, w.Category, formatCommaInt(w.Price), dmgText, w.Range, w.MagSize),
-							string.format("BUY %sG", formatCommaInt(w.Price)),
-							C_OXBLOOD,
-							function()
-								if dispatchAction then dispatchAction("BuyBlackMarketItem", wid) end
-							end
-						)
-					elseif dispatchAction then
-						dispatchAction("BuyBlackMarketItem", wid)
-					end
-				end)
-				buyBtn.TextSize = 11
+				local barBg = Instance.new("Frame")
+				barBg.Position = UDim2.fromOffset(0, 15)
+				barBg.Size = UDim2.new(1, 0, 0, 6)
+				barBg.BackgroundColor3 = Color3.fromRGB(11, 14, 22)
+				barBg.BorderSizePixel = 0
+				barBg.Parent = colFrame
+				makeCorner(barBg, 3)
 
-				if not isOwned and typeof(w.RobuxPrice) == "number" and w.RobuxPrice > 0 then
-					local rBtn = makeBtn(card, string.format("R$ %d", w.RobuxPrice), C_ROBUX, UDim2.new(1, -158, 0, 60), UDim2.fromOffset(146, 36), function()
-						if dispatchAction then
-							dispatchAction("BuyWithRobuxOption", { Kind = "BuyBlackMarketItem", Arg = wid })
-						end
-					end)
-					rBtn.TextSize = 11
-				elseif not w.IsMelee and quickPack and ammoSpec then
-					local ammoFull = curAmmo >= maxAmmo
-					local ammoBtnText = if ammoFull
-						then string.format("%s FULL", string.upper(ammoSpec.ShortName))
-						else string.format("+%d %s (%sG)", quickPack.Quantity, ammoSpec.ShortName, formatCommaInt(quickPack.Price))
-					local aBtn = makeBtn(card, ammoBtnText, if ammoFull then C_DISABLED else C_BG_SUBTLE, UDim2.new(1, -158, 0, 60), UDim2.fromOffset(146, 36), function()
-						if not ammoFull and dispatchAction then
-							dispatchAction("BuyAmmo", { AmmoType = w.AmmoType, PackIndex = 1 })
-						end
-					end)
-					aBtn.TextSize = 10
-				end
+				local fill = Instance.new("Frame")
+				fill.Size = UDim2.fromScale(ss.Pct, 1)
+				fill.BackgroundColor3 = ss.Col
+				fill.BorderSizePixel = 0
+				fill.Parent = barBg
+				makeCorner(fill, 3)
+			end
 
-				-- Gunsmith Attachment Workbench Row (for Firearms) or Blade Crit Tag (for Knife/Katana)
+			if isOwned then
+				-- OWNED WORKBENCH STRIP: Gunsmith Mods Row + Mastery Finishes Row!
 				if not w.IsMelee then
 					local modRow = Instance.new("Frame")
-					modRow.Position = UDim2.new(0, 108, 0, 108)
-					modRow.Size = UDim2.new(1, -120, 0, 28)
+					modRow.Position = UDim2.new(0, 10, 0, 144)
+					modRow.Size = UDim2.new(1, -20, 0, 24)
 					modRow.BackgroundTransparency = 1
 					modRow.Parent = card
 					local modLayout = Instance.new("UIListLayout")
 					modLayout.FillDirection = Enum.FillDirection.Horizontal
-					modLayout.Padding = UDim.new(0, 6)
+					modLayout.Padding = UDim.new(0, 4)
 					modLayout.Parent = modRow
 
 					local myMods = if typeof(weaponMods[wid]) == "table" then weaponMods[wid] else {}
@@ -2570,40 +2962,52 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 						if mSpec then
 							local hasMod = myMods[modId] == true
 							local mTxt = if hasMod
-								then string.format("%s [ON]", mSpec.ShortLabel)
-								else string.format("+%s (%dG)", mSpec.ShortLabel, mSpec.Price)
+								then mSpec.ShortLabel .. " [ON]"
+								else string.format("+%s %dG", mSpec.ShortLabel, mSpec.Price)
 							local mCol = if hasMod
 								then C_OWNED
-								elseif isOwned and playerCoins >= mSpec.Price then C_BG_SUBTLE
+								elseif playerCoins >= mSpec.Price then C_BG_SUBTLE
 								else C_DISABLED
-							local mb = makeBtn(modRow, mTxt, mCol, UDim2.new(), UDim2.new(1 / 3, -4, 0, 26), function()
+							local mb = makeBtn(modRow, mTxt, mCol, UDim2.new(), UDim2.new(1 / 3, -3, 0, 23), function()
 								if not hasMod and dispatchAction then
 									dispatchAction("BuyWeaponMod", { WeaponId = wid, ModId = modId })
 								end
 							end)
-							mb.TextSize = 9
+							mb.TextSize = 8
 						end
 					end
+				else
+					local meleeBadge = Instance.new("TextLabel")
+					meleeBadge.Position = UDim2.new(0, 10, 0, 145)
+					meleeBadge.Size = UDim2.new(1, -20, 0, 22)
+					meleeBadge.BackgroundColor3 = Color3.fromRGB(16, 26, 36)
+					meleeBadge.Font = Enum.Font.GothamBold
+					meleeBadge.TextSize = 9
+					meleeBadge.TextColor3 = C_GOLD_HI
+					meleeBadge.Text = "MELEE READY  •  1.75X BACKSTAB CRIT"
+					meleeBadge.Parent = card
+					makeCorner(meleeBadge, 5)
+					makeStroke(meleeBadge, C_BORDER, 1)
 				end
-				-- Weapon Mastery Finishes Row (Damascus Steel 3K, Crimson Lacquer 8K, 24K Gold Engraved 15K!)
+
+				-- Weapon Mastery Finishes Row
 				local wKills = tonumber(weaponKills[wid]) or 0
 				local activeSkin = tostring(weaponSkins[wid] or "Standard")
-				local masteryY = if w.IsMelee then 108 else 142
 				local masteryRow = Instance.new("Frame")
-				masteryRow.Position = UDim2.new(0, 108, 0, masteryY)
-				masteryRow.Size = UDim2.new(1, -120, 0, 28)
+				masteryRow.Position = UDim2.new(0, 10, 0, 172)
+				masteryRow.Size = UDim2.new(1, -20, 0, 24)
 				masteryRow.BackgroundTransparency = 1
 				masteryRow.Parent = card
 				local mLayout = Instance.new("UIListLayout")
 				mLayout.FillDirection = Enum.FillDirection.Horizontal
-				mLayout.Padding = UDim.new(0, 5)
+				mLayout.Padding = UDim.new(0, 4)
 				mLayout.Parent = masteryRow
 
 				local kTag = Instance.new("TextLabel")
-				kTag.Size = UDim2.fromOffset(78, 26)
-				kTag.BackgroundColor3 = Color3.fromRGB(16, 18, 24)
-				kTag.Font = Enum.Font.GothamBold
-				kTag.Text = string.format("KILLS: %d", wKills)
+				kTag.Size = UDim2.fromOffset(44, 23)
+				kTag.BackgroundColor3 = Color3.fromRGB(14, 18, 28)
+				kTag.Font = Enum.Font.GothamBlack
+				kTag.Text = string.format("%d K", wKills)
 				kTag.TextSize = 9
 				kTag.TextColor3 = C_BRASS
 				kTag.Parent = masteryRow
@@ -2616,189 +3020,251 @@ local function renderBlackMarketWeapons(state: { [string]: any }): ()
 						local unlocked = (wKills >= mTier.KillsRequired)
 						local equipped = (activeSkin == skinId)
 						local sTxt = if equipped
-							then mTier.ShortLabel .. " [ON]"
+							then mTier.ShortLabel .. "*"
 							elseif unlocked then mTier.ShortLabel
-							else string.format("%s (%dK)", mTier.ShortLabel, mTier.KillsRequired)
+							else string.format("%s %dK", string.sub(mTier.ShortLabel, 1, 3), mTier.KillsRequired)
 						local sCol = if equipped
 							then C_OWNED
-							elseif isOwned and unlocked then mTier.SwatchColor:Lerp(C_BG_SUBTLE, 0.55)
+							elseif unlocked then mTier.SwatchColor:Lerp(C_BG_SUBTLE, 0.55)
 							else C_DISABLED
-						local sb = makeBtn(masteryRow, sTxt, sCol, UDim2.new(), UDim2.new(0.25, -24, 0, 26), function()
-							if isOwned and unlocked and not equipped and dispatchAction then
+						local sb = makeBtn(masteryRow, sTxt, sCol, UDim2.new(), UDim2.new(0.25, -15, 0, 23), function()
+							if unlocked and not equipped and dispatchAction then
 								dispatchAction("EquipWeaponMasterySkin", { WeaponId = wid, SkinId = skinId })
 							end
 						end)
-						sb.TextSize = 9
+						sb.TextSize = 8
 					end
 				end
+			else
+				-- UNOWNED CLEAN DESCRIPTION + PERK HINT (Zero disabled button clutter!)
+				local descLbl = Instance.new("TextLabel")
+				descLbl.Position = UDim2.new(0, 10, 0, 143)
+				descLbl.Size = UDim2.new(1, -20, 0, 32)
+				descLbl.BackgroundTransparency = 1
+				descLbl.Font = Enum.Font.GothamMedium
+				descLbl.TextWrapped = true
+				descLbl.TextTruncate = Enum.TextTruncate.AtEnd
+				descLbl.TextXAlignment = Enum.TextXAlignment.Left
+				descLbl.TextYAlignment = Enum.TextYAlignment.Top
+				descLbl.TextSize = 10
+				descLbl.TextColor3 = C_TEXT_MUTED
+				descLbl.Text = w.Description
+				descLbl.Parent = card
+
+				local perkHint = Instance.new("TextLabel")
+				perkHint.Position = UDim2.new(0, 10, 0, 178)
+				perkHint.Size = UDim2.new(1, -20, 0, 19)
+				perkHint.BackgroundColor3 = Color3.fromRGB(15, 20, 32)
+				perkHint.Font = Enum.Font.GothamBold
+				perkHint.TextSize = 9
+				perkHint.TextColor3 = C_TEXT_DIM
+				perkHint.Text = if w.IsMelee
+					then "UNLOCKS: 4 MASTERY BLADE FINISHES"
+					else "UNLOCKS: 3 GUNSMITH MODS + 4 MASTERY SKINS"
+				perkHint.Parent = card
+				makeCorner(perkHint, 5)
+				makeStroke(perkHint, C_BORDER, 1)
+			end
+
+			-- Bottom Action Row (Dual-Currency Gold + Robux, OR Owned Equip + Quick Ammo!)
+			local hasRobuxOpt = (not isOwned) and typeof(w.RobuxPrice) == "number" and w.RobuxPrice > 0
+			local hasQuickAmmo = isOwned and (not w.IsMelee) and quickPack ~= nil and ammoSpec ~= nil
+
+			local buyText = if isOwned
+				then "EQUIP"
+				elseif locked then string.format("LV.%d LOCK", w.RequiredLevel)
+				elseif isSmugglerDeal then string.format("%sG (-%d%%)", formatCommaInt(effectivePrice), dealDiscPct)
+				else string.format("%sG", formatCommaInt(effectivePrice))
+			local buyCol = if isOwned
+				then C_OWNED
+				elseif locked or not canAfford then C_DISABLED
+				elseif isSmugglerDeal then C_BRASS
+				else accentCol
+
+			local leftWidth = if hasRobuxOpt then UDim2.new(0.54, -12, 0, 36)
+				elseif hasQuickAmmo then UDim2.new(0.46, -12, 0, 36)
+				else UDim2.new(1, -20, 0, 36)
+
+			local buyBtn = makeBtn(card, buyText, buyCol, UDim2.new(0, 10, 1, -44), leftWidth, function()
+				if locked or isOwned then
+					if dispatchAction then dispatchAction("BuyBlackMarketItem", wid) end
+					return
+				end
+				if effectivePrice >= 2500 then
+					local dealLine = if isSmugglerDeal
+						then string.format("\nDON VINNIE'S DROP: -%d%% OFF (Was %sG — Save %sG!)", dealDiscPct, formatCommaInt(w.Price), formatCommaInt(math.max(0, w.Price - effectivePrice)))
+						else ""
+					showConfirmDialog(
+						"CONFIRM WEAPON PURCHASE",
+						string.format("Acquire %s (%s %s) for %s Gold?%s\nStats: %s DMG  |  %d Range  |  %d Mag", w.DisplayName, w.Rarity, w.Category, formatCommaInt(effectivePrice), dealLine, dmgText, w.Range, w.MagSize),
+						string.format("BUY %sG", formatCommaInt(effectivePrice)),
+						if isSmugglerDeal then C_BRASS else accentCol,
+						function()
+							if dispatchAction then dispatchAction("BuyBlackMarketItem", wid) end
+						end
+					)
+				elseif dispatchAction then
+					dispatchAction("BuyBlackMarketItem", wid)
+				end
+			end)
+			buyBtn.TextSize = if isSmugglerDeal then 10 else 11
+
+			if hasRobuxOpt and w.RobuxPrice then
+				local rBtn = makeBtn(card, string.format("R$ %d", w.RobuxPrice), C_ROBUX, UDim2.new(0.54, 2, 1, -44), UDim2.new(0.46, -12, 0, 36), function()
+					if dispatchAction then
+						dispatchAction("BuyWithRobuxOption", { Kind = "BuyBlackMarketItem", Arg = wid })
+					end
+				end)
+				rBtn.TextSize = 11
+			elseif hasQuickAmmo and quickPack and ammoSpec then
+				local ammoFull = curAmmo >= maxAmmo
+				local ammoBtnText = if ammoFull
+					then "AMMO FULL"
+					else string.format("+%d (%sG)", quickPack.Quantity, formatCommaInt(quickPack.Price))
+				local aBtn = makeBtn(card, ammoBtnText, if ammoFull then C_DISABLED else C_STEEL, UDim2.new(0.46, 2, 1, -44), UDim2.new(0.54, -12, 0, 36), function()
+					if not ammoFull and dispatchAction then
+						dispatchAction("BuyAmmo", { AmmoType = w.AmmoType, PackIndex = 1 })
+					end
+				end)
+				aBtn.TextSize = 10
 			end
 		end
 	end
+end
 
-	-- Black Market Tier 2 Tactical Gadgets, Player Armor & Field Medkit
-	if currentWeaponFilter == "All" or currentWeaponFilter == "Gear" then
-		local smokeCount = tonumber(bm.SmokeGrenades) or 0
-		local flashCount = tonumber(bm.Flashbangs) or 0
-		local c4Count = tonumber(bm.C4Charges) or 0
-		local hasDash = bm.HasShadowDash == true
+local function renderBlackMarketGadgets(state: { [string]: any }): ()
+	if not scrollFrame then return end
+	local profile = state.Profile or {}
+	local playerCoins = tonumber(profile.Coins) or 0
+	local bm = state.BlackMarket or {}
+	local flashCount = tonumber(bm.Flashbangs) or 0
+	local c4Count = tonumber(bm.C4Charges) or 0
+	local hasDash = bm.HasShadowDash == true
 
-		-- 1. Flashbang Stun Grenades [6]
-		local flashCard = makeCard(scrollFrame, 84, C_BRASS)
-		ModelPreviewHelper.CreatePreview(flashCard, "Equipment", "Flashbang", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31))
-		local fName = Instance.new("TextLabel")
-		fName.Position = UDim2.new(0, 78, 0, 10)
-		fName.Size = UDim2.new(1, -246, 0, 20)
-		fName.BackgroundTransparency = 1
-		fName.Font = Enum.Font.GothamBlack
-		fName.TextXAlignment = Enum.TextXAlignment.Left
-		fName.TextSize = 13
-		fName.TextColor3 = C_TEXT_PRIMARY
-		fName.Text = string.format("FLASHBANG STUN GRENADES  (%d / 12)  |  KEY [6]", flashCount)
-		fName.Parent = flashCard
-		local fDesc = Instance.new("TextLabel")
-		fDesc.Position = UDim2.new(0, 78, 0, 34)
-		fDesc.Size = UDim2.new(1, -246, 0, 40)
-		fDesc.BackgroundTransparency = 1
-		fDesc.Font = Enum.Font.Gotham
-		fDesc.TextWrapped = true
-		fDesc.TextXAlignment = Enum.TextXAlignment.Left
-		fDesc.TextSize = 11
-		fDesc.TextColor3 = C_TEXT_MUTED
-		fDesc.Text = "Concussion flash canister that blinds, freezes, and disorients Rival Samurai, Ninja & Mafia squads for 4 full seconds."
-		fDesc.Parent = flashCard
-		makeBtn(flashCard, if flashCount >= 12 then "FULL (12)" else "BUY 3X 1,200G", if flashCount >= 12 then C_DISABLED else C_OXBLOOD, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
-			if flashCount < 12 and dispatchAction then dispatchAction("BuyFlashbangs", nil) end
-		end)
+	makeSectionDivider(scrollFrame, "UNDERGROUND CONTRABAND GADGETS  •  2X-4X BLACK MARKET EXCLUSIVES", C_OXBLOOD)
 
-		-- 2. C4 Breach Charges [7]
-		local c4Card = makeCard(scrollFrame, 84, C_OXBLOOD)
-		ModelPreviewHelper.CreatePreview(c4Card, "Equipment", "C4Charge", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31))
-		local c4Name = Instance.new("TextLabel")
-		c4Name.Position = UDim2.new(0, 78, 0, 10)
-		c4Name.Size = UDim2.new(1, -246, 0, 20)
-		c4Name.BackgroundTransparency = 1
-		c4Name.Font = Enum.Font.GothamBlack
-		c4Name.TextXAlignment = Enum.TextXAlignment.Left
-		c4Name.TextSize = 13
-		c4Name.TextColor3 = C_TEXT_PRIMARY
-		c4Name.Text = string.format("C4 BREACH CHARGES  (%d / 8)  |  KEY [7]", c4Count)
-		c4Name.Parent = c4Card
-		local c4Desc = Instance.new("TextLabel")
-		c4Desc.Position = UDim2.new(0, 78, 0, 34)
-		c4Desc.Size = UDim2.new(1, -246, 0, 40)
-		c4Desc.BackgroundTransparency = 1
-		c4Desc.Font = Enum.Font.Gotham
-		c4Desc.TextWrapped = true
-		c4Desc.TextXAlignment = Enum.TextXAlignment.Left
-		c4Desc.TextSize = 11
-		c4Desc.TextColor3 = C_TEXT_MUTED
-		c4Desc.Text = "Remote breach explosive that blows open Armored Mafia Cash Vans & reinforced restaurant vaults (+280-450G) and blasts squads for 125 DMG."
-		c4Desc.Parent = c4Card
-		makeBtn(c4Card, if c4Count >= 8 then "FULL (8)" else "BUY 2X 1,900G", if c4Count >= 8 then C_DISABLED else C_OXBLOOD, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
-			if c4Count < 8 and dispatchAction then dispatchAction("BuyC4Charges", nil) end
-		end)
+	local grid = makeGridContainer(scrollFrame, 2, 236, 10)
+	grid.Name = "GadgetCardGrid"
 
-		-- 3. Shadow Smoke Dash (Permanent Ninja Mobility Gadget) [8]
-		local dashCard = makeCard(scrollFrame, 84, if hasDash then C_OWNED else Color3.fromRGB(98, 114, 142))
-		ModelPreviewHelper.CreatePreview(dashCard, "Equipment", "ShadowDash", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31))
-		local dName = Instance.new("TextLabel")
-		dName.Position = UDim2.new(0, 78, 0, 10)
-		dName.Size = UDim2.new(1, -246, 0, 20)
-		dName.BackgroundTransparency = 1
-		dName.Font = Enum.Font.GothamBlack
-		dName.TextXAlignment = Enum.TextXAlignment.Left
-		dName.TextSize = 13
-		dName.TextColor3 = C_TEXT_PRIMARY
-		dName.Text = if hasDash then "SHADOW SMOKE DASH  [UNLOCKED]  |  KEY [8]" else "SHADOW SMOKE DASH  (PERMANENT)  |  KEY [8]"
-		dName.Parent = dashCard
-		local dDesc = Instance.new("TextLabel")
-		dDesc.Position = UDim2.new(0, 78, 0, 34)
-		dDesc.Size = UDim2.new(1, -246, 0, 40)
-		dDesc.BackgroundTransparency = 1
-		dDesc.Font = Enum.Font.Gotham
-		dDesc.TextWrapped = true
-		dDesc.TextXAlignment = Enum.TextXAlignment.Left
-		dDesc.TextSize = 11
-		dDesc.TextColor3 = C_TEXT_MUTED
-		dDesc.Text = "Quick 26-stud ninja smoke dash with afterimage trail (5s recharge). Dodges incoming fire and grants 1.5x Backstab Crit on your next strike!"
-		dDesc.Parent = dashCard
-		makeBtn(dashCard, if hasDash then "ACTIVE  [8]" else "UNLOCK 7,000G", if hasDash then C_OWNED elseif playerCoins >= 7000 then C_OXBLOOD else C_DISABLED, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
-			if not hasDash and dispatchAction then dispatchAction("BuyShadowDash", nil) end
-		end)
+	local dualOpts = MonetizationConfig.DualRobuxOptions
+	local gp = WeaponConfig.GADGET_PRICES
+	local activeDeal = if typeof(bm.SmugglerDeal) == "table" then bm.SmugglerDeal else nil
+	local dashIsDeal = (not hasDash) and activeDeal ~= nil and activeDeal.Category == "ShadowDash"
+	local dashDiscPct = if dashIsDeal then (tonumber(activeDeal.DiscountPct) or 35) else 0
+	local dashPrice = if dashIsDeal and typeof(activeDeal.DealPrice) == "number" then activeDeal.DealPrice else gp.ShadowDash
 
-		local smokeCard = makeCard(scrollFrame, 84, C_STEEL)
-		ModelPreviewHelper.CreatePreview(smokeCard, "Equipment", "SmokeGrenade", UDim2.fromOffset(56, 56), UDim2.new(0, 14, 0, 14), Color3.fromRGB(22, 24, 31))
-		local sName = Instance.new("TextLabel")
-		sName.Position = UDim2.new(0, 78, 0, 10)
-		sName.Size = UDim2.new(1, -246, 0, 20)
-		sName.BackgroundTransparency = 1
-		sName.Font = Enum.Font.GothamBlack
-		sName.TextXAlignment = Enum.TextXAlignment.Left
-		sName.TextSize = 13
-		sName.TextColor3 = C_TEXT_PRIMARY
-		sName.Text = string.format("TACTICAL SMOKE GRENADES  (%d / 12)  |  KEY [T]", smokeCount)
-		sName.Parent = smokeCard
-		local sDesc = Instance.new("TextLabel")
-		sDesc.Position = UDim2.new(0, 78, 0, 34)
-		sDesc.Size = UDim2.new(1, -246, 0, 40)
-		sDesc.BackgroundTransparency = 1
-		sDesc.Font = Enum.Font.Gotham
-		sDesc.TextWrapped = true
-		sDesc.TextXAlignment = Enum.TextXAlignment.Left
-		sDesc.TextSize = 11
-		sDesc.TextColor3 = C_TEXT_MUTED
-		sDesc.Text = "Deploys a dense 10-second tactical smoke screen that breaks Rival & Apex Mafia line-of-sight during escapes or flanks."
-		sDesc.Parent = smokeCard
-		makeBtn(smokeCard, if smokeCount >= 12 then "FULL (12)" else "BUY 3X 900G", if smokeCount >= 12 then C_DISABLED else C_OXBLOOD, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
-			if smokeCount < 12 and dispatchAction then dispatchAction("BuySmokeGrenades", nil) end
-		end)
-		local gearItems = {
-			{ Id = "KevlarVest", Name = "Kevlar Plate Armor", Price = 2100, RobuxPrice = 29, Kind = "Armor", Desc = "+100 breakable ballistic protection. Absorbs gunfire and melee hits until depleted." },
-			{ Id = "Medkit", Name = "Field Trauma Kit", Price = 750, RobuxPrice = 19, Kind = "Consumable", Desc = "Immediate 100% Base Health recovery and 6-second sprint adrenaline." },
-		}
-		for _, item in ipairs(gearItems) do
-			local isArmorFull = (item.Kind == "Armor" and currentArmor >= 100)
-			local card = makeCard(scrollFrame, 96, if isArmorFull then C_OWNED else C_STEEL)
-			ModelPreviewHelper.CreatePreview(card, "Equipment", item.Id, UDim2.fromOffset(72, 68), UDim2.new(0, 14, 0, 14), Color3.fromRGB(24, 26, 33))
+	local gadgetSpecs = {
+		{
+			Id = "Flashbang",
+			Name = "FLASHBANG STUN GRENADES",
+			LeftTag = "BM EXCLUSIVE",
+			LeftTagCol = C_OXBLOOD_DARK,
+			Badge = string.format("%d / 12  •  KEY [6]", flashCount),
+			Desc = "Contraband concussion tech: blinds, freezes & disorients Rival Samurai, Ninja & Mafia squads for 4 full seconds.",
+			Col = C_BRASS,
+			IsDone = (flashCount >= 12),
+			IsDeal = false,
+			BtnText = if flashCount >= 12 then "FULL (12)" else string.format("3X %sG", formatCommaInt(gp.Flashbang)),
+			BtnCol = if flashCount >= 12 then C_DISABLED elseif playerCoins >= gp.Flashbang then C_OXBLOOD else C_DISABLED,
+			RobuxPrice = dualOpts.BuyFlashbangs.RobuxPrice,
+			OnClick = function()
+				if flashCount < 12 and dispatchAction then dispatchAction("BuyFlashbangs", nil) end
+			end,
+			OnRobux = function()
+				if flashCount < 12 and dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "BuyFlashbangs" }) end
+			end,
+		},
+		{
+			Id = "C4Charge",
+			Name = "C4 BREACH CHARGES",
+			LeftTag = "BM EXCLUSIVE",
+			LeftTagCol = C_OXBLOOD_DARK,
+			Badge = string.format("%d / 8  •  KEY [7]", c4Count),
+			Desc = "Illicit demolition bricks: blows open Armored Mafia Cash Vans & vaults (+280-450G) and blasts squads for 125 DMG.",
+			Col = C_OXBLOOD,
+			IsDone = (c4Count >= 8),
+			IsDeal = false,
+			BtnText = if c4Count >= 8 then "FULL (8)" else string.format("2X %sG", formatCommaInt(gp.C4Charge)),
+			BtnCol = if c4Count >= 8 then C_DISABLED elseif playerCoins >= gp.C4Charge then C_OXBLOOD else C_DISABLED,
+			RobuxPrice = dualOpts.BuyC4Charges.RobuxPrice,
+			OnClick = function()
+				if c4Count < 8 and dispatchAction then dispatchAction("BuyC4Charges", nil) end
+			end,
+			OnRobux = function()
+				if c4Count < 8 and dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "BuyC4Charges" }) end
+			end,
+		},
+		{
+			Id = "ShadowDash",
+			Name = "SHADOW SMOKE DASH",
+			LeftTag = if dashIsDeal then string.format("-%d%% DROP", dashDiscPct) else "BM EXCLUSIVE",
+			LeftTagCol = if dashIsDeal then C_BRASS else C_OXBLOOD_DARK,
+			Badge = if hasDash then "UNLOCKED  •  KEY [8]" else "PERMANENT  •  KEY [8]",
+			Desc = "26-stud ninja smoke dash with afterimage trail (5s CD). Dodges fire & grants 1.5x Backstab Crit!",
+			Col = if hasDash then C_OWNED elseif dashIsDeal then C_GOLD_HI else Color3.fromRGB(139, 92, 246),
+			IsDone = hasDash,
+			IsDeal = dashIsDeal,
+			BtnText = if hasDash then "ACTIVE  [8]" elseif dashIsDeal then string.format("%sG (-%d%%)", formatCommaInt(dashPrice), dashDiscPct) else string.format("%sG", formatCommaInt(dashPrice)),
+			BtnCol = if hasDash then C_OWNED elseif playerCoins >= dashPrice then (if dashIsDeal then C_BRASS else C_OXBLOOD) else C_DISABLED,
+			RobuxPrice = dualOpts.BuyShadowDash.RobuxPrice,
+			OnClick = function()
+				if not hasDash and dispatchAction then dispatchAction("BuyShadowDash", nil) end
+			end,
+			OnRobux = function()
+				if not hasDash and dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "BuyShadowDash" }) end
+			end,
+		},
+	}
 
-			local nLbl = Instance.new("TextLabel")
-			nLbl.Position = UDim2.new(0, 98, 0, 12)
-			nLbl.Size = UDim2.new(1, -264, 0, 20)
-			nLbl.BackgroundTransparency = 1
-			nLbl.Font = Enum.Font.GothamBlack
-			nLbl.TextXAlignment = Enum.TextXAlignment.Left
-			nLbl.TextSize = 14
-			nLbl.TextColor3 = C_TEXT_PRIMARY
-			nLbl.Text = if item.Kind == "Armor"
-				then string.format("%s  (%d / 100)", string.upper(item.Name), currentArmor)
-				else string.upper(item.Name)
-			nLbl.Parent = card
+	for idx, g in ipairs(gadgetSpecs) do
+		local card = Instance.new("Frame")
+		card.Name = "GadgetCard_" .. g.Id
+		card.LayoutOrder = idx
+		card.BackgroundColor3 = C_BG_CARD:Lerp(g.Col, if g.IsDeal then 0.20 else 0.14)
+		card.BorderSizePixel = 0
+		card.ClipsDescendants = true
+		card.Parent = grid
+		makeCorner(card, 12)
+		makeStroke(card, if g.IsDeal then C_GOLD_HI else g.Col:Lerp(C_OUTLINE_DARK, 0.22), if g.IsDeal then 2.6 else 2.2)
 
-			local dLbl = Instance.new("TextLabel")
-			dLbl.Position = UDim2.new(0, 98, 0, 36)
-			dLbl.Size = UDim2.new(1, -264, 0, 46)
-			dLbl.BackgroundTransparency = 1
-			dLbl.Font = Enum.Font.Gotham
-			dLbl.TextWrapped = true
-			dLbl.TextXAlignment = Enum.TextXAlignment.Left
-			dLbl.TextSize = 11
-			dLbl.TextColor3 = C_TEXT_MUTED
-			dLbl.Text = item.Desc
-			dLbl.Parent = card
+		local topBay = createShowcasePedestalBay(card, 96, g.Col, "Equipment", g.Id, false)
+		makeTag(topBay, g.LeftTag, g.LeftTagCol, UDim2.fromOffset(8, 7), UDim2.fromOffset(90, 17))
+		makeTag(topBay, g.Badge, Color3.fromRGB(16, 22, 36), UDim2.new(1, -118, 0, 7), UDim2.fromOffset(110, 17))
 
-			if isArmorFull then
-				makeBtn(card, "FULL  (100)", C_OWNED, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function() end)
-			else
-				local btnText = if item.Kind == "Armor" and currentArmor > 0
-					then string.format("REFILL %sG", formatCommaInt(item.Price))
-					else string.format("BUY %sG", formatCommaInt(item.Price))
-				makeBtn(card, btnText, C_OXBLOOD, UDim2.new(1, -158, 0, 10), UDim2.fromOffset(146, 34), function()
-					if dispatchAction then dispatchAction("BuyBlackMarketItem", item.Id) end
-				end)
-				makeBtn(card, string.format("R$ %d", item.RobuxPrice), C_ROBUX, UDim2.new(1, -158, 0, 50), UDim2.fromOffset(146, 34), function()
-					if dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "BuyBlackMarketItem", Arg = item.Id }) end
-				end)
-			end
+		local nLbl = Instance.new("TextLabel")
+		nLbl.Position = UDim2.new(0, 10, 0, 104)
+		nLbl.Size = UDim2.new(1, -20, 0, 20)
+		nLbl.BackgroundTransparency = 1
+		nLbl.Font = Enum.Font.GothamBlack
+		nLbl.TextXAlignment = Enum.TextXAlignment.Left
+		nLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		nLbl.TextSize = 13
+		nLbl.TextColor3 = C_TEXT_PRIMARY
+		nLbl.Text = g.Name
+		nLbl.Parent = card
+		addTextOutline(nLbl, 1.5)
+
+		local dLbl = Instance.new("TextLabel")
+		dLbl.Position = UDim2.new(0, 10, 0, 128)
+		dLbl.Size = UDim2.new(1, -20, 0, 50)
+		dLbl.BackgroundTransparency = 1
+		dLbl.Font = Enum.Font.GothamMedium
+		dLbl.TextWrapped = true
+		dLbl.TextXAlignment = Enum.TextXAlignment.Left
+		dLbl.TextYAlignment = Enum.TextYAlignment.Top
+		dLbl.TextSize = 11
+		dLbl.TextColor3 = C_TEXT_MUTED
+		dLbl.Text = g.Desc
+		dLbl.Parent = card
+
+		if g.IsDone then
+			local btn = makeBtn(card, g.BtnText, g.BtnCol, UDim2.new(0, 10, 1, -48), UDim2.new(1, -20, 0, 38), g.OnClick)
+			btn.TextSize = 11
+		else
+			local gBtn = makeBtn(card, g.BtnText, g.BtnCol, UDim2.new(0, 10, 1, -48), UDim2.new(0.55, -12, 0, 38), g.OnClick)
+			gBtn.TextSize = 10
+			local rBtn = makeBtn(card, string.format("R$ %d", g.RobuxPrice), C_ROBUX, UDim2.new(0.55, 2, 1, -48), UDim2.new(0.45, -12, 0, 38), g.OnRobux)
+			rBtn.TextSize = 11
 		end
 	end
 end
@@ -2809,95 +3275,256 @@ local function renderBlackMarketAmmo(state: { [string]: any }): ()
 	local ammoInv = bm.AmmoInventory or {}
 	local coins = tonumber(state.Profile and state.Profile.Coins) or 0
 
-	local info = makeCard(scrollFrame, 42, C_STEEL)
-	local infoLbl = Instance.new("TextLabel")
-	infoLbl.Position = UDim2.new(0, 14, 0, 6)
-	infoLbl.Size = UDim2.new(1, -24, 1, -12)
-	infoLbl.BackgroundTransparency = 1
-	infoLbl.Font = Enum.Font.GothamMedium
-	infoLbl.TextXAlignment = Enum.TextXAlignment.Left
-	infoLbl.TextSize = 11
-	infoLbl.TextColor3 = C_TEXT_MUTED
-	infoLbl.Text = "Caliber-matched ammunition reserves shared across compatible firearms. Purchase in small, standard, or bulk crates."
-	infoLbl.Parent = info
+	makeSectionDivider(scrollFrame, "CALIBER-MATCHED AMMUNITION CRATES  •  SHARED RESERVES", C_BRASS)
 
-	for _, ammoId in ipairs(WeaponConfig.AMMO_ORDER) do
+	local ammoGrid = makeGridContainer(scrollFrame, 2, 162, 10)
+	ammoGrid.Name = "AmmoCardGrid"
+
+	for aIdx, ammoId in ipairs(WeaponConfig.AMMO_ORDER) do
 		local aSpec = WeaponConfig.AMMO_TYPES[ammoId]
 		if aSpec then
 			local cur = tonumber(ammoInv[ammoId]) or 0
 			local maxRes = aSpec.MaxReserve
 			local isFull = cur >= maxRes
 			local compatList = WeaponConfig.GetCompatibleWeaponsForAmmo(ammoId)
+			local themeCol = if isFull then C_OWNED else C_BRASS
 
-			local card = makeCard(scrollFrame, 114, if isFull then C_OWNED else C_BRASS)
-			ModelPreviewHelper.CreatePreview(card, "Ammo", ammoId, UDim2.fromOffset(78, 78), UDim2.new(0, 14, 0, 18), Color3.fromRGB(24, 26, 33))
+			local card = Instance.new("Frame")
+			card.Name = "AmmoCard_" .. ammoId
+			card.LayoutOrder = aIdx
+			card.BackgroundColor3 = C_BG_CARD:Lerp(themeCol, 0.14)
+			card.BorderSizePixel = 0
+			card.ClipsDescendants = true
+			card.Parent = ammoGrid
+			makeCorner(card, 12)
+			makeStroke(card, themeCol:Lerp(C_OUTLINE_DARK, 0.25), 2.0)
+
+			-- Glowing miniature 3D Ammo Pedestal on Top-Left
+			local iconBay = Instance.new("Frame")
+			iconBay.Position = UDim2.fromOffset(10, 10)
+			iconBay.Size = UDim2.fromOffset(72, 72)
+			iconBay.BackgroundColor3 = themeCol:Lerp(Color3.fromRGB(14, 18, 30), 0.65)
+			iconBay.BorderSizePixel = 0
+			iconBay.Parent = card
+			makeCorner(iconBay, 10)
+			makeStroke(iconBay, themeCol, 1.4, 0.4)
+
+			local vp = ModelPreviewHelper.CreatePreview(iconBay, "Ammo", ammoId, UDim2.fromOffset(66, 66), UDim2.fromOffset(3, 3), Color3.fromRGB(14, 18, 30))
+			vp.BackgroundTransparency = 1
+			local vpSt = vp:FindFirstChildOfClass("UIStroke")
+			if vpSt then vpSt:Destroy() end
 
 			local title = Instance.new("TextLabel")
-			title.Position = UDim2.new(0, 104, 0, 10)
-			title.Size = UDim2.new(1, -118, 0, 20)
+			title.Position = UDim2.new(0, 90, 0, 10)
+			title.Size = UDim2.new(1, -98, 0, 18)
 			title.BackgroundTransparency = 1
 			title.Font = Enum.Font.GothamBlack
 			title.TextXAlignment = Enum.TextXAlignment.Left
-			title.TextSize = 13
+			title.TextTruncate = Enum.TextTruncate.AtEnd
+			title.TextSize = 12
 			title.TextColor3 = C_TEXT_PRIMARY
-			title.Text = string.format("%s  |  %d / %d RESERVE", string.upper(aSpec.DisplayName), cur, maxRes)
+			title.Text = string.upper(aSpec.DisplayName)
 			title.Parent = card
+			addTextOutline(title, 1.4)
 
-			local compatLbl = Instance.new("TextLabel")
-			compatLbl.Position = UDim2.new(0, 104, 0, 31)
-			compatLbl.Size = UDim2.new(1, -118, 0, 16)
-			compatLbl.BackgroundTransparency = 1
-			compatLbl.Font = Enum.Font.Gotham
-			compatLbl.TextXAlignment = Enum.TextXAlignment.Left
-			compatLbl.TextSize = 11
-			compatLbl.TextColor3 = C_TEXT_MUTED
-			compatLbl.Text = "Compatible: " .. table.concat(compatList, ", ")
-			compatLbl.Parent = card
+			local resLbl = Instance.new("TextLabel")
+			resLbl.Position = UDim2.new(0, 90, 0, 30)
+			resLbl.Size = UDim2.new(1, -98, 0, 14)
+			resLbl.BackgroundTransparency = 1
+			resLbl.Font = Enum.Font.GothamBold
+			resLbl.TextXAlignment = Enum.TextXAlignment.Left
+			resLbl.TextSize = 10
+			resLbl.TextColor3 = if isFull then C_OWNED else C_GOLD_HI
+			resLbl.Text = string.format("RESERVE: %d / %d", cur, maxRes)
+			resLbl.Parent = card
 
 			local barBg = Instance.new("Frame")
-			barBg.Position = UDim2.new(0, 104, 0, 52)
-			barBg.Size = UDim2.new(1, -118, 0, 7)
-			barBg.BackgroundColor3 = Color3.fromRGB(12, 13, 17)
+			barBg.Position = UDim2.new(0, 90, 0, 48)
+			barBg.Size = UDim2.new(1, -100, 0, 7)
+			barBg.BackgroundColor3 = Color3.fromRGB(11, 14, 22)
+			barBg.BorderSizePixel = 0
 			barBg.Parent = card
 			makeCorner(barBg, 3)
 			local barFill = Instance.new("Frame")
 			barFill.Size = UDim2.fromScale(math.clamp(cur / math.max(1, maxRes), 0, 1), 1)
-			barFill.BackgroundColor3 = if isFull then C_OWNED else C_BRASS
+			barFill.BackgroundColor3 = themeCol
+			barFill.BorderSizePixel = 0
 			barFill.Parent = barBg
 			makeCorner(barFill, 3)
 
+			local compatLbl = Instance.new("TextLabel")
+			compatLbl.Position = UDim2.new(0, 90, 0, 59)
+			compatLbl.Size = UDim2.new(1, -98, 0, 26)
+			compatLbl.BackgroundTransparency = 1
+			compatLbl.Font = Enum.Font.Gotham
+			compatLbl.TextWrapped = true
+			compatLbl.TextTruncate = Enum.TextTruncate.AtEnd
+			compatLbl.TextXAlignment = Enum.TextXAlignment.Left
+			compatLbl.TextYAlignment = Enum.TextYAlignment.Top
+			compatLbl.TextSize = 9
+			compatLbl.TextColor3 = C_TEXT_MUTED
+			compatLbl.Text = "Fits: " .. table.concat(compatList, ", ")
+			compatLbl.Parent = card
+
 			local btnHolder = Instance.new("Frame")
-			btnHolder.Position = UDim2.new(0, 104, 0, 68)
-			btnHolder.Size = UDim2.new(1, -118, 0, 34)
+			btnHolder.Position = UDim2.new(0, 10, 1, -46)
+			btnHolder.Size = UDim2.new(1, -20, 0, 36)
 			btnHolder.BackgroundTransparency = 1
 			btnHolder.Parent = card
 			local bl = Instance.new("UIListLayout")
 			bl.FillDirection = Enum.FillDirection.Horizontal
-			bl.Padding = UDim.new(0, 6)
+			bl.Padding = UDim.new(0, 5)
 			bl.Parent = btnHolder
 
 			for pIdx, pack in ipairs(aSpec.Packs) do
 				local canAfford = coins >= pack.Price
 				local bText = if isFull
-					then "RESERVE FULL"
-					else string.format("+%d ROUNDS  (%dG)", pack.Quantity, pack.Price)
+					then "FULL"
+					else string.format("+%d (%dG)", pack.Quantity, pack.Price)
 				local bCol = if isFull
 					then C_DISABLED
-					elseif canAfford then C_BG_SUBTLE
+					elseif canAfford then C_TEAL
 					else C_DISABLED
-				local pb = makeBtn(btnHolder, bText, bCol, UDim2.new(), UDim2.new(1 / #aSpec.Packs, -4, 0, 32), function()
+				local pb = makeBtn(btnHolder, bText, bCol, UDim2.new(), UDim2.new(1 / #aSpec.Packs, -4, 0, 34), function()
 					if not isFull and dispatchAction then
 						dispatchAction("BuyAmmo", { AmmoType = ammoId, PackIndex = pIdx })
 					end
 				end)
-				pb.TextSize = 10
+				pb.TextSize = 9
 			end
 		end
 	end
 end
 
-local function renderBlackMarketBodyguards(state: { [string]: any }): ()
+local function renderMarketSupplies(state: { [string]: any }): ()
 	if not scrollFrame then return end
+	local bm = state.BlackMarket or {}
+	local currentArmor = if typeof(bm.Armor) == "number" then bm.Armor else 0
+	local smokeCount = tonumber(bm.SmokeGrenades) or 0
+
+	makeSectionDivider(scrollFrame, "SURVIVAL & TACTICAL SUPPLIES  •  CITY MARKET", C_TEAL)
+
+	-- 2-Column Collectible Survival Supplies Grid (Kevlar Armor, Medkit & Smoke Grenades)
+	local supGrid = makeGridContainer(scrollFrame, 2, 232, 10)
+	supGrid.Name = "SupplyCardGrid"
+
+	local supplyItems = {
+		{
+			Id = "KevlarVest",
+			Name = "KEVLAR PLATE ARMOR",
+			LeftTag = "ARMOR",
+			RightTag = string.format("%d / 100", currentArmor),
+			Desc = "+100 breakable ballistic protection. Absorbs gunfire and melee hits until depleted.",
+			Col = if currentArmor >= 100 then C_OWNED else C_TEAL,
+			IsFull = (currentArmor >= 100),
+			GoldLabel = if currentArmor >= 100 then "ARMOR FULL" elseif currentArmor > 0 then "REFILL 2,100G" else "BUY 2,100G",
+			RobuxPrice = 29,
+			OnGold = function()
+				if currentArmor < 100 and dispatchAction then dispatchAction("BuyBlackMarketItem", "KevlarVest") end
+			end,
+			OnRobux = function()
+				if currentArmor < 100 and dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "BuyBlackMarketItem", Arg = "KevlarVest" }) end
+			end,
+		},
+		{
+			Id = "Medkit",
+			Name = "FIELD TRAUMA KIT",
+			LeftTag = "MEDICAL",
+			RightTag = "INSTANT HEAL",
+			Desc = "Immediate 100% Base Health recovery plus a 6-second sprint adrenaline boost.",
+			Col = C_OWNED,
+			IsFull = false,
+			GoldLabel = "BUY 750G",
+			RobuxPrice = 19,
+			OnGold = function()
+				if dispatchAction then dispatchAction("BuyBlackMarketItem", "Medkit") end
+			end,
+			OnRobux = function()
+				if dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "BuyBlackMarketItem", Arg = "Medkit" }) end
+			end,
+		},
+		{
+			Id = "SmokeGrenade",
+			Name = "TACTICAL SMOKE GRENADES",
+			LeftTag = "KEY [T]",
+			RightTag = string.format("%d / 12", smokeCount),
+			Desc = "Deploys a dense 10-second tactical smoke screen breaking Mafia line-of-sight during escapes.",
+			Col = C_STEEL,
+			IsFull = (smokeCount >= 12),
+			GoldLabel = if smokeCount >= 12 then "FULL (12)" else "3X 900G",
+			RobuxPrice = MonetizationConfig.DualRobuxOptions.BuySmokeGrenades.RobuxPrice,
+			OnGold = function()
+				if smokeCount < 12 and dispatchAction then dispatchAction("BuySmokeGrenades", nil) end
+			end,
+			OnRobux = function()
+				if smokeCount < 12 and dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "BuySmokeGrenades" }) end
+			end,
+		},
+	}
+
+	for idx, item in ipairs(supplyItems) do
+		local card = Instance.new("Frame")
+		card.Name = "SupplyCard_" .. item.Id
+		card.LayoutOrder = idx
+		card.BackgroundColor3 = C_BG_CARD:Lerp(item.Col, 0.14)
+		card.BorderSizePixel = 0
+		card.ClipsDescendants = true
+		card.Parent = supGrid
+		makeCorner(card, 12)
+		makeStroke(card, item.Col:Lerp(C_OUTLINE_DARK, 0.22), 2.2)
+
+		local topBay = createShowcasePedestalBay(card, 94, item.Col, "Equipment", item.Id, false)
+		makeTag(topBay, item.LeftTag, item.Col:Lerp(C_OUTLINE_DARK, 0.25), UDim2.fromOffset(8, 7), UDim2.fromOffset(72, 17))
+		makeTag(topBay, item.RightTag, Color3.fromRGB(16, 22, 36), UDim2.new(1, -94, 0, 7), UDim2.fromOffset(86, 17))
+
+		local nLbl = Instance.new("TextLabel")
+		nLbl.Position = UDim2.new(0, 10, 0, 102)
+		nLbl.Size = UDim2.new(1, -20, 0, 20)
+		nLbl.BackgroundTransparency = 1
+		nLbl.Font = Enum.Font.GothamBlack
+		nLbl.TextXAlignment = Enum.TextXAlignment.Left
+		nLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		nLbl.TextSize = 13
+		nLbl.TextColor3 = C_TEXT_PRIMARY
+		nLbl.Text = item.Name
+		nLbl.Parent = card
+		addTextOutline(nLbl, 1.5)
+
+		local dLbl = Instance.new("TextLabel")
+		dLbl.Position = UDim2.new(0, 10, 0, 126)
+		dLbl.Size = UDim2.new(1, -20, 0, 48)
+		dLbl.BackgroundTransparency = 1
+		dLbl.Font = Enum.Font.GothamMedium
+		dLbl.TextWrapped = true
+		dLbl.TextXAlignment = Enum.TextXAlignment.Left
+		dLbl.TextYAlignment = Enum.TextYAlignment.Top
+		dLbl.TextSize = 11
+		dLbl.TextColor3 = C_TEXT_MUTED
+		dLbl.Text = item.Desc
+		dLbl.Parent = card
+
+		if item.IsFull then
+			makeBtn(card, item.GoldLabel, C_OWNED, UDim2.new(0, 10, 1, -48), UDim2.new(1, -20, 0, 38), function() end)
+		elseif item.RobuxPrice and item.OnRobux then
+			local gBtn = makeBtn(card, item.GoldLabel, C_TEAL, UDim2.new(0, 10, 1, -48), UDim2.new(0.56, -12, 0, 38), item.OnGold)
+			gBtn.TextSize = 10
+			local rBtn = makeBtn(card, string.format("R$ %d", item.RobuxPrice), C_ROBUX, UDim2.new(0.56, 2, 1, -48), UDim2.new(0.44, -12, 0, 38), item.OnRobux)
+			rBtn.TextSize = 11
+		else
+			local gBtn = makeBtn(card, item.GoldLabel, C_TEAL, UDim2.new(0, 10, 1, -48), UDim2.new(1, -20, 0, 38), item.OnGold)
+			gBtn.TextSize = 11
+		end
+	end
+
+	-- Full Caliber-Matched Ammunition Crates
+	renderBlackMarketAmmo(state)
+end
+
+renderBodyguardsForTier = function(state: { [string]: any }, targetTier: BodyguardConfig.MarketTier | "All", forcedView: GuardViewMode?, autoDefendHQ: boolean?): ()
+	if not scrollFrame then return end
+	local isAllUnified = (targetTier == "All")
+	local isBlackMarket = (targetTier == "BlackMarket")
+	local accentCol = if isBlackMarket then C_OXBLOOD else C_TEAL
 	local profile = state.Profile or {}
 	local playerLevel = tonumber(profile.Level) or 1
 	local playerCoins = tonumber(profile.Coins) or 0
@@ -2935,9 +3562,9 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 	stl.Parent = stRow
 
 	local stances = {
+		{ Id = "PatrolBase", Label = "DEFEND HQ" },
 		{ Id = "Follow", Label = "FOLLOW ME" },
 		{ Id = "GuardBistro", Label = "GUARD BISTRO" },
-		{ Id = "PatrolBase", Label = "PATROL BASE" },
 		{ Id = "Aggressive", Label = "AGGRESSIVE" },
 	}
 	for _, stOpt in ipairs(stances) do
@@ -2957,11 +3584,11 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 		sb.TextSize = 10
 	end
 
-	-- Active 4-Slot Squad Selector
+	-- Active 4-Slot Squad Selector (with one-click shortcut to Unified Security Hub when viewed inside Market/BlackMarket!)
 	local squadCard = makeCard(scrollFrame, 78, C_STEEL)
 	local sHead = Instance.new("TextLabel")
 	sHead.Position = UDim2.new(0, 14, 0, 7)
-	sHead.Size = UDim2.new(1, -24, 0, 18)
+	sHead.Size = UDim2.new(1, if isAllUnified then -24 else -168, 0, 18)
 	sHead.BackgroundTransparency = 1
 	sHead.Font = Enum.Font.GothamBlack
 	sHead.TextXAlignment = Enum.TextXAlignment.Left
@@ -2969,6 +3596,20 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 	sHead.TextColor3 = C_BRASS
 	sHead.Text = string.format("ACTIVE BODYGUARD DETAIL  (%d / %d)  —  SELECT TARGET SLOT", #activeSquad, maxSlots)
 	sHead.Parent = squadCard
+
+	if not isAllUnified then
+		local hubJump = makeBtn(squadCard, "SECURITY HUB >", C_TEAL, UDim2.new(1, -142, 0, 4), UDim2.fromOffset(130, 22), function()
+			AudioController.PlayClick()
+			currentTab = "Upgrades"
+			currentEmpireSubTab = "Security"
+			currentSecuritySubView = if (forcedView or currentGuardView) == "Gear" then "Gear" else "Classes"
+			if scrollFrame then scrollFrame.CanvasPosition = Vector2.new(0, 0) end
+			lastRenderedTabSig = ""
+			render()
+		end)
+		hubJump.Name = "OpenSecurityHubShortcutBtn"
+		hubJump.TextSize = 9
+	end
 
 	local slotRow = Instance.new("Frame")
 	slotRow.Position = UDim2.new(0, 14, 0, 30)
@@ -2990,7 +3631,7 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 		local btn = makeBtn(
 			slotRow,
 			label,
-			if isSel then C_OXBLOOD elseif cSpec then C_BG_SUBTLE else C_BG_CARD_ALT,
+			if isSel then accentCol elseif cSpec then C_BG_SUBTLE else C_BG_CARD_ALT,
 			UDim2.new(),
 			UDim2.new(0.25, -5, 0, 36),
 			function()
@@ -3006,128 +3647,227 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 		end
 	end
 
-	-- Toggle Classes vs Gear
-	local modeRow = Instance.new("Frame")
-	modeRow.Size = UDim2.new(1, -6, 0, 32)
-	modeRow.BackgroundTransparency = 1
-	modeRow.Parent = scrollFrame
-	local ml = Instance.new("UIListLayout")
-	ml.FillDirection = Enum.FillDirection.Horizontal
-	ml.Padding = UDim.new(0, 6)
-	ml.Parent = modeRow
+	-- Count items in this tier for crisp toggle labels
+	local tierClassCount = 0
+	for _, cid in ipairs(BodyguardConfig.CLASS_ORDER) do
+		if isAllUnified or BodyguardConfig.GetClassMarketTier(cid) == targetTier then
+			tierClassCount += 1
+		end
+	end
+	local tierGearCount = 0
+	for _, gid in ipairs(BodyguardConfig.GEAR_ORDER) do
+		if isAllUnified or BodyguardConfig.GetGearMarketTier(gid) == targetTier then
+			tierGearCount += 1
+		end
+	end
 
-	local cModeBtn = makeBtn(modeRow, string.format("RECRUIT CLASSES  (%d)", #BodyguardConfig.CLASS_ORDER), if currentGuardView == "Classes" then C_OXBLOOD else C_BG_CARD_ALT, UDim2.new(), UDim2.new(0.5, -3, 0, 30), function()
-		currentGuardView = "Classes"
-		render()
-	end)
-	cModeBtn.TextSize = 11
+	local viewMode: GuardViewMode = forcedView or currentGuardView
+	if not forcedView then
+		-- Toggle Classes vs Gear inside Black Market Elite Guards
+		local modeRow = Instance.new("Frame")
+		modeRow.Size = UDim2.new(1, -6, 0, 32)
+		modeRow.BackgroundTransparency = 1
+		modeRow.Parent = scrollFrame
+		local ml = Instance.new("UIListLayout")
+		ml.FillDirection = Enum.FillDirection.Horizontal
+		ml.Padding = UDim.new(0, 6)
+		ml.Parent = modeRow
 
-	local gModeBtn = makeBtn(modeRow, "BODYGUARD EQUIPMENT  (18)", if currentGuardView == "Gear" then C_OXBLOOD else C_BG_CARD_ALT, UDim2.new(), UDim2.new(0.5, -3, 0, 30), function()
-		currentGuardView = "Gear"
-		render()
-	end)
-	gModeBtn.TextSize = 11
+		local cModeBtn = makeBtn(
+			modeRow,
+			string.format("ELITE CLASSES  (%d)", tierClassCount),
+			if viewMode == "Classes" then accentCol else C_BG_CARD_ALT,
+			UDim2.new(),
+			UDim2.new(0.5, -3, 0, 30),
+			function()
+				currentGuardView = "Classes"
+				render()
+			end
+		)
+		cModeBtn.TextSize = 11
 
-	if currentGuardView == "Classes" then
+		local gModeBtn = makeBtn(
+			modeRow,
+			string.format("CONTRABAND GUARD GEAR  (%d)", tierGearCount),
+			if viewMode == "Gear" then accentCol else C_BG_CARD_ALT,
+			UDim2.new(),
+			UDim2.new(0.5, -3, 0, 30),
+			function()
+				currentGuardView = "Gear"
+				render()
+			end
+		)
+		gModeBtn.TextSize = 11
+	end
+
+	local activeDeal = if typeof(state.BlackMarket) == "table" and typeof(state.BlackMarket.SmugglerDeal) == "table" then state.BlackMarket.SmugglerDeal else nil
+
+	if viewMode == "Classes" then
+		local classGrid = makeGridContainer(scrollFrame, 2, 276, 10)
+		classGrid.Name = "GuardClassCardGrid"
+		local classOrder = 0
+
 		for _, classId in ipairs(BodyguardConfig.CLASS_ORDER) do
 			local cSpec = BodyguardConfig.CLASSES[classId]
-			if cSpec then
+			local itemTier = BodyguardConfig.GetClassMarketTier(classId)
+			if cSpec and (isAllUnified or itemTier == targetTier) then
+				classOrder += 1
+				local isItemBM = (itemTier == "BlackMarket")
+				local cardAccentBtn = if isItemBM then C_OXBLOOD else C_TEAL
 				local isUnlocked = unlockedClasses[classId] == true
 					or (cSpec.RobuxItemId ~= nil and ownedPasses[cSpec.RobuxItemId] == true)
+				local isSmugglerDeal = isItemBM and (not isUnlocked) and activeDeal ~= nil and activeDeal.Category == "GuardClass" and activeDeal.ItemId == classId
+				local dealDiscPct = if isSmugglerDeal then (tonumber(activeDeal.DiscountPct) or 35) else 0
+				local effectiveCost = if isSmugglerDeal and typeof(activeDeal.DealPrice) == "number" then activeDeal.DealPrice else cSpec.Cost
 				local locked = (not isUnlocked) and (playerLevel < cSpec.RequiredLevel)
 				local isRobuxOnly = (not isUnlocked) and cSpec.Cost <= 0 and typeof(cSpec.RobuxPrice) == "number" and cSpec.RobuxPrice > 0
 				local hasRobuxOption = (not isUnlocked) and cSpec.Cost > 0 and typeof(cSpec.RobuxPrice) == "number" and cSpec.RobuxPrice > 0
 				local inSelectedSlot = (activeSquad[selectedGuardSlot] == classId)
 				local rarityCol = RARITY_MUTED_COLORS[cSpec.Rarity] or C_STEEL
+				local themeCol = if inSelectedSlot then C_OWNED elseif isSmugglerDeal then C_GOLD_HI else rarityCol
 
-				local card = makeCard(scrollFrame, 120, if inSelectedSlot then C_OWNED else rarityCol)
-				ModelPreviewHelper.CreatePreview(card, "Bodyguard", classId, UDim2.fromOffset(82, 88), UDim2.new(0, 14, 0, 16), Color3.fromRGB(24, 26, 33))
+				local card = Instance.new("Frame")
+				card.Name = "GuardClassCard_" .. classId
+				card.LayoutOrder = classOrder
+				card.BackgroundColor3 = C_BG_CARD:Lerp(themeCol, if isSmugglerDeal then 0.20 else 0.14)
+				card.BorderSizePixel = 0
+				card.ClipsDescendants = true
+				card.Parent = classGrid
+				makeCorner(card, 12)
+				makeStroke(card, if isSmugglerDeal then C_GOLD_HI else themeCol:Lerp(C_OUTLINE_DARK, 0.22), if isSmugglerDeal then 2.6 else 2.2)
+
+				local topBay = createShowcasePedestalBay(card, 104, themeCol, "Bodyguard", classId, false)
+				makeTag(topBay, string.upper(cSpec.Rarity), rarityCol, UDim2.fromOffset(8, 7), UDim2.fromOffset(72, 17))
+				if inSelectedSlot then
+					makeTag(topBay, "ACTIVE #" .. tostring(selectedGuardSlot), C_OWNED, UDim2.new(1, -82, 0, 7), UDim2.fromOffset(74, 17))
+				elseif isSmugglerDeal then
+					makeTag(topBay, string.format("-%d%% DROP", dealDiscPct), C_BRASS, UDim2.new(1, -86, 0, 7), UDim2.fromOffset(78, 17))
+				elseif isItemBM then
+					makeTag(topBay, "BM EXCLUSIVE", C_OXBLOOD_DARK, UDim2.new(1, -98, 0, 7), UDim2.fromOffset(90, 17))
+				elseif isAllUnified then
+					makeTag(topBay, "CITY MARKET", C_TEAL_DARK, UDim2.new(1, -88, 0, 7), UDim2.fromOffset(80, 17))
+				else
+					makeTag(
+						topBay,
+						if locked then string.format("REQ LV.%d", cSpec.RequiredLevel) else string.format("LV.%d+", cSpec.RequiredLevel),
+						if locked then C_OXBLOOD_DARK else C_TEAL_DARK,
+						UDim2.new(1, -68, 0, 7),
+						UDim2.fromOffset(60, 17)
+					)
+				end
+				makeTag(topBay, string.upper(cSpec.Role), Color3.fromRGB(16, 22, 36), UDim2.new(0, 8, 1, -23), UDim2.fromOffset(118, 16))
 
 				local title = Instance.new("TextLabel")
-				title.Position = UDim2.new(0, 108, 0, 10)
-				title.Size = UDim2.new(1, -276, 0, 20)
+				title.Position = UDim2.new(0, 10, 0, 110)
+				title.Size = UDim2.new(1, -20, 0, 20)
 				title.BackgroundTransparency = 1
 				title.Font = Enum.Font.GothamBlack
 				title.TextXAlignment = Enum.TextXAlignment.Left
+				title.TextTruncate = Enum.TextTruncate.AtEnd
 				title.TextSize = 14
 				title.TextColor3 = C_TEXT_PRIMARY
-				title.Text = string.format("%s  |  %s", string.upper(cSpec.DisplayName), string.upper(cSpec.Role))
+				title.Text = string.upper(cSpec.DisplayName)
 				title.Parent = card
+				addTextOutline(title, 1.5)
 
-				makeTag(card, string.upper(cSpec.Rarity), rarityCol, UDim2.new(0, 108, 0, 32), UDim2.fromOffset(68, 16))
-				makeTag(
-					card,
-					if locked then string.format("REQ LV.%d", cSpec.RequiredLevel) else string.format("LV.%d+", cSpec.RequiredLevel),
-					if locked then C_OXBLOOD_DARK else C_BG_SUBTLE,
-					UDim2.new(0, 182, 0, 32),
-					UDim2.fromOffset(58, 16)
-				)
-				makeTag(card, string.upper(cSpec.AbilityName), C_BG_SUBTLE, UDim2.new(0, 246, 0, 32), UDim2.fromOffset(132, 16))
+				-- Crisp 4-Pill Stat Row (HP / DMG / RNG / SPD)
+				local statRow = Instance.new("Frame")
+				statRow.Position = UDim2.new(0, 10, 0, 134)
+				statRow.Size = UDim2.new(1, -20, 0, 20)
+				statRow.BackgroundTransparency = 1
+				statRow.Parent = card
+				local statPills = {
+					{ Text = string.format("HP %d", cSpec.MaxHP), Col = C_OWNED },
+					{ Text = string.format("DMG %d", cSpec.Damage), Col = cardAccentBtn },
+					{ Text = string.format("RNG %d", cSpec.AttackRange), Col = C_STEEL },
+					{ Text = string.format("SPD %.0f", cSpec.WalkSpeed), Col = C_BRASS },
+				}
+				for sIdx, sp in ipairs(statPills) do
+					local pill = Instance.new("TextLabel")
+					pill.Position = UDim2.new((sIdx - 1) * 0.255, 0, 0, 0)
+					pill.Size = UDim2.new(0.24, 0, 1, 0)
+					pill.BackgroundColor3 = Color3.fromRGB(14, 18, 28)
+					pill.Font = Enum.Font.GothamBold
+					pill.TextSize = 9
+					pill.TextColor3 = sp.Col:Lerp(Color3.new(1, 1, 1), 0.35)
+					pill.Text = sp.Text
+					pill.Parent = statRow
+					makeCorner(pill, 4)
+					makeStroke(pill, sp.Col:Lerp(C_OUTLINE_DARK, 0.45), 1)
+				end
 
-				local statLbl = Instance.new("TextLabel")
-				statLbl.Position = UDim2.new(0, 108, 0, 52)
-				statLbl.Size = UDim2.new(1, -272, 0, 16)
-				statLbl.BackgroundTransparency = 1
-				statLbl.Font = Enum.Font.Code
-				statLbl.TextXAlignment = Enum.TextXAlignment.Left
-				statLbl.TextSize = 11
-				statLbl.TextColor3 = Color3.fromRGB(204, 200, 192)
-				statLbl.Text = string.format("HP %d  |  DMG %d  |  RNG %d  |  SPD %.0f", cSpec.MaxHP, cSpec.Damage, cSpec.AttackRange, cSpec.WalkSpeed)
-				statLbl.Parent = card
+				local abilLbl = Instance.new("TextLabel")
+				abilLbl.Position = UDim2.new(0, 10, 0, 159)
+				abilLbl.Size = UDim2.new(1, -20, 0, 15)
+				abilLbl.BackgroundTransparency = 1
+				abilLbl.Font = Enum.Font.GothamBlack
+				abilLbl.TextXAlignment = Enum.TextXAlignment.Left
+				abilLbl.TextTruncate = Enum.TextTruncate.AtEnd
+				abilLbl.TextSize = 10
+				abilLbl.TextColor3 = C_GOLD_HI
+				abilLbl.Text = "ABILITY: " .. string.upper(cSpec.AbilityName)
+				abilLbl.Parent = card
 
 				local descLbl = Instance.new("TextLabel")
-				descLbl.Position = UDim2.new(0, 108, 0, 72)
-				descLbl.Size = UDim2.new(1, -272, 0, 40)
+				descLbl.Position = UDim2.new(0, 10, 0, 176)
+				descLbl.Size = UDim2.new(1, -20, 0, 44)
 				descLbl.BackgroundTransparency = 1
-				descLbl.Font = Enum.Font.Gotham
+				descLbl.Font = Enum.Font.GothamMedium
 				descLbl.TextWrapped = true
+				descLbl.TextTruncate = Enum.TextTruncate.AtEnd
 				descLbl.TextXAlignment = Enum.TextXAlignment.Left
 				descLbl.TextYAlignment = Enum.TextYAlignment.Top
-				descLbl.TextSize = 11
+				descLbl.TextSize = 10
 				descLbl.TextColor3 = C_TEXT_MUTED
 				descLbl.Text = cSpec.AbilityDesc .. " " .. cSpec.Description
 				descLbl.Parent = card
 
-				local targetSlotLabel = if activeSquad[selectedGuardSlot] then string.format("SLOT #%d", selectedGuardSlot) else string.format("SLOT #%d", math.min(maxSlots, #activeSquad + 1))
+				local targetSlotLabel = if activeSquad[selectedGuardSlot] then string.format("#%d", selectedGuardSlot) else string.format("#%d", math.min(maxSlots, #activeSquad + 1))
 				if isRobuxOnly and cSpec.RobuxPrice then
 					local rPrice = cSpec.RobuxPrice
-					local vipBtn = makeBtn(card, string.format("R$ %d  UNLOCK", rPrice), C_ROBUX, UDim2.new(1, -158, 0, 42), UDim2.fromOffset(146, 36), function()
+					local vipBtn = makeBtn(card, string.format("R$ %d  UNLOCK", rPrice), C_ROBUX, UDim2.new(0, 10, 1, -48), UDim2.new(1, -20, 0, 38), function()
 						if dispatchAction then
 							if cSpec.RobuxItemId then
 								dispatchAction("BuyRobuxItem", cSpec.RobuxItemId)
 							else
-								dispatchAction("RecruitBodyguard", { ClassId = classId, SlotIndex = selectedGuardSlot, UseRobux = true })
+								dispatchAction("RecruitBodyguard", { ClassId = classId, SlotIndex = selectedGuardSlot, UseRobux = true, AutoDefendHQ = autoDefendHQ == true })
 							end
 						end
 					end)
 					vipBtn.TextSize = 11
 				else
 					local recruitText = if inSelectedSlot
-						then "ACTIVE  #" .. tostring(selectedGuardSlot)
-						elseif isUnlocked then "ASSIGN  " .. targetSlotLabel
-						elseif locked then string.format("LOCKED  LV.%d", cSpec.RequiredLevel)
-						else string.format("HIRE %sG", formatCommaInt(cSpec.Cost))
+						then "ACTIVE  SLOT #" .. tostring(selectedGuardSlot)
+						elseif isUnlocked then "ASSIGN  SLOT " .. targetSlotLabel
+						elseif locked then string.format("LV.%d LOCK", cSpec.RequiredLevel)
+						elseif isSmugglerDeal then string.format("%sG (-%d%%)", formatCommaInt(effectiveCost), dealDiscPct)
+						else string.format("HIRE %sG", formatCommaInt(effectiveCost))
 					local recruitCol = if inSelectedSlot
 						then C_OWNED
 						elseif isUnlocked then C_STEEL
-						elseif locked or playerCoins < cSpec.Cost then C_DISABLED
-						else C_OXBLOOD
+						elseif locked or playerCoins < effectiveCost then C_DISABLED
+						elseif isSmugglerDeal then C_BRASS
+						else cardAccentBtn
 
+					local leftW = if hasRobuxOption then UDim2.new(0.55, -12, 0, 38) else UDim2.new(1, -20, 0, 38)
 					local rBtn = makeBtn(
 						card,
 						recruitText,
 						recruitCol,
-						UDim2.new(1, -158, 0, if hasRobuxOption then 16 else 42),
-						UDim2.fromOffset(146, 36),
+						UDim2.new(0, 10, 1, -48),
+						leftW,
 						function()
 							if inSelectedSlot then return end
-							local argPayload = { ClassId = classId, SlotIndex = selectedGuardSlot }
-							if not isUnlocked and not locked and cSpec.Cost >= 2500 then
+							local argPayload = { ClassId = classId, SlotIndex = selectedGuardSlot, AutoDefendHQ = autoDefendHQ == true }
+							if not isUnlocked and not locked and effectiveCost >= 2500 then
+								local dealLine = if isSmugglerDeal
+									then string.format("\nDON VINNIE'S DROP: -%d%% OFF (Was %sG — Save %sG!)", dealDiscPct, formatCommaInt(cSpec.Cost), formatCommaInt(math.max(0, cSpec.Cost - effectiveCost)))
+									else ""
 								showConfirmDialog(
 									"CONFIRM BODYGUARD RECRUIT",
-									string.format("Recruit %s (%s) into %s for %s Gold?\nHP: %d  |  DMG: %d  |  Ability: %s", cSpec.DisplayName, cSpec.Role, targetSlotLabel, formatCommaInt(cSpec.Cost), cSpec.MaxHP, cSpec.Damage, cSpec.AbilityName),
-									string.format("HIRE %sG", formatCommaInt(cSpec.Cost)),
-									C_OXBLOOD,
+									string.format("Recruit %s (%s) into Slot %s for %s Gold?%s\nHP: %d  |  DMG: %d  |  Ability: %s", cSpec.DisplayName, cSpec.Role, targetSlotLabel, formatCommaInt(effectiveCost), dealLine, cSpec.MaxHP, cSpec.Damage, cSpec.AbilityName),
+									string.format("HIRE %sG", formatCommaInt(effectiveCost)),
+									if isSmugglerDeal then C_BRASS else cardAccentBtn,
 									function()
 										if dispatchAction then dispatchAction("RecruitBodyguard", argPayload) end
 									end
@@ -3137,16 +3877,16 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 							end
 						end
 					)
-					rBtn.TextSize = 11
+					rBtn.TextSize = if isSmugglerDeal then 10 else 11
 
 					if hasRobuxOption and cSpec.RobuxPrice then
 						local rPrice = cSpec.RobuxPrice
-						local vipBtn = makeBtn(card, string.format("R$ %d  UNLOCK", rPrice), C_ROBUX, UDim2.new(1, -158, 0, 60), UDim2.fromOffset(146, 36), function()
+						local vipBtn = makeBtn(card, string.format("R$ %d", rPrice), C_ROBUX, UDim2.new(0.55, 2, 1, -48), UDim2.new(0.45, -12, 0, 38), function()
 							if dispatchAction then
 								if cSpec.RobuxItemId then
 									dispatchAction("BuyRobuxItem", cSpec.RobuxItemId)
 								else
-									dispatchAction("RecruitBodyguard", { ClassId = classId, SlotIndex = selectedGuardSlot, UseRobux = true })
+									dispatchAction("RecruitBodyguard", { ClassId = classId, SlotIndex = selectedGuardSlot, UseRobux = true, AutoDefendHQ = autoDefendHQ == true })
 								end
 							end
 						end)
@@ -3179,7 +3919,7 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 		}
 		for _, gf in ipairs(gFilters) do
 			local active = (currentGuardGearFilter == gf.Id)
-			local fb = makeBtn(gFilterRow, gf.Label, if active then C_OXBLOOD else C_BG_CARD_ALT, UDim2.new(), UDim2.new(1 / #gFilters, -4, 0, 26), function()
+			local fb = makeBtn(gFilterRow, gf.Label, if active then accentCol else C_BG_CARD_ALT, UDim2.new(), UDim2.new(1 / #gFilters, -4, 0, 26), function()
 				currentGuardGearFilter = gf.Id
 				render()
 			end)
@@ -3190,15 +3930,28 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 		local selClassSpec = if selClassId then BodyguardConfig.CLASSES[selClassId :: BodyguardConfig.GuardClassId] else nil
 		local selLoadout = loadouts[tostring(selectedGuardSlot)] or {}
 
+		-- Modern 2-Column Collectible Bodyguard Gear Grid!
+		local gearGrid = makeGridContainer(scrollFrame, 2, 246, 10)
+		gearGrid.Name = "GuardGearCardGrid"
+		local gearOrder = 0
+
 		for _, gearId in ipairs(BodyguardConfig.GEAR_ORDER) do
 			local gSpec = BodyguardConfig.GEAR[gearId]
-			if gSpec and (currentGuardGearFilter == "All" or currentGuardGearFilter == gSpec.Slot) then
+			local gearTier = BodyguardConfig.GetGearMarketTier(gearId)
+			if gSpec and (isAllUnified or gearTier == targetTier) and (currentGuardGearFilter == "All" or currentGuardGearFilter == gSpec.Slot) then
+				gearOrder += 1
+				local isGearBM = (gearTier == "BlackMarket")
+				local gearBuyAccent = if isGearBM then C_OXBLOOD else C_TEAL
 				local ownsGear = ownedGear[gearId] == true
 					or (gSpec.RobuxItemId ~= nil and ownedPasses[gSpec.RobuxItemId] == true)
+				local isSmugglerDeal = isGearBM and (not ownsGear) and (not gSpec.RobuxItemId) and activeDeal ~= nil and activeDeal.Category == "GuardGear" and activeDeal.ItemId == gearId
+				local dealDiscPct = if isSmugglerDeal then (tonumber(activeDeal.DiscountPct) or 35) else 0
+				local effectivePrice = if isSmugglerDeal and typeof(activeDeal.DealPrice) == "number" then activeDeal.DealPrice else gSpec.Price
 				local isEquippedOnSlot = (selLoadout[gSpec.Slot] == gearId)
 				local isCompatible = if selClassId then BodyguardConfig.IsGearCompatible(selClassId :: BodyguardConfig.GuardClassId, gearId) else false
 				local locked = (not ownsGear) and (not gSpec.RobuxItemId) and (playerLevel < gSpec.RequiredLevel)
 				local rarityCol = RARITY_MUTED_COLORS[gSpec.Rarity] or C_STEEL
+				local themeCol = if isEquippedOnSlot then C_OWNED elseif isSmugglerDeal then C_GOLD_HI else rarityCol
 
 				local bonusParts: { string } = {}
 				if gSpec.BonusHP ~= 0 then table.insert(bonusParts, string.format("+%d HP", gSpec.BonusHP)) end
@@ -3209,53 +3962,74 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 				if gSpec.HealAuraBonus > 0 then table.insert(bonusParts, string.format("+%d HEAL", gSpec.HealAuraBonus)) end
 				if gSpec.StunEffect then table.insert(bonusParts, "STUN") end
 
-				local card = makeCard(scrollFrame, 112, if isEquippedOnSlot then C_OWNED else rarityCol)
-				ModelPreviewHelper.CreatePreview(card, "Equipment", gearId, UDim2.fromOffset(78, 78), UDim2.new(0, 14, 0, 17), Color3.fromRGB(24, 26, 33))
+				local card = Instance.new("Frame")
+				card.Name = "GuardGearCard_" .. gearId
+				card.LayoutOrder = gearOrder
+				card.BackgroundColor3 = C_BG_CARD:Lerp(themeCol, if isSmugglerDeal then 0.20 else 0.14)
+				card.BorderSizePixel = 0
+				card.ClipsDescendants = true
+				card.Parent = gearGrid
+				makeCorner(card, 12)
+				makeStroke(card, if isSmugglerDeal then C_GOLD_HI else themeCol:Lerp(C_OUTLINE_DARK, 0.22), if isSmugglerDeal then 2.6 else 2.2)
 
-				local title = Instance.new("TextLabel")
-				title.Position = UDim2.new(0, 104, 0, 10)
-				title.Size = UDim2.new(1, -270, 0, 20)
-				title.BackgroundTransparency = 1
-				title.Font = Enum.Font.GothamBlack
-				title.TextXAlignment = Enum.TextXAlignment.Left
-				title.TextSize = 13
-				title.TextColor3 = C_TEXT_PRIMARY
-				title.Text = string.upper(gSpec.DisplayName)
-				title.Parent = card
-
-				makeTag(card, string.upper(gSpec.Slot), C_BG_SUBTLE, UDim2.new(0, 104, 0, 32), UDim2.fromOffset(64, 16))
-				makeTag(card, string.upper(gSpec.Rarity), rarityCol, UDim2.new(0, 174, 0, 32), UDim2.fromOffset(64, 16))
+				local topBay = createShowcasePedestalBay(card, 94, themeCol, "Equipment", gearId, gSpec.Slot == "Weapon")
+				makeTag(topBay, string.upper(gSpec.Slot), C_BG_SUBTLE, UDim2.fromOffset(8, 7), UDim2.fromOffset(66, 17))
+				makeTag(topBay, string.upper(gSpec.Rarity), rarityCol, UDim2.fromOffset(78, 7), UDim2.fromOffset(64, 17))
+				if isSmugglerDeal then
+					makeTag(topBay, string.format("-%d%% DROP", dealDiscPct), C_BRASS, UDim2.new(0, 8, 1, -22), UDim2.fromOffset(78, 15))
+				elseif isGearBM then
+					makeTag(topBay, "BM EXCLUSIVE", C_OXBLOOD_DARK, UDim2.new(0, 8, 1, -22), UDim2.fromOffset(88, 15))
+				elseif isAllUnified then
+					makeTag(topBay, "CITY MARKET", C_TEAL_DARK, UDim2.new(0, 8, 1, -22), UDim2.fromOffset(78, 15))
+				end
 
 				local compatText = if not selClassSpec
-					then "RECRUIT SLOT #" .. tostring(selectedGuardSlot)
-					elseif isCompatible then "COMPATIBLE: " .. string.upper(selClassSpec.DisplayName)
-					else "INCOMPATIBLE: " .. string.upper(selClassSpec.DisplayName)
+					then "SLOT #" .. tostring(selectedGuardSlot) .. " EMPTY"
+					elseif isCompatible then "FITS #" .. tostring(selectedGuardSlot)
+					else "NO FIT #" .. tostring(selectedGuardSlot)
 				local compatCol = if not selClassSpec
 					then C_DISABLED
 					elseif isCompatible then C_OWNED
 					else C_OXBLOOD_DARK
-				makeTag(card, compatText, compatCol, UDim2.new(0, 244, 0, 32), UDim2.fromOffset(162, 16))
+				makeTag(topBay, compatText, compatCol, UDim2.new(1, -86, 0, 7), UDim2.fromOffset(78, 17))
+
+				local title = Instance.new("TextLabel")
+				title.Position = UDim2.new(0, 10, 0, 100)
+				title.Size = UDim2.new(1, -20, 0, 20)
+				title.BackgroundTransparency = 1
+				title.Font = Enum.Font.GothamBlack
+				title.TextXAlignment = Enum.TextXAlignment.Left
+				title.TextTruncate = Enum.TextTruncate.AtEnd
+				title.TextSize = 13
+				title.TextColor3 = C_TEXT_PRIMARY
+				title.Text = string.upper(gSpec.DisplayName)
+				title.Parent = card
+				addTextOutline(title, 1.5)
 
 				local statLbl = Instance.new("TextLabel")
-				statLbl.Position = UDim2.new(0, 104, 0, 52)
-				statLbl.Size = UDim2.new(1, -268, 0, 16)
-				statLbl.BackgroundTransparency = 1
-				statLbl.Font = Enum.Font.Code
+				statLbl.Position = UDim2.new(0, 10, 0, 122)
+				statLbl.Size = UDim2.new(1, -20, 0, 18)
+				statLbl.BackgroundColor3 = Color3.fromRGB(14, 18, 28)
+				statLbl.Font = Enum.Font.GothamBold
+				statLbl.TextSize = 10
+				statLbl.TextColor3 = C_GOLD_HI
+				statLbl.TextTruncate = Enum.TextTruncate.AtEnd
+				statLbl.Text = "  " .. table.concat(bonusParts, "  •  ")
 				statLbl.TextXAlignment = Enum.TextXAlignment.Left
-				statLbl.TextSize = 11
-				statLbl.TextColor3 = Color3.fromRGB(204, 200, 192)
-				statLbl.Text = table.concat(bonusParts, "  |  ")
 				statLbl.Parent = card
+				makeCorner(statLbl, 4)
+				makeStroke(statLbl, C_BORDER, 1)
 
 				local descLbl = Instance.new("TextLabel")
-				descLbl.Position = UDim2.new(0, 104, 0, 70)
-				descLbl.Size = UDim2.new(1, -268, 0, 34)
+				descLbl.Position = UDim2.new(0, 10, 0, 146)
+				descLbl.Size = UDim2.new(1, -20, 0, 44)
 				descLbl.BackgroundTransparency = 1
-				descLbl.Font = Enum.Font.Gotham
+				descLbl.Font = Enum.Font.GothamMedium
 				descLbl.TextWrapped = true
+				descLbl.TextTruncate = Enum.TextTruncate.AtEnd
 				descLbl.TextXAlignment = Enum.TextXAlignment.Left
 				descLbl.TextYAlignment = Enum.TextYAlignment.Top
-				descLbl.TextSize = 11
+				descLbl.TextSize = 10
 				descLbl.TextColor3 = C_TEXT_MUTED
 				descLbl.Text = gSpec.Description
 				descLbl.Parent = card
@@ -3267,16 +4041,16 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 						elseif not isCompatible then "INCOMPATIBLE"
 						else "EQUIP  GUARD #" .. tostring(selectedGuardSlot)
 					local eqCol = if isEquippedOnSlot then C_OWNED elseif isCompatible then C_STEEL else C_DISABLED
-					local eqBtn = makeBtn(card, eqText, eqCol, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
+					local eqBtn = makeBtn(card, eqText, eqCol, UDim2.new(0, 10, 1, -48), UDim2.new(1, -20, 0, 38), function()
 						if isCompatible and not isEquippedOnSlot and dispatchAction then
 							dispatchAction("EquipGuardGear", { SlotIndex = selectedGuardSlot, GearId = gearId })
 						end
 					end)
-					eqBtn.TextSize = 10
+					eqBtn.TextSize = 11
 				elseif gSpec.RobuxItemId and gSpec.RobuxPrice then
 					local rId = gSpec.RobuxItemId
 					local rPrice = gSpec.RobuxPrice
-					local rBtn = makeBtn(card, string.format("R$ %d", rPrice), C_ROBUX, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
+					local rBtn = makeBtn(card, string.format("R$ %d", rPrice), C_ROBUX, UDim2.new(0, 10, 1, -48), UDim2.new(1, -20, 0, 38), function()
 						showConfirmDialog(
 							"CONFIRM ROBUX OUTFIT",
 							string.format("Unlock %s permanently for R$ %d?\n%s", gSpec.DisplayName, rPrice, gSpec.Description),
@@ -3290,19 +4064,27 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 					local rst = rBtn:FindFirstChildOfClass("UIStroke")
 					if rst then rst.Color = C_BRASS end
 				else
-					local bText = if locked then string.format("LOCKED  LV.%d", gSpec.RequiredLevel) else string.format("BUY  %d G", gSpec.Price)
-					local bCol = if locked or playerCoins < gSpec.Price then C_DISABLED else C_OXBLOOD
-					local bBtn = makeBtn(card, bText, bCol, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function()
+					local hasRobuxOpt = typeof(gSpec.RobuxPrice) == "number" and gSpec.RobuxPrice > 0
+					local bText = if locked
+						then string.format("LV.%d LOCK", gSpec.RequiredLevel)
+						elseif isSmugglerDeal then string.format("%sG (-%d%%)", formatCommaInt(effectivePrice), dealDiscPct)
+						else string.format("%sG", formatCommaInt(effectivePrice))
+					local bCol = if locked or playerCoins < effectivePrice then C_DISABLED elseif isSmugglerDeal then C_BRASS else gearBuyAccent
+					local leftW = if hasRobuxOpt then UDim2.new(0.55, -12, 0, 38) else UDim2.new(1, -20, 0, 38)
+					local bBtn = makeBtn(card, bText, bCol, UDim2.new(0, 10, 1, -48), leftW, function()
 						if locked then
 							if dispatchAction then dispatchAction("BuyGuardGear", gearId) end
 							return
 						end
-						if gSpec.Price >= 500 then
+						if effectivePrice >= 500 then
+							local dealLine = if isSmugglerDeal
+								then string.format("\nDON VINNIE'S DROP: -%d%% OFF (Was %sG — Save %sG!)", dealDiscPct, formatCommaInt(gSpec.Price), formatCommaInt(math.max(0, gSpec.Price - effectivePrice)))
+								else ""
 							showConfirmDialog(
 								"CONFIRM EQUIPMENT PURCHASE",
-								string.format("Purchase %s (%s) for %d Gold?\nBonuses: %s", gSpec.DisplayName, gSpec.Slot, gSpec.Price, table.concat(bonusParts, ", ")),
-								string.format("BUY  %d G", gSpec.Price),
-								C_OXBLOOD,
+								string.format("Purchase %s (%s) for %s Gold?%s\nBonuses: %s", gSpec.DisplayName, gSpec.Slot, formatCommaInt(effectivePrice), dealLine, table.concat(bonusParts, ", ")),
+								string.format("BUY  %sG", formatCommaInt(effectivePrice)),
+								if isSmugglerDeal then C_BRASS else gearBuyAccent,
 								function()
 									if dispatchAction then dispatchAction("BuyGuardGear", gearId) end
 								end
@@ -3311,7 +4093,19 @@ local function renderBlackMarketBodyguards(state: { [string]: any }): ()
 							dispatchAction("BuyGuardGear", gearId)
 						end
 					end)
-					bBtn.TextSize = 11
+					bBtn.TextSize = if isSmugglerDeal then 10 else 11
+
+					if hasRobuxOpt and gSpec.RobuxPrice then
+						local rPrice = gSpec.RobuxPrice
+						local rBtn = makeBtn(card, string.format("R$ %d", rPrice), C_ROBUX, UDim2.new(0.55, 2, 1, -48), UDim2.new(0.45, -12, 0, 38), function()
+							if dispatchAction then
+								dispatchAction("BuyWithRobuxOption", { Kind = "BuyGuardGear", Arg = gearId })
+							end
+						end)
+						rBtn.TextSize = 11
+						local rst = rBtn:FindFirstChildOfClass("UIStroke")
+						if rst then rst.Color = C_BRASS end
+					end
 				end
 			end
 		end
@@ -3406,6 +4200,8 @@ local function renderBlackMarketMercenaries(state: { [string]: any }): ()
 
 		local vp = ModelPreviewHelper.CreatePreview(topBay, "Empire", ms.Code, UDim2.fromOffset(106, 106), UDim2.new(0.5, -53, 0.5, -50), Color3.fromRGB(18, 24, 38))
 		vp.BackgroundTransparency = 1
+		local vpSt = vp:FindFirstChildOfClass("UIStroke")
+		if vpSt then vpSt:Destroy() end
 		makeTag(topBay, ms.Badge, ms.Col:Lerp(C_OUTLINE_DARK, 0.2), UDim2.fromOffset(10, 8), UDim2.fromOffset(132, 18))
 
 		local t = Instance.new("TextLabel")
@@ -3548,32 +4344,285 @@ local function renderBlackMarketPremium(state: { [string]: any }): ()
 	end
 end
 
-local function renderBlackMarket(state: { [string]: any }): ()
+local function renderMarket(state: { [string]: any }): ()
 	if not scrollFrame then return end
 	local profile = state.Profile or {}
 	local coins = tonumber(profile.Coins) or 0
 	local level = tonumber(profile.Level) or 1
 
-	local warpCard = makeCard(scrollFrame, 52, C_OXBLOOD)
+	local banner = makeCard(scrollFrame, 56, C_TEAL)
+	banner.Name = "CityMarketBanner"
+	local bLbl = Instance.new("TextLabel")
+	bLbl.Position = UDim2.new(0, 14, 0, 6)
+	bLbl.Size = UDim2.new(1, -196, 1, -12)
+	bLbl.BackgroundTransparency = 1
+	bLbl.Font = Enum.Font.GothamBold
+	bLbl.TextWrapped = true
+	bLbl.TextXAlignment = Enum.TextXAlignment.Left
+	bLbl.TextSize = 11
+	bLbl.TextColor3 = C_TEXT_PRIMARY
+	bLbl.Text = string.format("CITY MARKET  •  STANDARD AFFORDABLE RATES  |  %s GOLD  |  LEVEL %d\nEveryday firearms, ammo crates, kevlar & city guards — fair street prices, open anywhere!", formatCommaInt(coins), level)
+	bLbl.Parent = banner
+
+	local openBmBtn = makeBtn(banner, "BLACK MARKET >", C_OXBLOOD, UDim2.new(1, -174, 0.5, -16), UDim2.fromOffset(162, 32), function()
+		AudioController.PlayClick()
+		if scrollFrame then
+			scrollFrame.CanvasPosition = Vector2.new(0, 0)
+		end
+		currentTab = "BlackMarket"
+		lastRenderedTabSig = ""
+		render()
+	end)
+	openBmBtn.Name = "OpenBlackMarketTabBtn"
+	openBmBtn.TextSize = 10
+
+	-- 4 City Market Category Sub-Tabs
+	local subBar = Instance.new("Frame")
+	subBar.Name = "MarketSubTabBar"
+	subBar.Size = UDim2.new(1, -6, 0, 38)
+	subBar.BackgroundTransparency = 1
+	subBar.Parent = scrollFrame
+	local sl = Instance.new("UIListLayout")
+	sl.FillDirection = Enum.FillDirection.Horizontal
+	sl.SortOrder = Enum.SortOrder.LayoutOrder
+	sl.Padding = UDim.new(0, 5)
+	sl.Parent = subBar
+
+	local subTabs: { { Id: MarketSubTab, Label: string, ActiveCol: Color3, Icon: "Gun" | "Ammo" | "Guard" | "Empire" } } = {
+		{ Id = "Weapons", Label = "WEAPONS", ActiveCol = C_TEAL, Icon = "Gun" },
+		{ Id = "Supplies", Label = "AMMO & GEAR", ActiveCol = C_STEEL, Icon = "Ammo" },
+		{ Id = "Bodyguards", Label = "BODYGUARDS", ActiveCol = C_TEAL, Icon = "Guard" },
+		{ Id = "GuardGear", Label = "GUARD GEAR", ActiveCol = C_BRASS, Icon = "Empire" },
+	}
+	for sIdx, st in ipairs(subTabs) do
+		local active = (currentMarketSubTab == st.Id)
+		local btn = makeBtn(subBar, "", if active then st.ActiveCol else C_BG_CARD_ALT, UDim2.new(), UDim2.new(0.25, -4, 0, 36), function()
+			AudioController.PlayClick()
+			currentMarketSubTab = st.Id
+			render()
+		end)
+		btn.Name = "MarketSubTab_" .. st.Id
+		btn.LayoutOrder = sIdx
+		CurrencyIconHelper.CreateCategoryIcon(btn, st.Icon, 24, UDim2.new(0, 8, 0.5, -12), btn.ZIndex + 2)
+		local lbl = Instance.new("TextLabel")
+		lbl.Name = "SubTabLabel"
+		lbl.Position = UDim2.fromOffset(36, 0)
+		lbl.Size = UDim2.new(1, -40, 1, 0)
+		lbl.BackgroundTransparency = 1
+		lbl.Font = Enum.Font.GothamBlack
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.TextTruncate = Enum.TextTruncate.AtEnd
+		lbl.Text = st.Label
+		lbl.TextSize = 10
+		lbl.TextColor3 = if active then Color3.new(1, 1, 1) else C_TEXT_PRIMARY
+		lbl.ZIndex = btn.ZIndex + 2
+		lbl.Active = false
+		lbl.Parent = btn
+		addTextOutline(lbl, 1.4)
+		if active then
+			local stroke = btn:FindFirstChildOfClass("UIStroke")
+			if stroke then
+				stroke.Color = C_GOLD_HI
+				stroke.Thickness = 1.8
+			end
+		end
+	end
+
+	if currentMarketSubTab == "Weapons" then
+		renderWeaponsForTier(state, "Market")
+	elseif currentMarketSubTab == "Supplies" then
+		renderMarketSupplies(state)
+	elseif currentMarketSubTab == "Bodyguards" then
+		renderBodyguardsForTier(state, "Market", "Classes")
+	else
+		renderBodyguardsForTier(state, "Market", "Gear")
+	end
+end
+
+local function renderBlackMarket(state: { [string]: any }): ()
+	if not scrollFrame then return end
+	local profile = state.Profile or {}
+	local coins = tonumber(profile.Coins) or 0
+	local level = tonumber(profile.Level) or 1
+	local bm = if typeof(state.BlackMarket) == "table" then state.BlackMarket else {}
+	local deal = if typeof(bm.SmugglerDeal) == "table" then bm.SmugglerDeal else nil
+	local quip = if deal and typeof(deal.Quip) == "string"
+		then deal.Quip
+		else "\"2x-4x contraband markup? Hey, bribing the Health Inspector ain't cheap!\""
+
+	local warpCard = makeCard(scrollFrame, 60, C_OXBLOOD)
+	warpCard.Name = "BlackMarketBanner"
 	local wLbl = Instance.new("TextLabel")
 	wLbl.Position = UDim2.new(0, 14, 0, 6)
-	wLbl.Size = UDim2.new(1, -186, 1, -12)
+	wLbl.Size = UDim2.new(1, -284, 0, 19)
 	wLbl.BackgroundTransparency = 1
-	wLbl.Font = Enum.Font.GothamBold
-	wLbl.TextWrapped = true
+	wLbl.Font = Enum.Font.GothamBlack
+	wLbl.TextTruncate = Enum.TextTruncate.AtEnd
 	wLbl.TextXAlignment = Enum.TextXAlignment.Left
 	wLbl.TextSize = 11
 	wLbl.TextColor3 = C_TEXT_PRIMARY
-	wLbl.Text = string.format("UNDERGROUND ARMS SYNDICATE  |  %d GOLD  |  LEVEL %d\nAcquire firearms, caliber-matched ammunition, and bodyguard equipment.", coins, level)
+	wLbl.Text = string.format("UNDERGROUND BLACK MARKET  •  2X-4X CONTRABAND  |  %s GOLD  |  LV.%d", formatCommaInt(coins), level)
 	wLbl.Parent = warpCard
 
-	local visitBtn = makeBtn(warpCard, "VISIT OUTPOST", C_BG_SUBTLE, UDim2.new(1, -162, 0.5, -16), UDim2.fromOffset(150, 32), function()
+	local qLbl = Instance.new("TextLabel")
+	qLbl.Name = "SmugglerQuipLabel"
+	qLbl.Position = UDim2.new(0, 14, 0, 26)
+	qLbl.Size = UDim2.new(1, -284, 0, 28)
+	qLbl.BackgroundTransparency = 1
+	qLbl.Font = Enum.Font.GothamMedium
+	qLbl.TextWrapped = true
+	qLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	qLbl.TextXAlignment = Enum.TextXAlignment.Left
+	qLbl.TextSize = 10
+	qLbl.TextColor3 = C_GOLD_HI
+	qLbl.Text = "DON VINNIE: " .. quip
+	qLbl.Parent = warpCard
+
+	local marketSwitchBtn = makeBtn(warpCard, "< CITY MARKET", C_TEAL, UDim2.new(1, -268, 0.5, -16), UDim2.fromOffset(118, 32), function()
+		AudioController.PlayClick()
+		if scrollFrame then
+			scrollFrame.CanvasPosition = Vector2.new(0, 0)
+		end
+		currentTab = "Market"
+		lastRenderedTabSig = ""
+		render()
+	end)
+	marketSwitchBtn.Name = "BackToCityMarketBtn"
+	marketSwitchBtn.TextSize = 10
+
+	local visitBtn = makeBtn(warpCard, "TELEPORT OUTPOST", C_BG_SUBTLE, UDim2.new(1, -144, 0.5, -16), UDim2.fromOffset(134, 32), function()
 		EmpireMenuController.Close()
 		if dispatchAction then dispatchAction("TeleportBlackMarket", nil) end
 	end)
-	visitBtn.TextSize = 11
+	visitBtn.Name = "TeleportOutpostBtn"
+	visitBtn.TextSize = 10
 
-	-- 5 Category Sub-Tabs with Real 3D Icons (Real Gun, Brass Ammo, Bodyguard, Real Ninja & Robux Gem!)
+	-- LIVE ROTATING 5-MINUTE SMUGGLER'S SECRET DROP (35% OFF DAY / 45% OFF NIGHT — HUGE CCU RETENTION HOOK!)
+	if deal and typeof(deal.ItemId) == "string" then
+		local ownedWeapons = if typeof(bm.OwnedWeapons) == "table" then bm.OwnedWeapons else {}
+		local bgState = if typeof(state.Bodyguards) == "table" then state.Bodyguards else {}
+		local unlockedClasses = if typeof(bgState.UnlockedClasses) == "table" then bgState.UnlockedClasses else {}
+		local ownedGear = if typeof(bgState.OwnedGear) == "table" then bgState.OwnedGear else {}
+		local ownedPasses = if typeof(state.OwnedPasses) == "table" then state.OwnedPasses else {}
+
+		local dealOwned = false
+		if deal.Category == "Weapon" then
+			dealOwned = ownedWeapons[deal.ItemId] == true
+		elseif deal.Category == "GuardClass" then
+			dealOwned = unlockedClasses[deal.ItemId] == true or (deal.RobuxItemId ~= nil and ownedPasses[deal.RobuxItemId] == true)
+		elseif deal.Category == "GuardGear" then
+			dealOwned = ownedGear[deal.ItemId] == true or (deal.RobuxItemId ~= nil and ownedPasses[deal.RobuxItemId] == true)
+		else
+			dealOwned = bm.HasShadowDash == true
+		end
+
+		local reqLv = tonumber(deal.RequiredLevel) or 1
+		local dealLocked = (not dealOwned) and level < reqLv
+		local dealPrice = tonumber(deal.DealPrice) or 0
+		local basePrice = tonumber(deal.BasePrice) or dealPrice
+		local discPct = tonumber(deal.DiscountPct) or 35
+		local remSec = math.max(0, tonumber(deal.TimeRemaining) or 0)
+		local remM = math.floor(remSec / 60)
+		local remS = remSec % 60
+		local isNightSale = deal.IsNightBonus == true
+
+		local dropCard = makeCard(scrollFrame, 72, if isNightSale then Color3.fromRGB(168, 85, 247) else C_GOLD_HI)
+		dropCard.Name = "SmugglerDropCard"
+		dropCard.BackgroundColor3 = C_BG_CARD:Lerp(if isNightSale then Color3.fromRGB(124, 58, 237) else C_BRASS, 0.20)
+		local dropStroke = dropCard:FindFirstChildOfClass("UIStroke")
+		if dropStroke then
+			dropStroke.Color = C_GOLD_HI
+			dropStroke.Thickness = 2.2
+		end
+
+		local prevCat = tostring(deal.PreviewCategory or "Weapon")
+		local prevId = tostring(deal.PreviewId or deal.ItemId)
+		ModelPreviewHelper.CreatePreview(dropCard, prevCat :: any, prevId, UDim2.fromOffset(56, 56), UDim2.new(0, 10, 0.5, -28), Color3.fromRGB(18, 22, 34), C_GOLD_HI)
+
+		local saleBadgeTxt = if isNightSale
+			then string.format("MIDNIGHT HEIST  •  -%d%% GOLD", discPct)
+			else string.format("DON VINNIE'S DROP  •  -%d%% GOLD", discPct)
+		makeTag(dropCard, saleBadgeTxt, if isNightSale then Color3.fromRGB(124, 58, 237) else C_OXBLOOD, UDim2.fromOffset(74, 7), UDim2.fromOffset(184, 17))
+		makeTag(dropCard, string.format("ROTATES %02d:%02d", remM, remS), Color3.fromRGB(16, 22, 36), UDim2.fromOffset(264, 7), UDim2.fromOffset(102, 17))
+
+		local dTitle = Instance.new("TextLabel")
+		dTitle.Position = UDim2.new(0, 74, 0, 27)
+		dTitle.Size = UDim2.new(1, -304, 0, 19)
+		dTitle.BackgroundTransparency = 1
+		dTitle.Font = Enum.Font.GothamBlack
+		dTitle.TextXAlignment = Enum.TextXAlignment.Left
+		dTitle.TextTruncate = Enum.TextTruncate.AtEnd
+		dTitle.TextSize = 13
+		dTitle.TextColor3 = Color3.new(1, 1, 1)
+		dTitle.Text = string.upper(tostring(deal.DisplayName or deal.ItemId))
+		dTitle.Parent = dropCard
+		addTextOutline(dTitle, 1.5)
+
+		local dSub = Instance.new("TextLabel")
+		dSub.Position = UDim2.new(0, 74, 0, 48)
+		dSub.Size = UDim2.new(1, -304, 0, 16)
+		dSub.BackgroundTransparency = 1
+		dSub.Font = Enum.Font.GothamBold
+		dSub.TextXAlignment = Enum.TextXAlignment.Left
+		dSub.TextTruncate = Enum.TextTruncate.AtEnd
+		dSub.TextSize = 10
+		dSub.TextColor3 = C_GOLD_HI
+		dSub.Text = string.format(
+			"STREET %sG  ->  DROP %sG  (SAVE %sG!%s)",
+			formatCommaInt(basePrice),
+			formatCommaInt(dealPrice),
+			formatCommaInt(math.max(0, basePrice - dealPrice)),
+			if isNightSale then " • NIGHT BONUS!" else " • 45% OFF AT NIGHT"
+		)
+		dSub.Parent = dropCard
+
+		if dealOwned then
+			local ownBtn = makeBtn(dropCard, "ALREADY OWNED", C_OWNED, UDim2.new(1, -158, 0.5, -18), UDim2.fromOffset(146, 36), function() end)
+			ownBtn.TextSize = 10
+		else
+			local hasDealRobux = typeof(deal.RobuxPrice) == "number" and deal.RobuxPrice > 0
+			local gBtnW = if hasDealRobux then 124 else 206
+			local gBtnX = if hasDealRobux then -218 else -218
+			local gTxt = if dealLocked then string.format("LV.%d LOCK", reqLv) else string.format("SNAG %sG", formatCommaInt(dealPrice))
+			local gCol = if dealLocked or coins < dealPrice then C_DISABLED else C_BRASS
+			local snagBtn = makeBtn(dropCard, gTxt, gCol, UDim2.new(1, gBtnX, 0.5, -18), UDim2.fromOffset(gBtnW, 36), function()
+				if not dispatchAction then return end
+				if deal.Category == "Weapon" then
+					dispatchAction("BuyBlackMarketItem", deal.ItemId)
+				elseif deal.Category == "GuardClass" then
+					dispatchAction("RecruitBodyguard", { ClassId = deal.ItemId, SlotIndex = selectedGuardSlot })
+				elseif deal.Category == "GuardGear" then
+					dispatchAction("BuyGuardGear", deal.ItemId)
+				else
+					dispatchAction("BuyShadowDash", nil)
+				end
+			end)
+			snagBtn.Name = "SmugglerDropBuyGoldBtn"
+			snagBtn.TextSize = 10
+
+			if hasDealRobux and deal.RobuxPrice then
+				local rPrice = deal.RobuxPrice
+				local rBtn = makeBtn(dropCard, string.format("R$ %d", rPrice), C_ROBUX, UDim2.new(1, -88, 0.5, -18), UDim2.fromOffset(78, 36), function()
+					if not dispatchAction then return end
+					if deal.RobuxItemId then
+						dispatchAction("BuyRobuxItem", deal.RobuxItemId)
+					elseif deal.Category == "Weapon" then
+						dispatchAction("BuyWithRobuxOption", { Kind = "BuyBlackMarketItem", Arg = deal.ItemId })
+					elseif deal.Category == "GuardClass" then
+						dispatchAction("RecruitBodyguard", { ClassId = deal.ItemId, SlotIndex = selectedGuardSlot, UseRobux = true })
+					elseif deal.Category == "GuardGear" then
+						dispatchAction("BuyWithRobuxOption", { Kind = "BuyGuardGear", Arg = deal.ItemId })
+					else
+						dispatchAction("BuyWithRobuxOption", { Kind = "BuyShadowDash" })
+					end
+				end)
+				rBtn.Name = "SmugglerDropBuyRobuxBtn"
+				rBtn.TextSize = 10
+			end
+		end
+	end
+
+	-- 5 Underground Black Market Sub-Tabs
 	local subBar = Instance.new("Frame")
 	subBar.Name = "BMSubTabBar"
 	subBar.Size = UDim2.new(1, -6, 0, 38)
@@ -3586,9 +4635,9 @@ local function renderBlackMarket(state: { [string]: any }): ()
 	sl.Parent = subBar
 
 	local subTabs: { { Id: BlackMarketSubTab, Label: string, ActiveCol: Color3, Icon: "Gun" | "Ammo" | "Guard" | "Ninja" | "Robux" } } = {
-		{ Id = "Weapons", Label = "WEAPONS", ActiveCol = C_OXBLOOD, Icon = "Gun" },
-		{ Id = "Ammo", Label = "AMMO", ActiveCol = C_STEEL, Icon = "Ammo" },
-		{ Id = "Bodyguards", Label = "GUARDS", ActiveCol = C_OXBLOOD, Icon = "Guard" },
+		{ Id = "Weapons", Label = "CONTRABAND", ActiveCol = C_OXBLOOD, Icon = "Gun" },
+		{ Id = "Gadgets", Label = "GADGETS", ActiveCol = C_BRASS, Icon = "Ammo" },
+		{ Id = "Bodyguards", Label = "ELITE GUARDS", ActiveCol = C_OXBLOOD, Icon = "Guard" },
 		{ Id = "Mercenaries", Label = "MAFIA HIRE", ActiveCol = C_OXBLOOD, Icon = "Ninja" },
 		{ Id = "Premium", Label = "R$ VIP", ActiveCol = C_ROBUX, Icon = "Robux" },
 	}
@@ -3630,11 +4679,11 @@ local function renderBlackMarket(state: { [string]: any }): ()
 	end
 
 	if currentBMSubTab == "Weapons" then
-		renderBlackMarketWeapons(state)
-	elseif currentBMSubTab == "Ammo" then
-		renderBlackMarketAmmo(state)
+		renderWeaponsForTier(state, "BlackMarket")
+	elseif currentBMSubTab == "Gadgets" then
+		renderBlackMarketGadgets(state)
 	elseif currentBMSubTab == "Bodyguards" then
-		renderBlackMarketBodyguards(state)
+		renderBodyguardsForTier(state, "BlackMarket", nil)
 	elseif currentBMSubTab == "Mercenaries" then
 		renderBlackMarketMercenaries(state)
 	else
@@ -3660,7 +4709,7 @@ local function updateVisibleViewports(): ()
 				local cTop = desc.AbsolutePosition.Y
 				local cBot = cTop + desc.AbsoluteSize.Y
 				local inView = (cBot >= viewTop) and (cTop <= viewBot)
-				local wantVis = inView and visibleCount < 18
+				local wantVis = inView and visibleCount < 24
 				if wantVis then
 					visibleCount += 1
 				end
@@ -3700,6 +4749,8 @@ render = function(): ()
 		renderKitchen(state)
 	elseif currentTab == "Warehouses" then
 		renderWarehouses(state)
+	elseif currentTab == "Market" then
+		renderMarket(state)
 	elseif currentTab == "BlackMarket" then
 		renderBlackMarket(state)
 	elseif currentTab == "Shop" then
@@ -3834,11 +4885,11 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 	brandSub.Parent = brandCard
 	addTextOutline(brandSub, 1.4)
 
-	-- Live Player Wallet Card directly under Logo (Y = 70..158) — keeps ALL 5 nav buttons safely BELOW CoreGui ExperienceChat's top-left hitbox!
+	-- Live Player Wallet Card directly under Logo (Y = 66..148) — keeps ALL 6 nav buttons safely BELOW CoreGui ExperienceChat's top-left hitbox and inside 420px min modal height!
 	local walletCard = Instance.new("Frame")
 	walletCard.Name = "SidebarWalletCard"
-	walletCard.Position = UDim2.fromOffset(12, 70)
-	walletCard.Size = UDim2.new(1, -24, 0, 88)
+	walletCard.Position = UDim2.fromOffset(12, 66)
+	walletCard.Size = UDim2.new(1, -24, 0, 82)
 	walletCard.BackgroundColor3 = Color3.fromRGB(22, 30, 48)
 	walletCard.BorderSizePixel = 0
 	walletCard.Parent = sidebar
@@ -3846,8 +4897,8 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 	makeStroke(walletCard, C_BRASS, 1.8)
 
 	local wLabel = Instance.new("TextLabel")
-	wLabel.Position = UDim2.fromOffset(10, 6)
-	wLabel.Size = UDim2.new(1, -20, 0, 14)
+	wLabel.Position = UDim2.fromOffset(10, 5)
+	wLabel.Size = UDim2.new(1, -20, 0, 13)
 	wLabel.BackgroundTransparency = 1
 	wLabel.Font = Enum.Font.GothamBlack
 	wLabel.TextXAlignment = Enum.TextXAlignment.Left
@@ -3858,17 +4909,17 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 
 	local goldPill = Instance.new("Frame")
 	goldPill.Name = "HeaderGoldPill"
-	goldPill.Position = UDim2.fromOffset(8, 22)
-	goldPill.Size = UDim2.new(1, -16, 0, 32)
+	goldPill.Position = UDim2.fromOffset(8, 20)
+	goldPill.Size = UDim2.new(1, -16, 0, 30)
 	goldPill.BackgroundColor3 = Color3.fromRGB(34, 26, 12)
 	goldPill.BorderSizePixel = 0
 	goldPill.Parent = walletCard
 	makeCorner(goldPill, 7)
 	makeStroke(goldPill, C_GOLD_HI, 1.6)
-	CurrencyIconHelper.CreateGoldCoin(goldPill, 22, UDim2.new(0, 7, 0.5, -11), 4)
+	CurrencyIconHelper.CreateGoldCoin(goldPill, 20, UDim2.new(0, 7, 0.5, -10), 4)
 	local gVal = Instance.new("TextLabel")
-	gVal.Position = UDim2.new(0, 34, 0, 0)
-	gVal.Size = UDim2.new(1, -38, 1, 0)
+	gVal.Position = UDim2.new(0, 32, 0, 0)
+	gVal.Size = UDim2.new(1, -36, 1, 0)
 	gVal.BackgroundTransparency = 1
 	gVal.Font = Enum.Font.GothamBlack
 	gVal.TextXAlignment = Enum.TextXAlignment.Left
@@ -3881,7 +4932,7 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 
 	local rankPill = Instance.new("TextLabel")
 	rankPill.Name = "HeaderRankPill"
-	rankPill.Position = UDim2.fromOffset(8, 60)
+	rankPill.Position = UDim2.fromOffset(8, 55)
 	rankPill.Size = UDim2.new(1, -16, 0, 20)
 	rankPill.BackgroundColor3 = Color3.fromRGB(16, 22, 36)
 	rankPill.Font = Enum.Font.GothamBlack
@@ -3893,24 +4944,25 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 	makeStroke(rankPill, C_BORDER, 1.2)
 	headerRankValLbl = rankPill
 
-	-- 5 Chunky Tactile 3D Sidebar Nav Buttons (Y = 170..430 — 100% clear of CoreGui Chat & TopBar at EVERY resolution!)
+	-- 6 Chunky Tactile 3D Sidebar Nav Buttons (Y = 156..409 — fits cleanly at 420px min height & 100% clear of Chat!)
 	local tabBar = Instance.new("Frame")
 	tabBar.Name = "TabBar"
-	tabBar.Position = UDim2.fromOffset(12, 170)
-	tabBar.Size = UDim2.new(1, -24, 1, -182)
+	tabBar.Position = UDim2.fromOffset(12, 156)
+	tabBar.Size = UDim2.new(1, -24, 1, -166)
 	tabBar.BackgroundTransparency = 1
 	tabBar.Parent = sidebar
 
 	local tabLayout = Instance.new("UIListLayout")
 	tabLayout.FillDirection = Enum.FillDirection.Vertical
 	tabLayout.SortOrder = Enum.SortOrder.LayoutOrder
-	tabLayout.Padding = UDim.new(0, 9)
+	tabLayout.Padding = UDim.new(0, 5)
 	tabLayout.Parent = tabBar
 
-	local tabs: { { Id: MenuTab, Label: string, Icon: "Food" | "Storage" | "Empire" | "Gun" | "Robux", BadgeBg: Color3 } } = {
+	local tabs: { { Id: MenuTab, Label: string, Icon: "Food" | "Storage" | "Empire" | "Market" | "Gun" | "Robux", BadgeBg: Color3 } } = {
 		{ Id = "Kitchen", Label = "KITCHEN", Icon = "Food", BadgeBg = Color3.fromRGB(64, 42, 16) },
 		{ Id = "Warehouses", Label = "STORAGE", Icon = "Storage", BadgeBg = Color3.fromRGB(16, 48, 76) },
 		{ Id = "Upgrades", Label = "EMPIRE", Icon = "Empire", BadgeBg = Color3.fromRGB(68, 52, 14) },
+		{ Id = "Market", Label = "MARKET", Icon = "Market", BadgeBg = Color3.fromRGB(12, 62, 68) },
 		{ Id = "BlackMarket", Label = "BLACK MARKET", Icon = "Gun", BadgeBg = Color3.fromRGB(76, 18, 30) },
 		{ Id = "Shop", Label = "ROBUX STORE", Icon = "Robux", BadgeBg = Color3.fromRGB(14, 60, 40) },
 	}
@@ -3918,7 +4970,7 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 	table.clear(tabLabels)
 	table.clear(tabActiveBars)
 	for tIdx, t in ipairs(tabs) do
-		local tb = makeBtn(tabBar, "", C_BG_CARD, UDim2.new(), UDim2.new(1, 0, 0, 46), function()
+		local tb = makeBtn(tabBar, "", C_BG_CARD, UDim2.new(), UDim2.new(1, 0, 0, 38), function()
 			AudioController.PlayClick()
 			hideConfirmDialog()
 			if currentTab ~= t.Id and scrollFrame then
@@ -3932,8 +4984,8 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 		tb.LayoutOrder = tIdx
 
 		local activeBar = Instance.new("Frame")
-		activeBar.Position = UDim2.fromOffset(4, 7)
-		activeBar.Size = UDim2.new(0, 4, 1, -18)
+		activeBar.Position = UDim2.fromOffset(4, 6)
+		activeBar.Size = UDim2.new(0, 4, 1, -15)
 		activeBar.BackgroundColor3 = Color3.new(1, 1, 1)
 		activeBar.BorderSizePixel = 0
 		activeBar.Active = false
@@ -3945,8 +4997,8 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 		-- Framed high-contrast Icon Medallion so EVERY category icon pops sharply on any tab state!
 		local iconMedallion = Instance.new("Frame")
 		iconMedallion.Name = "IconMedallion"
-		iconMedallion.Position = UDim2.new(0, 11, 0.5, -17)
-		iconMedallion.Size = UDim2.fromOffset(32, 32)
+		iconMedallion.Position = UDim2.new(0, 10, 0.5, -15)
+		iconMedallion.Size = UDim2.fromOffset(28, 28)
 		iconMedallion.BackgroundColor3 = t.BadgeBg
 		iconMedallion.BorderSizePixel = 0
 		iconMedallion.Active = false
@@ -3955,8 +5007,8 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 		makeCorner(iconMedallion, 7)
 		makeStroke(iconMedallion, Color3.fromRGB(12, 14, 22), 1.4)
 
-		local iconSz = if t.Icon == "Robux" then 24 else 26
-		local iconOff = math.floor((32 - iconSz) * 0.5)
+		local iconSz = if t.Icon == "Robux" then 20 else 22
+		local iconOff = math.floor((28 - iconSz) * 0.5)
 		CurrencyIconHelper.CreateCategoryIcon(
 			iconMedallion,
 			t.Icon,
@@ -3967,8 +5019,8 @@ function EmpireMenuController.Init(_parentGui: ScreenGui, onAction: ActionCallba
 
 		local tLbl = Instance.new("TextLabel")
 		tLbl.Name = "TabLabel"
-		tLbl.Position = UDim2.fromOffset(48, 0)
-		tLbl.Size = UDim2.new(1, -52, 1, -3)
+		tLbl.Position = UDim2.fromOffset(44, 0)
+		tLbl.Size = UDim2.new(1, -48, 1, -3)
 		tLbl.BackgroundTransparency = 1
 		tLbl.Font = Enum.Font.GothamBlack
 		tLbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -4223,6 +5275,33 @@ local function computeTabSignature(tab: MenuTab, state: { [string]: any }): stri
 		local cnt = 0
 		for _, v in pairs(op) do if v then cnt += 1 end end
 		return string.format("%s|S:%d|%s", base, cnt, tostring(state.OwnsMotorbike == true))
+	elseif tab == "Market" then
+		local bm = if typeof(state.BlackMarket) == "table" then state.BlackMarket else {}
+		local ow = if typeof(bm.OwnedWeapons) == "table" then bm.OwnedWeapons else {}
+		local wCnt = 0
+		for _, v in pairs(ow) do if v then wCnt += 1 end end
+		local ammoInv = if typeof(bm.AmmoInventory) == "table" then bm.AmmoInventory else {}
+		local ammoSum = 0
+		for _, v in pairs(ammoInv) do if typeof(v) == "number" then ammoSum += v end end
+		local bg = if typeof(state.Bodyguards) == "table" then state.Bodyguards else {}
+		local sqList = if typeof(bg.ActiveSquad) == "table" then bg.ActiveSquad else {}
+		local og = if typeof(bg.OwnedGear) == "table" then bg.OwnedGear else {}
+		local gCnt = 0
+		for _, v in pairs(og) do if v then gCnt += 1 end end
+		return string.format(
+			"%s|MK:%s|%s|%s|%d|%d|%d|%d|%d|%s|%s",
+			base,
+			currentMarketSubTab,
+			currentMarketWeaponFilter,
+			currentGuardGearFilter,
+			selectedGuardSlot,
+			wCnt,
+			tonumber(bm.Armor) or 0,
+			ammoSum,
+			tonumber(bm.SmokeGrenades) or 0,
+			table.concat(sqList, ","),
+			tostring(gCnt) .. "|" .. tostring(bg.Stance or "")
+		)
 	elseif tab == "BlackMarket" then
 		local bm = if typeof(state.BlackMarket) == "table" then state.BlackMarket else {}
 		local ow = if typeof(bm.OwnedWeapons) == "table" then bm.OwnedWeapons else {}
@@ -4230,11 +5309,31 @@ local function computeTabSignature(tab: MenuTab, state: { [string]: any }): stri
 		for _, v in pairs(ow) do if v then wCnt += 1 end end
 		local mc = if typeof(state.MercenaryMafia) == "table" then state.MercenaryMafia else {}
 		local bg = if typeof(state.Bodyguards) == "table" then state.Bodyguards else {}
-		local sq = if typeof(bg.ActiveSquad) == "table" then #bg.ActiveSquad else 0
+		local sqList = if typeof(bg.ActiveSquad) == "table" then bg.ActiveSquad else {}
+		local og = if typeof(bg.OwnedGear) == "table" then bg.OwnedGear else {}
+		local gCnt = 0
+		for _, v in pairs(og) do if v then gCnt += 1 end end
+		local deal = if typeof(bm.SmugglerDeal) == "table" then bm.SmugglerDeal else nil
+		local dealSig = if deal
+			then string.format("%s:%d:%d", tostring(deal.DealId or ""), tonumber(deal.DiscountPct) or 0, math.floor((tonumber(deal.TimeRemaining) or 0) / 10))
+			else ""
 		return string.format(
-			"%s|BM:%s|%s|%d|%d|%s|%s|%s",
-			base, currentBMSubTab, currentWeaponFilter, wCnt, sq,
-			tostring(mc.Active == true), tostring(mc.MercType or ""), tostring(mc.TargetRestaurantId or "")
+			"%s|BM:%s|%s|%s|%s|%d|%d|%d|%d|%s|%s|%s|%s|%s|%s",
+			base,
+			currentBMSubTab,
+			currentWeaponFilter,
+			currentGuardView,
+			currentGuardGearFilter,
+			selectedGuardSlot,
+			wCnt,
+			tonumber(bm.Flashbangs) or 0,
+			tonumber(bm.C4Charges) or 0,
+			tostring(bm.HasShadowDash == true),
+			table.concat(sqList, ",") .. ":" .. tostring(gCnt),
+			tostring(mc.Active == true),
+			tostring(mc.MercType or ""),
+			tostring(mc.TargetRestaurantId or ""),
+			dealSig
 		)
 	else
 		local bg = if typeof(state.Bodyguards) == "table" then state.Bodyguards else {}
@@ -4245,19 +5344,49 @@ local function computeTabSignature(tab: MenuTab, state: { [string]: any }): stri
 		for _, v in pairs(unlMap) do
 			if v then unlCnt += 1 end
 		end
+		local hc = if typeof(state.HiredCompanions) == "table" then state.HiredCompanions else {}
+		local hcList = if typeof(hc.List) == "table" then hc.List else {}
+		local hcParts: { string } = {}
+		for _, item in ipairs(hcList) do
+			if typeof(item) == "table" then
+				-- Bucket countdown by 5s in menu sig so menu updates smoothly without constant layout jitter
+				table.insert(
+					hcParts,
+					string.format(
+						"%s:%s:%d:%d",
+						tostring(item.CompanionType),
+						tostring(item.State),
+						math.floor((tonumber(item.TimeRemaining) or 0) / 5),
+						tonumber(item.RespawnRemaining) or 0
+					)
+				)
+			end
+		end
+		local ogMap = if typeof(bg.OwnedGear) == "table" then bg.OwnedGear else {}
+		local ogCnt = 0
+		for _, v in pairs(ogMap) do
+			if v then ogCnt += 1 end
+		end
+		local hcSig = table.concat(hcParts, ";")
 		return string.format(
-			"%s|U:%d|%d|%d|%d|%s|%s|%s|%d|%s|%d|%d",
+			"%s|U:%s|%s|%s|%d|%d|%d|%d|%d|%s|%s|%s|%d|%d|%s|%d|%s|%d",
 			base,
+			currentEmpireSubTab,
+			currentSecuritySubView,
+			currentGuardGearFilter,
 			tonumber(prof.DefenseLevel) or 1,
 			tonumber(prof.CrewCount) or 0,
 			tonumber(state.WaiterCount) or 0,
 			tonumber(state.CourierCount) or 0,
+			ogCnt,
 			tostring(prof.HasDualStove == true),
 			tostring(prof.HasVIPBooths == true),
 			sqStr,
 			unlCnt,
+			#sqList,
 			tostring(bg.Stance or ""),
 			selectedGuardSlot,
+			hcSig,
 			tonumber(prof.TotalDishesServed) or 0
 		)
 	end

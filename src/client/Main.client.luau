@@ -22,6 +22,7 @@ local FishingController = require(controllersFolder:WaitForChild("FishingControl
 local WeaponController = require(controllersFolder:WaitForChild("WeaponController"))
 local HotbarController = require(controllersFolder:WaitForChild("HotbarController"))
 local NightController = require(controllersFolder:WaitForChild("NightController"))
+local RaidWarningController = require(controllersFolder:WaitForChild("RaidWarningController"))
 local CinematicRevealController = require(controllersFolder:WaitForChild("CinematicRevealController"))
 local SpinWheelController = require(controllersFolder:WaitForChild("SpinWheelController"))
 
@@ -45,6 +46,7 @@ local function applyState(state: { [string]: any }): ()
 	BaseSelectController.Update(state)
 	UrbanNPCController.Update(state)
 	SpinWheelController.Update(state)
+	RaidWarningController.Update(state)
 end
 
 local function sendAction(action: string, arg: any?): ()
@@ -74,26 +76,22 @@ local function sendAction(action: string, arg: any?): ()
 		AudioController.PlayCoins()
 	elseif action == "CookRecipe" or action == "ServeCustomerOrder" or action == "SearBoostCook" then
 		AudioController.PlayCook()
-	elseif action == "BuyRobuxItem" or action == "BuyWithRobuxOption" or action == "BuyMotorbikeCoins" or action == "BuyDualStove" or action == "BuyVIPBooths" or action == "BuyMafiaSedan" or action == "ToggleMafiaSedan" or action == "BuyArmoredVan" or action == "ToggleArmoredVan" or action == "BuyGetawayCoupe" or action == "ToggleGetawayCoupe" or action == "BuyVehicleArmor" or action == "SetVehiclePaint" or action == "ClaimDailyVault" or action == "TriggerGodfatherPrestige" or action == "CreateFamily" or action == "JoinFamily" or action == "CommandAllAttack" or action == "CommandAllRecall" or action == "CrackTerritoryVault" or action == "ClaimEmperorTribute" or action == "BuyWeaponMod" or action == "SetGuardStance" or action == "OrderMercenaryAssault" or action == "HireMafiaRestaurantChef" or action == "BuyFrontBusiness" or action == "CollectBusinessSafe" or action == "StartPenthouseHeist" or action == "AcceptHitContract" or action == "PlacePlayerBounty" or action == "RaidBlackoutTruck" or action == "BuySmokeGrenades" or action == "ThrowSmokeGrenade" or action == "BuyFlashbangs" or action == "ThrowFlashbang" or action == "BuyC4Charges" or action == "DeployC4Charge" or action == "BuyShadowDash" or action == "TriggerShadowDash" or action == "EquipWeaponMasterySkin" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireWaiter" or action == "HireCourier" or action == "BuyCentralParkBranch" or action == "ToggleCentralParkStaff" or action == "DefendCentralParkBranch" or action == "StartSmugglerConvoy" or action == "StartGangWarDrop" or action == "TriggerBikeTurbo" or action == "ClaimSyndicateContract" or action == "HireRaider" or action == "BuyGuardGear" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
+	elseif action == "BuyRobuxItem" or action == "BuyWithRobuxOption" or action == "HireDefenseCompanion" or action == "BuyMotorbikeCoins" or action == "BuyDualStove" or action == "BuyVIPBooths" or action == "BuyMafiaSedan" or action == "ToggleMafiaSedan" or action == "BuyArmoredVan" or action == "ToggleArmoredVan" or action == "BuyGetawayCoupe" or action == "ToggleGetawayCoupe" or action == "BuyVehicleArmor" or action == "SetVehiclePaint" or action == "ClaimDailyVault" or action == "TriggerGodfatherPrestige" or action == "CreateFamily" or action == "JoinFamily" or action == "CommandAllAttack" or action == "CommandAllRecall" or action == "CrackTerritoryVault" or action == "ClaimEmperorTribute" or action == "BuyWeaponMod" or action == "SetGuardStance" or action == "OrderMercenaryAssault" or action == "HireMafiaRestaurantChef" or action == "BuyFrontBusiness" or action == "CollectBusinessSafe" or action == "StartPenthouseHeist" or action == "AcceptHitContract" or action == "PlacePlayerBounty" or action == "RaidBlackoutTruck" or action == "BuySmokeGrenades" or action == "ThrowSmokeGrenade" or action == "BuyFlashbangs" or action == "ThrowFlashbang" or action == "BuyC4Charges" or action == "DeployC4Charge" or action == "BuyShadowDash" or action == "TriggerShadowDash" or action == "EquipWeaponMasterySkin" or action == "ChooseBase" or action == "UpgradeRestaurant" or action == "UpgradeDefenses" or action == "UpgradeWarehouse" or action == "HireCrew" or action == "HireWaiter" or action == "HireCourier" or action == "BuyCentralParkBranch" or action == "ToggleCentralParkStaff" or action == "DefendCentralParkBranch" or action == "StartSmugglerConvoy" or action == "StartGangWarDrop" or action == "TriggerBikeTurbo" or action == "ClaimSyndicateContract" or action == "HireRaider" or action == "BuyGuardGear" or action == "DispatchDeliveryRunner" or action == "BuyBlackMarketItem" or action == "SkipDayNight" then
 		AudioController.PlayFanfare()
 	elseif action ~= "GetState" and action ~= "SetSprint" then
 		AudioController.PlayClick()
 	end
 end
 
-local function openAndVisitBlackMarket(): ()
+local function openMarket(): ()
 	WeaponController.ExitScope()
 	AudioController.PlayClick()
-	EmpireMenuController.ToggleTab("BlackMarket")
+	EmpireMenuController.ToggleTab("Market")
 end
 
 -- Initialize HUD, Tabbed Empire Menu, Minimap, Feedback VFX, Guide Arrow & Ambient Windmill/Boats
 local hudGui = HUDController.Init(function(tab)
 	WeaponController.ExitScope()
-	if tab == "BlackMarket" then
-		openAndVisitBlackMarket()
-		return
-	end
 	AudioController.PlayClick()
 	EmpireMenuController.ToggleTab(tab)
 end, function()
@@ -128,6 +126,7 @@ FishingController.Init(hudGui)
 NightController.Init(hudGui, function()
 	sendAction("SkipDayNight", nil)
 end)
+RaidWarningController.Init(hudGui)
 WaypointController.Start()
 AmbientEffectsController.Start()
 CentralNPCController.Start()
@@ -160,7 +159,7 @@ UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: 
 		AudioController.PlayClick()
 		EmpireMenuController.ToggleTab("Shop")
 	elseif input.KeyCode == Enum.KeyCode.M then
-		openAndVisitBlackMarket()
+		openMarket()
 	elseif input.KeyCode == Enum.KeyCode.N then
 		sendAction("SkipDayNight", nil)
 	elseif input.KeyCode == Enum.KeyCode.H then

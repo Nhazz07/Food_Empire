@@ -72,11 +72,11 @@ local REEL_CYCLES = 6
 
 type ReelTileEntry = {
 	OffsetX: number,
-	Viewport: ViewportFrame?,
+	Viewport: GuiObject?,
 }
 local reelTileEntries: { ReelTileEntry } = {}
-local headerPreviewVp: ViewportFrame? = nil
-local resultPreviewVp: ViewportFrame? = nil
+local headerPreviewVp: GuiObject? = nil
+local resultPreviewVp: GuiObject? = nil
 local resultOrbitCam: Camera? = nil
 local resultOrbitCenter = Vector3.new(0, 0, 0)
 local resultOrbitDist = 5.5
@@ -312,7 +312,7 @@ local function populateReel(prizes: { any }): ()
 
 			local pKind = tostring(p.PreviewKind or "Equipment")
 			local pId = tostring(p.PreviewId or "InstantEmpireCrate")
-			local vp: ViewportFrame? = nil
+			local vp: GuiObject? = nil
 			if isValidPreviewKind(pKind) then
 				local created = ModelPreviewHelper.CreatePreview(
 					iconBox,
@@ -455,27 +455,29 @@ local function showResultBanner(res: { [string]: any }): ()
 		)
 		vp.ZIndex = 39
 		resultPreviewVp = vp
-		resultOrbitCam = vp.CurrentCamera
-		local mdl = vp:FindFirstChildOfClass("Model")
-		if mdl and resultOrbitCam then
-			local bbCF, bbSz = mdl:GetBoundingBox()
-			resultOrbitCenter = bbCF.Position + Vector3.new(0, bbSz.Y * 0.03, 0)
-			local rel = resultOrbitCam.CFrame.Position - bbCF.Position
-			local baseAng = math.atan2(rel.X, rel.Z)
-			local maxDim = math.max(bbSz.X, bbSz.Y, bbSz.Z, 1.8)
-			resultOrbitDist = math.max(rel.Magnitude * 1.15, maxDim * 1.55)
-			resultOrbitHeight = math.max(0.45, bbSz.Y * 0.16)
-			local t = 0
-			resultOrbitConn = RunService.RenderStepped:Connect(function(dt: number)
-				if not modal or not modal.Visible or CinematicRevealController.IsActive() or not vp.Parent or not resultOrbitCam then
-					return
-				end
-				t += math.min(dt, 0.05)
-				local ang = baseAng + math.sin(t * 1.0) * 0.55 + t * 0.32
-				local cx = resultOrbitCenter.X + math.sin(ang) * resultOrbitDist
-				local cz = resultOrbitCenter.Z + math.cos(ang) * resultOrbitDist
-				resultOrbitCam.CFrame = CFrame.lookAt(Vector3.new(cx, resultOrbitCenter.Y + resultOrbitHeight, cz), resultOrbitCenter)
-			end)
+		if vp:IsA("ViewportFrame") then
+			resultOrbitCam = vp.CurrentCamera
+			local mdl = vp:FindFirstChildOfClass("Model")
+			if mdl and resultOrbitCam then
+				local bbCF, bbSz = mdl:GetBoundingBox()
+				resultOrbitCenter = bbCF.Position + Vector3.new(0, bbSz.Y * 0.03, 0)
+				local rel = resultOrbitCam.CFrame.Position - bbCF.Position
+				local baseAng = math.atan2(rel.X, rel.Z)
+				local maxDim = math.max(bbSz.X, bbSz.Y, bbSz.Z, 1.8)
+				resultOrbitDist = math.max(rel.Magnitude * 1.15, maxDim * 1.55)
+				resultOrbitHeight = math.max(0.45, bbSz.Y * 0.16)
+				local t = 0
+				resultOrbitConn = RunService.RenderStepped:Connect(function(dt: number)
+					if not modal or not modal.Visible or CinematicRevealController.IsActive() or not vp.Parent or not resultOrbitCam then
+						return
+					end
+					t += math.min(dt, 0.05)
+					local ang = baseAng + math.sin(t * 1.0) * 0.55 + t * 0.32
+					local cx = resultOrbitCenter.X + math.sin(ang) * resultOrbitDist
+					local cz = resultOrbitCenter.Z + math.cos(ang) * resultOrbitDist
+					resultOrbitCam.CFrame = CFrame.lookAt(Vector3.new(cx, resultOrbitCenter.Y + resultOrbitHeight, cz), resultOrbitCenter)
+				end)
+			end
 		end
 	end
 

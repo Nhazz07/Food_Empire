@@ -12,6 +12,11 @@ local MafiaVisualBuilder = require(
 local BodyguardConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("BodyguardConfig")
 )
+local ItemIconAssets = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("ItemIconAssets")
+)
+
+task.spawn(ItemIconAssets.PreloadAll)
 
 local ModelPreviewHelper = {}
 
@@ -1010,6 +1015,33 @@ local function buildHeroCharacterIcon(charKey: string): Model
 		addPart(m, "DrawnBlade", Vector3.new(0.08, 0.22, 1.95), CFrame.new(0.08, 0.56, -0.68) * CFrame.Angles(math.rad(18), math.rad(68), math.rad(-16)), Color3.fromRGB(232, 238, 248), Enum.Material.Metal, nil)
 		return m
 
+	elseif charKey == "CrimsonAssassin" then
+		-- CRIMSON ASSASSIN (High-DPS Katana Striker): Obsidian Assassin Hood w/ Crimson Trim, Oni Half-Mask, Glowing Crimson Eyes, Gilded Pauldrons & Drawn Curved Katana!
+		addBaseBust(obsidian, Color3.fromRGB(42, 16, 22), crimson, 1.04)
+		addPart(m, "AssassinVest", Vector3.new(1.48, 0.86, 1.02), CFrame.new(0, 0.48, 0), Color3.fromRGB(34, 24, 30), Enum.Material.Metal, nil)
+		addPart(m, "CrimsonSash", Vector3.new(1.54, 0.24, 1.06), CFrame.new(0, 0.22, 0), crimson, Enum.Material.Fabric, nil)
+		addPart(m, "PauldronL", Vector3.new(0.56, 0.46, 0.92), CFrame.new(-0.92, 0.76, 0) * CFrame.Angles(0, 0, math.rad(18)), crimson, Enum.Material.Metal, nil)
+		addPart(m, "PauldronR", Vector3.new(0.56, 0.46, 0.92), CFrame.new(0.92, 0.76, 0) * CFrame.Angles(0, 0, math.rad(-18)), crimson, Enum.Material.Metal, nil)
+		addPart(m, "PauldronTrimL", Vector3.new(0.60, 0.12, 0.96), CFrame.new(-0.94, 0.96, 0) * CFrame.Angles(0, 0, math.rad(18)), gold, Enum.Material.Metal, nil)
+		addPart(m, "PauldronTrimR", Vector3.new(0.60, 0.12, 0.96), CFrame.new(0.94, 0.96, 0) * CFrame.Angles(0, 0, math.rad(-18)), gold, Enum.Material.Metal, nil)
+		-- Sleek Pointed Assassin Hood + Crimson Inner Lining + Obsidian Oni Half-Mask
+		addPart(m, "HoodOuter", Vector3.new(1.30, 1.24, 1.30), CFrame.new(0, 1.68, 0.08), obsidian, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "HoodTrim", Vector3.new(1.22, 1.12, 0.18), CFrame.new(0, 1.62, -0.44), crimson, Enum.Material.Fabric, Enum.PartType.Ball)
+		addPart(m, "OniMask", Vector3.new(1.06, 0.58, 0.68), CFrame.new(0, 1.32, -0.28), Color3.fromRGB(28, 30, 38), Enum.Material.Metal, Enum.PartType.Ball)
+		addPart(m, "MaskFangL", Vector3.new(0.10, 0.16, 0.10), CFrame.new(-0.24, 1.28, -0.60), gold, Enum.Material.Metal, nil)
+		addPart(m, "MaskFangR", Vector3.new(0.10, 0.16, 0.10), CFrame.new(0.24, 1.28, -0.60), gold, Enum.Material.Metal, nil)
+		-- Fierce Glowing Crimson Assassin Eyes
+		addPart(m, "EyeL", Vector3.new(0.26, 0.11, 0.12), CFrame.new(-0.22, 1.62, -0.52) * CFrame.Angles(0, math.rad(12), math.rad(-14)), Color3.fromRGB(255, 58, 76), Enum.Material.Neon, nil)
+		addPart(m, "EyeR", Vector3.new(0.26, 0.11, 0.12), CFrame.new(0.22, 1.62, -0.52) * CFrame.Angles(0, math.rad(-12), math.rad(14)), Color3.fromRGB(255, 58, 76), Enum.Material.Neon, nil)
+		-- Diagonal Forged Katana Held Across Foreground (Crimson Tsuka + Gold Tsuba + Chrome Edge!)
+		local katCF = CFrame.new(0.06, 0.56, -0.74) * CFrame.Angles(math.rad(14), math.rad(68), math.rad(-22))
+		addPart(m, "KatanaHilt", Vector3.new(0.14, 0.18, 0.72), katCF * CFrame.new(0, 0, 0.88), crimson, Enum.Material.Fabric, nil)
+		addPart(m, "KatanaPommel", Vector3.new(0.16, 0.20, 0.10), katCF * CFrame.new(0, 0, 1.26), gold, Enum.Material.Metal, nil)
+		addPart(m, "KatanaTsuba", Vector3.new(0.10, 0.42, 0.42), katCF * CFrame.new(0, 0, 0.48) * CFrame.Angles(0, math.rad(90), 0), gold, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "KatanaBlade", Vector3.new(0.07, 0.20, 2.02), katCF * CFrame.new(0, 0.02, -0.58), Color3.fromRGB(238, 244, 255), Enum.Material.Metal, nil)
+		addPart(m, "KatanaEdgeGlow", Vector3.new(0.08, 0.05, 1.92), katCF * CFrame.new(0, -0.08, -0.56), Color3.fromRGB(255, 92, 108), Enum.Material.Neon, nil)
+		return m
+
 	elseif charKey == "AssaultGuard" then
 		-- ASSAULT BODYGUARD (Breacher Rifleman): Tactical Operator Cap, Amber Goggles, Triple Mag Rig & Assault Rifle!
 		addBaseBust(Color3.fromRGB(58, 52, 44), nil, nil, 1.06)
@@ -1402,35 +1434,62 @@ local function buildEquipmentModel(itemId: string): Model
 		addPart(m, "KunaiRing", Vector3.new(0.10, 0.34, 0.34), CFrame.new(-0.52, 0.24, -0.44) * CFrame.Angles(0, math.rad(90), 0), P.TarnishedBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
 		return m
 	elseif itemId == "KevlarVest" or itemId == "GuardKevlarPlate" or itemId == "GuardJuggernautArmor" then
-		local col = if itemId == "GuardJuggernautArmor" then Color3.fromRGB(48, 52, 60) elseif itemId == "KevlarVest" then Color3.fromRGB(36, 44, 54) else Color3.fromRGB(44, 52, 62)
-		local bulk = if itemId == "GuardJuggernautArmor" then 1.22 else 1.0
-		addPart(m, "Chest", Vector3.new(1.65 * bulk, 1.55 * bulk, 0.78 * bulk), CFrame.new(), col, Enum.Material.Metal, nil)
-		addPart(m, "FrontPlate", Vector3.new(1.22 * bulk, 1.12 * bulk, 0.18), CFrame.new(0, 0.05, -0.44 * bulk), P.Charcoal, Enum.Material.Metal, nil)
-		addPart(m, "StrapL", Vector3.new(0.32, 0.48, 0.74 * bulk), CFrame.new(-0.56 * bulk, 0.92 * bulk, 0), P.Obsidian, Enum.Material.Fabric, nil)
-		addPart(m, "StrapR", Vector3.new(0.32, 0.48, 0.74 * bulk), CFrame.new(0.56 * bulk, 0.92 * bulk, 0), P.Obsidian, Enum.Material.Fabric, nil)
+		local isJug = (itemId == "GuardJuggernautArmor")
+		local isKev = (itemId == "KevlarVest")
+		local col = if isJug then Color3.fromRGB(62, 70, 84) elseif isKev then Color3.fromRGB(46, 62, 82) else Color3.fromRGB(54, 68, 86)
+		local trimCol = if isJug then Color3.fromRGB(238, 178, 52) elseif isKev then Color3.fromRGB(56, 189, 248) else Color3.fromRGB(168, 178, 194)
+		local bulk = if isJug then 1.18 else 1.0
+		addPart(m, "Chest", Vector3.new(1.66 * bulk, 1.54 * bulk, 0.74 * bulk), CFrame.new(), col, Enum.Material.Metal, nil)
+		addPart(m, "FrontPlate", Vector3.new(1.24 * bulk, 1.04 * bulk, 0.22), CFrame.new(0, 0.08, -0.42 * bulk), Color3.fromRGB(36, 44, 56), Enum.Material.Metal, nil)
+		addPart(m, "PlateTrim", Vector3.new(1.30 * bulk, 0.12, 0.24), CFrame.new(0, 0.56 * bulk, -0.43 * bulk), trimCol, Enum.Material.Metal, nil)
+		for mx = -0.36, 0.36, 0.36 do
+			addPart(m, "MagPouch_" .. tostring(mx), Vector3.new(0.28 * bulk, 0.44 * bulk, 0.16), CFrame.new(mx * bulk, -0.36 * bulk, -0.50 * bulk), Color3.fromRGB(28, 34, 44), Enum.Material.Fabric, nil)
+		end
+		addPart(m, "StrapL", Vector3.new(0.34, 0.48, 0.72 * bulk), CFrame.new(-0.56 * bulk, 0.92 * bulk, 0), Color3.fromRGB(32, 38, 48), Enum.Material.Fabric, nil)
+		addPart(m, "StrapR", Vector3.new(0.34, 0.48, 0.72 * bulk), CFrame.new(0.56 * bulk, 0.92 * bulk, 0), Color3.fromRGB(32, 38, 48), Enum.Material.Fabric, nil)
+		if isJug then
+			addPart(m, "BlastCollar", Vector3.new(1.48, 0.34, 0.94), CFrame.new(0, 1.08, 0), Color3.fromRGB(78, 86, 100), Enum.Material.Metal, nil)
+			addPart(m, "PauldronL", Vector3.new(0.46, 0.62, 0.86), CFrame.new(-1.12, 0.52, 0) * CFrame.Angles(0, 0, math.rad(16)), trimCol, Enum.Material.Metal, nil)
+			addPart(m, "PauldronR", Vector3.new(0.46, 0.62, 0.86), CFrame.new(1.12, 0.52, 0) * CFrame.Angles(0, 0, math.rad(-16)), trimCol, Enum.Material.Metal, nil)
+		end
 		return m
 	elseif itemId == "Medkit" or itemId == "GuardFieldMedPack" then
-		addPart(m, "Case", Vector3.new(1.55, 1.15, 0.62), CFrame.new(), P.Charcoal, Enum.Material.Metal, nil)
-		addPart(m, "Handle", Vector3.new(0.62, 0.18, 0.18), CFrame.new(0, 0.68, 0), P.Obsidian, Enum.Material.Metal, nil)
-		addPart(m, "CrossH", Vector3.new(0.64, 0.18, 0.08), CFrame.new(0, 0, -0.34), P.DeepRed, Enum.Material.SmoothPlastic, nil)
-		addPart(m, "CrossV", Vector3.new(0.18, 0.64, 0.08), CFrame.new(0, 0, -0.34), P.DeepRed, Enum.Material.SmoothPlastic, nil)
+		addPart(m, "Case", Vector3.new(1.64, 1.18, 0.66), CFrame.new(), Color3.fromRGB(238, 242, 248), Enum.Material.SmoothPlastic, nil)
+		addPart(m, "CaseRim", Vector3.new(1.70, 0.14, 0.70), CFrame.new(0, 0.16, 0), Color3.fromRGB(214, 34, 52), Enum.Material.Metal, nil)
+		addPart(m, "LatchL", Vector3.new(0.20, 0.24, 0.16), CFrame.new(-0.48, 0.16, -0.34), Color3.fromRGB(48, 54, 66), Enum.Material.Metal, nil)
+		addPart(m, "LatchR", Vector3.new(0.20, 0.24, 0.16), CFrame.new(0.48, 0.16, -0.34), Color3.fromRGB(48, 54, 66), Enum.Material.Metal, nil)
+		addPart(m, "Handle", Vector3.new(0.72, 0.18, 0.18), CFrame.new(0, 0.70, 0), Color3.fromRGB(214, 34, 52), Enum.Material.Metal, nil)
+		addPart(m, "CrossH", Vector3.new(0.68, 0.22, 0.10), CFrame.new(0, -0.10, -0.35), Color3.fromRGB(232, 32, 48), Enum.Material.Neon, nil)
+		addPart(m, "CrossV", Vector3.new(0.22, 0.68, 0.10), CFrame.new(0, -0.10, -0.35), Color3.fromRGB(232, 32, 48), Enum.Material.Neon, nil)
 		return m
 	elseif itemId == "GuardBallisticHelmet" or itemId == "GuardTitaniumHelm" or itemId == "GuardReconVisor" then
-		local col = if itemId == "GuardTitaniumHelm" then Color3.fromRGB(116, 98, 62) elseif itemId == "GuardReconVisor" then Color3.fromRGB(46, 56, 54) else Color3.fromRGB(48, 52, 60)
-		addPart(m, "Dome", Vector3.new(1.42, 0.92, 1.48), CFrame.new(0, 0.15, 0), col, Enum.Material.Metal, nil)
-		addPart(m, "Brim", Vector3.new(1.48, 0.18, 1.54), CFrame.new(0, -0.22, 0), P.Obsidian, Enum.Material.Metal, nil)
+		local col = if itemId == "GuardTitaniumHelm" then Color3.fromRGB(168, 138, 72) elseif itemId == "GuardReconVisor" then Color3.fromRGB(48, 68, 62) else Color3.fromRGB(58, 68, 84)
+		addPart(m, "Dome", Vector3.new(1.48, 0.96, 1.52), CFrame.new(0, 0.18, 0), col, Enum.Material.Metal, Enum.PartType.Ball)
+		addPart(m, "Brim", Vector3.new(1.52, 0.20, 1.56), CFrame.new(0, -0.18, 0), P.Obsidian, Enum.Material.Metal, nil)
+		addPart(m, "SideRail", Vector3.new(1.56, 0.16, 0.72), CFrame.new(0, 0.04, -0.08), Color3.fromRGB(178, 188, 204), Enum.Material.Metal, nil)
 		if itemId == "GuardReconVisor" then
-			addPart(m, "OpticL", Vector3.new(0.36, 0.28, 0.42), CFrame.new(-0.32, -0.28, -0.78), P.Gunmetal, Enum.Material.Metal, nil)
-			addPart(m, "OpticR", Vector3.new(0.36, 0.28, 0.42), CFrame.new(0.32, -0.28, -0.78), P.Gunmetal, Enum.Material.Metal, nil)
+			addPart(m, "OpticL", Vector3.new(0.38, 0.30, 0.48), CFrame.new(-0.32, -0.24, -0.78), P.Gunmetal, Enum.Material.Metal, nil)
+			addPart(m, "OpticR", Vector3.new(0.38, 0.30, 0.48), CFrame.new(0.32, -0.24, -0.78), P.Gunmetal, Enum.Material.Metal, nil)
+			addPart(m, "GlowL", Vector3.new(0.24, 0.20, 0.08), CFrame.new(-0.32, -0.24, -1.03), Color3.fromRGB(52, 238, 142), Enum.Material.Neon, nil)
+			addPart(m, "GlowR", Vector3.new(0.24, 0.20, 0.08), CFrame.new(0.32, -0.24, -1.03), Color3.fromRGB(52, 238, 142), Enum.Material.Neon, nil)
 		elseif itemId == "GuardTitaniumHelm" then
-			addPart(m, "Visor", Vector3.new(1.36, 0.56, 0.16), CFrame.new(0, -0.34, -0.76), Color3.fromRGB(24, 28, 34), Enum.Material.Glass, nil)
+			addPart(m, "Visor", Vector3.new(1.36, 0.56, 0.18), CFrame.new(0, -0.28, -0.76), Color3.fromRGB(56, 189, 248), Enum.Material.Glass, nil)
+			addPart(m, "VisorTrim", Vector3.new(1.42, 0.10, 0.20), CFrame.new(0, -0.02, -0.78), Color3.fromRGB(246, 198, 58), Enum.Material.Metal, nil)
 		end
 		return m
 	elseif itemId == "GuardShadowSuit" or itemId == "GuardSyndicateSuit" or itemId == "GoldenEmperorSuit" then
-		local col = if itemId == "GoldenEmperorSuit" then Color3.fromRGB(142, 118, 66) elseif itemId == "GuardSyndicateSuit" then Color3.fromRGB(72, 26, 40) else Color3.fromRGB(28, 32, 42)
-		addPart(m, "Jacket", Vector3.new(1.65, 1.85, 0.72), CFrame.new(), col, Enum.Material.Fabric, nil)
-		addPart(m, "Shirt", Vector3.new(0.54, 1.45, 0.14), CFrame.new(0, 0.14, -0.36), P.OffWhite, Enum.Material.Fabric, nil)
-		addPart(m, "Tie", Vector3.new(0.18, 1.18, 0.16), CFrame.new(0, 0.10, -0.40), if itemId == "GoldenEmperorSuit" then P.Obsidian else P.DeepRed, Enum.Material.Fabric, nil)
+		local isGold = (itemId == "GoldenEmperorSuit")
+		local isSyn = (itemId == "GuardSyndicateSuit")
+		local col = if isGold then Color3.fromRGB(218, 174, 58) elseif isSyn then Color3.fromRGB(118, 28, 46) else Color3.fromRGB(36, 42, 58)
+		local trim = if isGold then Color3.fromRGB(255, 224, 96) elseif isSyn then Color3.fromRGB(238, 182, 58) else Color3.fromRGB(56, 189, 248)
+		addPart(m, "Jacket", Vector3.new(1.68, 1.82, 0.72), CFrame.new(), col, Enum.Material.Fabric, nil)
+		addPart(m, "LapelL", Vector3.new(0.30, 1.24, 0.16), CFrame.new(-0.34, 0.22, -0.38) * CFrame.Angles(0, 0, math.rad(12)), col:Lerp(P.Obsidian, 0.25), Enum.Material.Fabric, nil)
+		addPart(m, "LapelR", Vector3.new(0.30, 1.24, 0.16), CFrame.new(0.34, 0.22, -0.38) * CFrame.Angles(0, 0, math.rad(-12)), col:Lerp(P.Obsidian, 0.25), Enum.Material.Fabric, nil)
+		addPart(m, "Shirt", Vector3.new(0.56, 1.44, 0.14), CFrame.new(0, 0.16, -0.36), P.OffWhite, Enum.Material.Fabric, nil)
+		addPart(m, "Tie", Vector3.new(0.20, 1.22, 0.18), CFrame.new(0, 0.10, -0.40), if isGold then P.Obsidian else Color3.fromRGB(214, 34, 52), Enum.Material.Fabric, nil)
+		addPart(m, "PocketSq", Vector3.new(0.26, 0.16, 0.10), CFrame.new(0.52, 0.42, -0.38), trim, Enum.Material.Metal, nil)
+		addPart(m, "EpauletteL", Vector3.new(0.42, 0.12, 0.34), CFrame.new(-0.62, 0.94, 0), trim, Enum.Material.Metal, nil)
+		addPart(m, "EpauletteR", Vector3.new(0.42, 0.12, 0.34), CFrame.new(0.62, 0.94, 0), trim, Enum.Material.Metal, nil)
 		return m
 	elseif itemId == "GuardTacticalSMG" then
 		return buildWeaponModel("TacticalSMG")
@@ -1441,27 +1500,34 @@ local function buildEquipmentModel(itemId: string): Model
 	elseif itemId == "GuardPrecisionSniper" then
 		return buildWeaponModel("ShadowSniper")
 	elseif itemId == "GuardHoloSight" then
-		addPart(m, "Base", Vector3.new(0.52, 0.24, 1.18), CFrame.new(0, -0.36, 0), P.Obsidian, Enum.Material.Metal, nil)
-		addPart(m, "Hood", Vector3.new(0.68, 0.78, 0.86), CFrame.new(0, 0.12, 0), P.Gunmetal, Enum.Material.Metal, nil)
-		addPart(m, "Lens", Vector3.new(0.52, 0.56, 0.10), CFrame.new(0, 0.14, -0.40), Color3.fromRGB(36, 44, 52), Enum.Material.Glass, nil)
+		addPart(m, "Base", Vector3.new(0.56, 0.26, 1.24), CFrame.new(0, -0.36, 0), P.Obsidian, Enum.Material.Metal, nil)
+		addPart(m, "Hood", Vector3.new(0.74, 0.82, 0.90), CFrame.new(0, 0.14, 0), Color3.fromRGB(64, 72, 86), Enum.Material.Metal, nil)
+		addPart(m, "Lens", Vector3.new(0.56, 0.58, 0.12), CFrame.new(0, 0.16, -0.42), Color3.fromRGB(56, 189, 248), Enum.Material.Glass, nil)
+		addPart(m, "ReticleDot", Vector3.new(0.14, 0.14, 0.14), CFrame.new(0, 0.16, -0.44), Color3.fromRGB(244, 63, 94), Enum.Material.Neon, Enum.PartType.Ball)
 		return m
 	elseif itemId == "GuardExtendedMag" then
-		addPart(m, "DrumL", Vector3.new(0.62, 0.84, 0.84), CFrame.new(-0.36, -0.18, 0) * CFrame.Angles(0, math.rad(90), 0), P.Gunmetal, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "DrumR", Vector3.new(0.62, 0.84, 0.84), CFrame.new(0.36, -0.18, 0) * CFrame.Angles(0, math.rad(90), 0), P.Gunmetal, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Tower", Vector3.new(0.34, 0.88, 0.48), CFrame.new(0, 0.56, 0), P.Obsidian, Enum.Material.Metal, nil)
+		addPart(m, "DrumL", Vector3.new(0.62, 0.88, 0.88), CFrame.new(-0.38, -0.18, 0) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(58, 66, 78), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "DrumR", Vector3.new(0.62, 0.88, 0.88), CFrame.new(0.38, -0.18, 0) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(58, 66, 78), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "HubL", Vector3.new(0.68, 0.34, 0.34), CFrame.new(-0.38, -0.18, 0) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(238, 182, 54), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "HubR", Vector3.new(0.68, 0.34, 0.34), CFrame.new(0.38, -0.18, 0) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(238, 182, 54), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Tower", Vector3.new(0.36, 0.90, 0.50), CFrame.new(0, 0.56, 0), P.Obsidian, Enum.Material.Metal, nil)
+		addPart(m, "TopRound", Vector3.new(0.22, 0.18, 0.42), CFrame.new(0, 1.06, 0), Color3.fromRGB(242, 194, 62), Enum.Material.Metal, Enum.PartType.Cylinder)
 		return m
 	elseif itemId == "GuardSuppressor" then
-		addPart(m, "Can", Vector3.new(1.85, 0.42, 0.42), CFrame.new() * CFrame.Angles(0, math.rad(90), 0), P.Obsidian, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Collar", Vector3.new(0.32, 0.48, 0.48), CFrame.new(0, 0, 0.82) * CFrame.Angles(0, math.rad(90), 0), P.BrushedSteel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Can", Vector3.new(1.92, 0.46, 0.46), CFrame.new() * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(48, 54, 64), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "HeatWrap", Vector3.new(0.92, 0.50, 0.50), CFrame.new(0, 0, -0.05) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(30, 34, 42), Enum.Material.Fabric, Enum.PartType.Cylinder)
+		addPart(m, "Collar", Vector3.new(0.34, 0.52, 0.52), CFrame.new(0, 0, 0.84) * CFrame.Angles(0, math.rad(90), 0), Color3.fromRGB(238, 184, 58), Enum.Material.Metal, Enum.PartType.Cylinder)
 		return m
 	elseif itemId == "GuardFlashbangKit" then
-		addPart(m, "Canister", Vector3.new(1.18, 0.52, 0.52), CFrame.new() * CFrame.Angles(0, 0, math.rad(90)), P.Gunmetal, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Band", Vector3.new(0.24, 0.56, 0.56), CFrame.new(0, 0.14, 0) * CFrame.Angles(0, 0, math.rad(90)), P.TarnishedBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
-		addPart(m, "Fuse", Vector3.new(0.34, 0.28, 0.34), CFrame.new(0, 0.72, 0), P.Obsidian, Enum.Material.Metal, nil)
+		addPart(m, "Canister", Vector3.new(1.22, 0.56, 0.56), CFrame.new() * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(148, 158, 174), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Band", Vector3.new(0.28, 0.60, 0.60), CFrame.new(0, 0.16, 0) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(246, 194, 52), Enum.Material.Metal, Enum.PartType.Cylinder)
+		addPart(m, "Fuse", Vector3.new(0.36, 0.30, 0.36), CFrame.new(0, 0.74, 0), P.Obsidian, Enum.Material.Metal, nil)
+		addPart(m, "Pin", Vector3.new(0.08, 0.30, 0.30), CFrame.new(0.30, 0.76, 0), Color3.fromRGB(236, 240, 248), Enum.Material.Metal, Enum.PartType.Cylinder)
 		return m
 	elseif itemId == "GuardRiotPlate" then
-		addPart(m, "Shield", Vector3.new(1.38, 2.15, 0.18), CFrame.new(), P.Gunmetal, Enum.Material.Metal, nil)
-		addPart(m, "Viewport", Vector3.new(0.84, 0.34, 0.22), CFrame.new(0, 0.48, 0), Color3.fromRGB(36, 44, 54), Enum.Material.Glass, nil)
+		addPart(m, "Shield", Vector3.new(1.42, 2.18, 0.20), CFrame.new(), Color3.fromRGB(52, 60, 74), Enum.Material.Metal, nil)
+		addPart(m, "Trim", Vector3.new(1.48, 0.16, 0.22), CFrame.new(0, -0.30, -0.02), Color3.fromRGB(56, 189, 248), Enum.Material.Neon, nil)
+		addPart(m, "Viewport", Vector3.new(0.90, 0.38, 0.24), CFrame.new(0, 0.50, 0), Color3.fromRGB(168, 224, 250), Enum.Material.Glass, nil)
 		return m
 	elseif itemId == "DoubleEmpireVIP" then
 		-- Twin Stacked 24K Gold Coin Towers & Emerald VIP Ribbon
@@ -1494,40 +1560,54 @@ local function buildEquipmentModel(itemId: string): Model
 end
 
 local function frameCameraToModel(viewport: ViewportFrame, model: Model, viewMode: "Weapon" | "Character" | "Object" | "IconPortrait" | "IconObject" | "IconWeapon"): ()
+	-- Apply heroic diagonal presentation tilt for Weapons & Blades so long guns/katanas fill the tile diagonally!
+	if viewMode == "Weapon" or viewMode == "IconWeapon" then
+		local cf0, sz0 = model:GetBoundingBox()
+		local isLongBlade = (sz0.Z > sz0.Y * 3.0)
+		local tiltDeg = if isLongBlade then -30 else -18
+		model:PivotTo(CFrame.new(cf0.Position) * CFrame.Angles(math.rad(tiltDeg), 0, 0) * CFrame.new(-cf0.Position) * model:GetPivot())
+	end
+
 	local cf, sz = model:GetBoundingBox()
 	local center = cf.Position
 	local maxDim = math.max(sz.X, sz.Y, sz.Z, 0.8)
 
+	local fov = 34
 	local cam = Instance.new("Camera")
-	cam.FieldOfView = 36
+	cam.FieldOfView = fov
 	cam.Parent = viewport
 	viewport.CurrentCamera = cam
 
+	local halfTan = math.tan(math.rad(fov * 0.5))
+
 	if viewMode == "Character" then
-		local focus = center + Vector3.new(0, sz.Y * 0.20, 0)
-		local dist = maxDim * 1.12
+		local focus = center + Vector3.new(0, sz.Y * 0.18, 0)
+		local dist = (maxDim * 0.62) / halfTan
 		local eye = focus + Vector3.new(dist * 0.34, dist * 0.08, -dist * 0.94)
 		cam.CFrame = CFrame.lookAt(eye, focus)
 	elseif viewMode == "IconPortrait" then
-		local focus = center + Vector3.new(0, sz.Y * 0.08, 0)
-		local dist = maxDim * 1.22
-		local eye = focus + Vector3.new(dist * 0.24, dist * 0.12, -dist * 0.96)
+		local focus = center + Vector3.new(0, sz.Y * 0.06, 0)
+		local fitDim = math.max(sz.X, sz.Y * 1.04)
+		local dist = (fitDim * 0.60) / halfTan
+		local eye = focus + Vector3.new(dist * 0.24, dist * 0.10, -dist * 0.96)
 		cam.CFrame = CFrame.lookAt(eye, focus)
 	elseif viewMode == "IconWeapon" then
-		local dist = maxDim * 1.24
-		local eye = center + Vector3.new(dist * 0.96, dist * 0.16, -dist * 0.22)
+		local fitDim = math.max(sz.Z * 0.92, sz.Y * 1.05)
+		local dist = (fitDim * 0.56) / halfTan + sz.X * 0.5
+		local eye = center + Vector3.new(dist * 0.96, dist * 0.14, -dist * 0.22)
 		cam.CFrame = CFrame.lookAt(eye, center)
 	elseif viewMode == "IconObject" then
-		local dist = maxDim * 1.24
+		local dist = (maxDim * 0.64) / halfTan
 		local eye = center + Vector3.new(dist * 0.48, dist * 0.42, -dist * 0.78)
 		cam.CFrame = CFrame.lookAt(eye, center)
 	elseif viewMode == "Weapon" then
-		local dist = maxDim * 1.38
-		local eye = center + Vector3.new(dist * 0.94, dist * 0.20, -dist * 0.24)
+		local fitDim = math.max(sz.Z * 0.92, sz.Y * 1.08)
+		local dist = (fitDim * 0.60) / halfTan + sz.X * 0.5
+		local eye = center + Vector3.new(dist * 0.94, dist * 0.18, -dist * 0.24)
 		cam.CFrame = CFrame.lookAt(eye, center)
 	else
-		local dist = maxDim * 1.42
-		local eye = center + Vector3.new(dist * 0.56, dist * 0.44, -dist * 0.78)
+		local dist = (maxDim * 0.68) / halfTan
+		local eye = center + Vector3.new(dist * 0.54, dist * 0.40, -dist * 0.78)
 		cam.CFrame = CFrame.lookAt(eye, center)
 	end
 end
@@ -1537,22 +1617,22 @@ local function setupViewportShell(parent: Instance, size: UDim2, pos: UDim2, bgC
 	vp.Name = "Preview3D"
 	vp.Position = pos
 	vp.Size = size
-	vp.BackgroundColor3 = bgColor or Color3.fromRGB(20, 22, 29)
+	vp.BackgroundColor3 = bgColor or Color3.fromRGB(20, 24, 34)
 	vp.BackgroundTransparency = 0
 	vp.BorderSizePixel = 0
-	vp.Ambient = Color3.fromRGB(242, 246, 255)
-	vp.LightColor = Color3.fromRGB(255, 250, 240)
-	vp.LightDirection = Vector3.new(-0.45, -0.70, 0.55)
+	vp.Ambient = Color3.fromRGB(246, 250, 255)
+	vp.LightColor = Color3.fromRGB(255, 252, 244)
+	vp.LightDirection = Vector3.new(-0.35, -0.58, 0.72)
 	vp.Parent = parent
 
 	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 6)
+	c.CornerRadius = UDim.new(0, 8)
 	c.Parent = vp
 
 	local st = Instance.new("UIStroke")
 	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-	st.Color = borderColor or Color3.fromRGB(54, 58, 68)
-	st.Thickness = 1
+	st.Color = borderColor or Color3.fromRGB(64, 74, 96)
+	st.Thickness = 1.4
 	st.Parent = vp
 
 	return vp
@@ -1594,6 +1674,58 @@ function ModelPreviewHelper.CreateCategoryIcon(
 	return vp
 end
 
+-- Renders a crisp, glossy AAA illustrated sprite icon from Roblox Cloud Atlases when available!
+local function createIllustratedIconShell(
+	parent: Instance,
+	spec: ItemIconAssets.IconSpriteSpec,
+	size: UDim2,
+	pos: UDim2,
+	bgColor: Color3?,
+	borderColor: Color3?
+): Frame
+	local shell = Instance.new("Frame")
+	shell.Name = "PreviewIcon2D"
+	shell.Position = pos
+	shell.Size = size
+	shell.BackgroundColor3 = bgColor or Color3.fromRGB(20, 26, 40)
+	shell.BackgroundTransparency = 0
+	shell.BorderSizePixel = 0
+	shell.Active = false
+	shell.Selectable = false
+	shell.Parent = parent
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 9)
+	c.Parent = shell
+
+	local st = Instance.new("UIStroke")
+	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	st.Color = borderColor or Color3.fromRGB(64, 74, 96)
+	st.Thickness = 1.5
+	st.Parent = shell
+
+	local img = Instance.new("ImageLabel")
+	img.Name = "ArtworkImage"
+	img.AnchorPoint = Vector2.new(0.5, 0.5)
+	img.Position = UDim2.fromScale(0.5, 0.5)
+	img.Size = UDim2.fromScale(0.94, 0.94)
+	img.BackgroundTransparency = 1
+	img.BorderSizePixel = 0
+	img.Image = spec.AssetId
+	img.ImageRectOffset = spec.RectOffset
+	img.ImageRectSize = spec.RectSize
+	img.ScaleType = Enum.ScaleType.Fit
+	img.ResampleMode = Enum.ResamplerMode.Default
+	if spec.Tint then
+		img.ImageColor3 = spec.Tint
+	end
+	img.Active = false
+	img.Selectable = false
+	img.Parent = shell
+
+	return shell
+end
+
 function ModelPreviewHelper.CreatePreview(
 	parent: Instance,
 	kind: "Weapon" | "Ammo" | "Bodyguard" | "Guard" | "Equipment" | "Premium" | "Dish" | "Warehouse" | "Empire" | "CategoryIcon",
@@ -1602,7 +1734,13 @@ function ModelPreviewHelper.CreatePreview(
 	pos: UDim2,
 	bgColor: Color3?,
 	borderColor: Color3?
-): ViewportFrame
+): GuiObject
+	-- Prioritize crisp AAA illustrated sprite icons (zero blocky primitives, zero ViewportFrame aliasing!)
+	local spriteSpec = ItemIconAssets.GetIcon(kind, itemId)
+	if spriteSpec then
+		return createIllustratedIconShell(parent, spriteSpec, size, pos, bgColor, borderColor)
+	end
+
 	local vp = setupViewportShell(parent, size, pos, bgColor, borderColor)
 	local model: Model
 	local viewMode: "Weapon" | "Character" | "Object" | "IconPortrait" | "IconObject" | "IconWeapon" = "Object"
@@ -1676,7 +1814,7 @@ function ModelPreviewHelper.CreatePreview(
 end
 
 -- Renders ANY live Roblox Tool (Golden Spatula, Street Pistol, Shadow Sniper, etc.) cleanly for the 1-5 Hotbar!
-function ModelPreviewHelper.CreateToolPreview(parent: Instance, tool: Tool, size: UDim2, pos: UDim2): ViewportFrame
+function ModelPreviewHelper.CreateToolPreview(parent: Instance, tool: Tool, size: UDim2, pos: UDim2): GuiObject
 	local wid = tool:GetAttribute("WeaponId")
 	if typeof(wid) == "string" then
 		return ModelPreviewHelper.CreatePreview(parent, "Weapon", wid, size, pos, Color3.fromRGB(24, 26, 33))

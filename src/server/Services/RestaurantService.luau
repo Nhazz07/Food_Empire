@@ -53,6 +53,8 @@ local MercenaryMafiaService = require("./MercenaryMafiaService")
 local SyndicateFamilyService = require("./SyndicateFamilyService")
 local PrestigeVaultService = require("./PrestigeVaultService")
 local CombatLockService = require("./CombatLockService")
+local NightMafiaRaidService = require("./NightMafiaRaidService")
+local DefenseCompanionService = require("./DefenseCompanionService")
 
 local COLLISION_GROUP_PLAYERS = "FoodEmpirePlayers"
 local COLLISION_GROUP_NPCS = "FoodEmpireRestaurantNPCs"
@@ -2335,6 +2337,8 @@ local function buildClientPayload(player: Player): { [string]: any }
 		BaseSlots = BaseService.GetSlotAvailability(),
 		WaitingCustomer = waitingOrders[player],
 		SeatedPatience = buildSeatedPatienceSnapshot(player),
+		NightRaid = NightMafiaRaidService.GetSnapshot(player),
+		HiredCompanions = DefenseCompanionService.GetSnapshot(player),
 		Receipts = receiptHistory[player] or {},
 		LatestReceipt = if receiptHistory[player] then receiptHistory[player][1] else nil,
 		Shipments = ShipmentService.GetSnapshot(),
@@ -3189,6 +3193,9 @@ local function setupRemotes(): ()
 				ok, msg = BlackMarketService.EquipWeaponMasterySkin(player, arg.WeaponId, arg.SkinId)
 			elseif action == "HireMercenaryMafia" and typeof(arg) == "string" then
 				ok, msg = MercenaryMafiaService.TryHireWithGold(player, arg)
+			elseif action == "HireDefenseCompanion" and typeof(arg) == "table" and typeof(arg.CompanionType) == "string" then
+				local durMin = if typeof(arg.DurationMinutes) == "number" then arg.DurationMinutes else 5
+				ok, msg = DefenseCompanionService.TryHireCompanion(player, arg.CompanionType, durMin, false)
 			elseif action == "OrderMercenaryAssault" then
 				ok, msg = MercenaryMafiaService.OrderAssault(player, if typeof(arg) == "string" then arg else nil)
 			elseif action == "HireMafiaRestaurantChef" and typeof(arg) == "string" then
@@ -3365,6 +3372,71 @@ local function setupRemotes(): ()
 					end)
 				elseif kind == "BuyBlackMarketItem" and typeof(subArg) == "string" then
 					ok, msg = BlackMarketService.BuyItem(player, subArg, true, false)
+				elseif kind == "BuyGuardGear" and typeof(subArg) == "string" then
+					ok, msg = BodyguardService.TryBuyGear(player, subArg, true)
+				elseif kind == "BuySmokeGrenades" then
+					local prof = PlayerDataService.GetProfile(player)
+					if (prof.SmokeGrenades or 0) >= 12 then
+						ok, msg = false, "Smoke Grenades full (12/12)!"
+					else
+						local opt = dualOpts.BuySmokeGrenades
+						ok, msg = MonetizationService.TryPromptDualPurchase(player, "BuySmokeGrenades", opt.RobuxPrice, opt.DisplayName, function()
+							return BlackMarketService.BuySmokeGrenades(player, true)
+						end)
+					end
+				elseif kind == "BuyFlashbangs" then
+					local prof = PlayerDataService.GetProfile(player)
+					if (prof.Flashbangs or 0) >= 12 then
+						ok, msg = false, "Flashbangs full (12/12)!"
+					else
+						local opt = dualOpts.BuyFlashbangs
+						ok, msg = MonetizationService.TryPromptDualPurchase(player, "BuyFlashbangs", opt.RobuxPrice, opt.DisplayName, function()
+							return BlackMarketService.BuyFlashbangs(player, true)
+						end)
+					end
+				elseif kind == "BuyC4Charges" then
+					local prof = PlayerDataService.GetProfile(player)
+					if (prof.C4Charges or 0) >= 8 then
+						ok, msg = false, "C4 Breach Charges full (8/8)!"
+					else
+						local opt = dualOpts.BuyC4Charges
+						ok, msg = MonetizationService.TryPromptDualPurchase(player, "BuyC4Charges", opt.RobuxPrice, opt.DisplayName, function()
+							return BlackMarketService.BuyC4Charges(player, true)
+						end)
+					end
+				elseif kind == "BuyShadowDash" then
+					if PlayerDataService.HasShadowDash(player) then
+						ok, msg = false, "Shadow Smoke Dash already unlocked!"
+					else
+						local opt = dualOpts.BuyShadowDash
+						ok, msg = MonetizationService.TryPromptDualPurchase(player, "BuyShadowDash", opt.RobuxPrice, opt.DisplayName, function()
+							return BlackMarketService.BuyShadowDash(player, true)
+						end)
+					end
+				elseif kind == "HireDefenseCompanion" and typeof(subArg) == "table" and typeof(subArg.CompanionType) == "string" then
+					local compType = subArg.CompanionType
+					local durMin = if typeof(subArg.DurationMinutes) == "number" and subArg.DurationMinutes == 10 then 10 else 5
+					local cSpec = RestaurantSecurityConfig.HiredCompanions.Types[compType :: RestaurantSecurityConfig.CompanionTypeId]
+					if not cSpec then
+						ok, msg = false, "Unknown defense companion!"
+					else
+						local canOk, canMsg = DefenseCompanionService.CanHireCompanion(player, compType, durMin)
+						if not canOk then
+							ok, msg = false, canMsg
+						else
+							local rPrice = if durMin == 10 then cSpec.Robux10Min else cSpec.Robux5Min
+							local pKey = string.format("HireCompanion_%s_%dm", compType, durMin)
+							ok, msg = MonetizationService.TryPromptDualPurchase(
+								player,
+								pKey,
+								rPrice,
+								string.format("%s (%dm Contract)", cSpec.DisplayName, durMin),
+								function()
+									return DefenseCompanionService.TryHireCompanion(player, compType, durMin, true)
+								end
+							)
+						end
+					end
 				end
 			elseif action == "ChooseBase" and typeof(arg) == "string" then
 				ok, msg = BaseService.ClaimBaseSlot(player, arg :: any)
@@ -3456,6 +3528,27 @@ function RestaurantService.Start(): ()
 
 	MercenaryMafiaService.SetChangedCallback(function(player)
 		RestaurantService.PushStateToClient(player)
+	end)
+
+	DefenseCompanionService.SetChangedCallback(function(player)
+		RestaurantService.PushStateToClient(player)
+	end)
+
+	NightMafiaRaidService.OnRaidWarning(function(payload)
+		if payload.Owner and payload.Owner.Parent then
+			RestaurantService.PushStateToClient(payload.Owner)
+		end
+	end)
+	NightMafiaRaidService.OnRaidStarted(function(payload)
+		if payload.Owner and payload.Owner.Parent then
+			RestaurantService.PushStateToClient(payload.Owner)
+		end
+	end)
+	NightMafiaRaidService.OnRaidEnded(function(summary)
+		local owner = Players:GetPlayerByUserId(summary.OwnerUserId)
+		if owner and owner.Parent then
+			RestaurantService.PushStateToClient(owner)
+		end
 	end)
 
 	MonetizationService.SetAutoCookHandler(function(player)

@@ -8,6 +8,9 @@ local CollectionService = game:GetService("CollectionService")
 local WeaponConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WeaponConfig")
 )
+local BodyguardConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("BodyguardConfig")
+)
 local PlayerDataService = require("./PlayerDataService")
 local BaseService = require("./BaseService")
 local MonetizationService = require("./MonetizationService")
@@ -130,6 +133,7 @@ local BLACK_MARKET_LOOK_POS = Vector3.new(-295, 5.5, 130)
 local SAFE_ZONE_RADIUS = 114
 
 local isRunning = false
+local smugglerWatcherThread: thread? = nil
 local fireEv: RemoteEvent? = nil
 local reloadEv: RemoteEvent? = nil
 local ammoSyncEv: RemoteEvent? = nil
@@ -801,7 +805,8 @@ local function buildGunTool(weaponId: string): Tool
 			end
 		end
 		handle.Size = Vector3.new(0.24, 0.88, 0.28)
-		tool.Grip = CFrame.new(0, -0.18, 0) * CFrame.Angles(math.rad(-82), 0, 0)
+		-- Natural fist grip: blade (+Y) rises cleanly upward/forward out of the thumb side of the hand
+		tool.Grip = CFrame.new(0, 0.04, 0) * CFrame.Angles(math.rad(-14), 0, 0)
 		gPart("BrassBolster", Vector3.new(0.32, 0.14, 0.34), CFrame.new(0, 0.48, 0), goldTrim, Enum.Material.Metal, nil)
 		gPart("PommelCap", Vector3.new(0.26, 0.12, 0.30), CFrame.new(0, -0.48, 0), darkSteel, Enum.Material.Metal, nil)
 		gPart("CarbonBlade", Vector3.new(0.08, 1.65, 0.22), CFrame.new(0, 1.36, 0), chromeSilver, Enum.Material.Metal, nil)
@@ -815,7 +820,8 @@ local function buildGunTool(weaponId: string): Tool
 			end
 		end
 		handle.Size = Vector3.new(0.24, 1.35, 0.28)
-		tool.Grip = CFrame.new(0, -0.25, 0) * CFrame.Angles(math.rad(-84), 0, 0)
+		-- Authentic two-handed kenjutsu upper-tsuka grip right below the Tsuba guard (blade extends cleanly forward-upward!)
+		tool.Grip = CFrame.new(0, 0.24, 0) * CFrame.Angles(math.rad(-10), 0, 0)
 		gPart("SilkWrapBand", Vector3.new(0.26, 0.22, 0.30), CFrame.new(0, 0.15, 0), Color3.fromRGB(142, 26, 34), Enum.Material.Fabric, nil)
 		gPart("PommelKashira", Vector3.new(0.28, 0.14, 0.32), CFrame.new(0, -0.72, 0), goldTrim, Enum.Material.Metal, nil)
 		gPart("TsubaGuard", Vector3.new(0.56, 0.10, 0.56), CFrame.new(0, 0.72, 0), goldTrim, Enum.Material.Metal, nil)
@@ -1090,6 +1096,14 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 				local g = if typeof(goldAttr) == "number" then goldAttr else 240
 				local e = if typeof(expAttr) == "number" then expAttr else 95
 				local r = if typeof(repAttr) == "number" then repAttr else 50
+				PlayerDataService.AddRewards(player, g, e, r)
+			elseif CollectionService:HasTag(hitModel, "NightRaidMafiaUnit") then
+				local goldAttr = hitModel:GetAttribute("BountyGold")
+				local expAttr = hitModel:GetAttribute("BountyExp")
+				local repAttr = hitModel:GetAttribute("BountyRep")
+				local g = if typeof(goldAttr) == "number" then goldAttr else 85
+				local e = if typeof(expAttr) == "number" then expAttr else 32
+				local r = if typeof(repAttr) == "number" then repAttr else 15
 				PlayerDataService.AddRewards(player, g, e, r)
 			elseif isMafiaBoss then
 				PlayerDataService.AddRewards(player, 220, 80, 45)
@@ -1576,8 +1590,15 @@ function BlackMarketService.BuyItem(player: Player, itemId: string, useRobux: bo
 		return false, string.format("Requires Player Lv.%d to unlock %s!", reqLv, spec.DisplayName)
 	end
 
-	if not bypassGold and not PlayerDataService.SpendCoins(player, spec.Price) then
-		return false, string.format("Need %d Gold to buy %s!", spec.Price, spec.DisplayName)
+	local effectivePrice = spec.Price
+	local isSmugglerDeal = false
+	local dealDiscPct = 0
+	if spec.Kind == "Weapon" and WeaponConfig.GetMarketTier(itemId) == "BlackMarket" then
+		effectivePrice, isSmugglerDeal, dealDiscPct = BlackMarketService.GetEffectivePrice("Weapon", itemId, spec.Price)
+	end
+
+	if not bypassGold and not PlayerDataService.SpendCoins(player, effectivePrice) then
+		return false, string.format("Need %d Gold to buy %s!", effectivePrice, spec.DisplayName)
 	end
 
 	if spec.Kind == "Weapon" then
@@ -1596,6 +1617,17 @@ function BlackMarketService.BuyItem(player: Player, itemId: string, useRobux: bo
 			st.Mag = spec.MagSize or 12
 		end
 		grantOwnedGearToPlayer(player, false)
+		if isSmugglerDeal and not bypassGold then
+			return true, string.format(
+				"DON VINNIE'S DROP (-%d%%)! Snagged %s for %dG (saved %dG off contraband price)!",
+				dealDiscPct,
+				spec.DisplayName,
+				effectivePrice,
+				math.max(0, spec.Price - effectivePrice)
+			)
+		elseif WeaponConfig.GetMarketTier(itemId) == "BlackMarket" and not bypassGold then
+			return true, string.format("Don Vinnie slid %s under the noodle counter — loaded & hot! Press [R] to reload.", spec.DisplayName)
+		end
 		return true, string.format("%s unlocked with full magazine. Press [R] to reload.", spec.DisplayName)
 	elseif spec.Kind == "Armor" then
 		PlayerDataService.SetArmor(player, 100)
@@ -1676,13 +1708,14 @@ function BlackMarketService.BuyWeaponMod(player: Player, weaponId: string, modId
 	return true, string.format("Installed %s on %s!", modSpec.DisplayName, spec.DisplayName)
 end
 
-function BlackMarketService.BuySmokeGrenades(player: Player): (boolean, string)
+function BlackMarketService.BuySmokeGrenades(player: Player, bypassGold: boolean?): (boolean, string)
 	local prof = PlayerDataService.GetProfile(player)
 	if (prof.SmokeGrenades or 0) >= 12 then
 		return false, "Smoke Grenades full (12/12)! Press [T] to deploy a tactical smoke screen."
 	end
-	if not PlayerDataService.SpendCoins(player, 900) then
-		return false, "Need 900 Gold to buy 3x Tactical Smoke Grenades!"
+	local cost = WeaponConfig.GADGET_PRICES.SmokeGrenade
+	if not bypassGold and not PlayerDataService.SpendCoins(player, cost) then
+		return false, string.format("Need %d Gold to buy 3x Tactical Smoke Grenades!", cost)
 	end
 	local newCount = PlayerDataService.AddSmokeGrenades(player, 3)
 	return true, string.format("Bought 3x Tactical Smoke Grenades (%d/12). Press [T] to deploy smoke cover!", newCount)
@@ -1695,7 +1728,7 @@ function BlackMarketService.ThrowSmokeGrenade(player: Player): (boolean, string)
 		return false, "Character unavailable!"
 	end
 	if not PlayerDataService.ConsumeSmokeGrenade(player) then
-		return false, "Out of Smoke Grenades! Buy 3x (180G) in Black Market (M) -> Armor/Med."
+		return false, string.format("Out of Smoke Grenades! Buy 3x (%dG or 19 R$) in City Market [M] -> Ammo & Gear.", WeaponConfig.GADGET_PRICES.SmokeGrenade)
 	end
 
 	local dropPos = root.Position + root.CFrame.LookVector * 10 + Vector3.new(0, -1.5, 0)
@@ -1757,16 +1790,17 @@ local SHADOW_DASH_COOLDOWN = 5.0
 -- BLACK MARKET TIER 2 TACTICAL GADGETS: FLASHBANGS, C4 BREACH CHARGES & SHADOW SMOKE DASH
 -- ============================================================================
 
-function BlackMarketService.BuyFlashbangs(player: Player): (boolean, string)
+function BlackMarketService.BuyFlashbangs(player: Player, bypassGold: boolean?): (boolean, string)
 	local prof = PlayerDataService.GetProfile(player)
 	if (prof.Flashbangs or 0) >= 12 then
 		return false, "Flashbangs full (12/12)! Press [6] to stun rival squads."
 	end
-	if not PlayerDataService.SpendCoins(player, 1200) then
-		return false, "Need 1,200 Gold to buy 3x Tactical Flashbangs!"
+	local cost = WeaponConfig.GADGET_PRICES.Flashbang
+	if not bypassGold and not PlayerDataService.SpendCoins(player, cost) then
+		return false, string.format("Need %d Gold to buy 3x Contraband Flashbangs!", cost)
 	end
 	local newCount = PlayerDataService.AddFlashbangs(player, 3)
-	return true, string.format("Bought 3x Tactical Flashbangs (%d/12). Press [6] to stun enemies for 4s!", newCount)
+	return true, string.format("Bought 3x Contraband Flashbangs (%d/12). Press [6] to stun enemies for 4s!", newCount)
 end
 
 function BlackMarketService.ThrowFlashbang(player: Player): (boolean, string)
@@ -1776,7 +1810,7 @@ function BlackMarketService.ThrowFlashbang(player: Player): (boolean, string)
 		return false, "Character unavailable!"
 	end
 	if not PlayerDataService.ConsumeFlashbang(player) then
-		return false, "Out of Flashbangs! Buy 3x (240G) in Black Market [M] -> Gear."
+		return false, string.format("Out of Flashbangs! Buy 3x (%dG or 25 R$) in Black Market -> Gadgets.", WeaponConfig.GADGET_PRICES.Flashbang)
 	end
 
 	local startPos = root.Position + Vector3.new(0, 1.4, 0)
@@ -1926,16 +1960,17 @@ function BlackMarketService.ThrowFlashbang(player: Player): (boolean, string)
 	return true, string.format("Flashbang deployed! Stuns nearby rival squads for 4s (%d left).", rem)
 end
 
-function BlackMarketService.BuyC4Charges(player: Player): (boolean, string)
+function BlackMarketService.BuyC4Charges(player: Player, bypassGold: boolean?): (boolean, string)
 	local prof = PlayerDataService.GetProfile(player)
 	if (prof.C4Charges or 0) >= 8 then
 		return false, "C4 Breach Charges full (8/8)! Press [7] to plant & detonate."
 	end
-	if not PlayerDataService.SpendCoins(player, 1900) then
-		return false, "Need 1,900 Gold to buy 2x C4 Breach Charges!"
+	local cost = WeaponConfig.GADGET_PRICES.C4Charge
+	if not bypassGold and not PlayerDataService.SpendCoins(player, cost) then
+		return false, string.format("Need %d Gold to buy 2x Contraband C4 Breach Charges!", cost)
 	end
 	local newCount = PlayerDataService.AddC4Charges(player, 2)
-	return true, string.format("Bought 2x C4 Breach Charges (%d/8). Press [7] to breach vaults & blast squads!", newCount)
+	return true, string.format("Bought 2x Contraband C4 Breach Charges (%d/8). Press [7] to breach vaults & blast squads!", newCount)
 end
 
 function BlackMarketService.DeployC4Charge(player: Player): (boolean, string)
@@ -1945,7 +1980,7 @@ function BlackMarketService.DeployC4Charge(player: Player): (boolean, string)
 		return false, "Character unavailable!"
 	end
 	if not PlayerDataService.ConsumeC4Charge(player) then
-		return false, "Out of C4 Breach Charges! Buy 2x (380G) in Black Market [M] -> Gear."
+		return false, string.format("Out of C4 Breach Charges! Buy 2x (%dG or 35 R$) in Black Market -> Gadgets.", WeaponConfig.GADGET_PRICES.C4Charge)
 	end
 
 	local plantPos = root.Position + root.CFrame.LookVector * 6.5 + Vector3.new(0, -1.6, 0)
@@ -2133,20 +2168,25 @@ function BlackMarketService.DeployC4Charge(player: Player): (boolean, string)
 	return true, string.format("C4 Breach Charge armed — stand clear! (%d left)", rem)
 end
 
-function BlackMarketService.BuyShadowDash(player: Player): (boolean, string)
+function BlackMarketService.BuyShadowDash(player: Player, bypassGold: boolean?): (boolean, string)
 	if PlayerDataService.HasShadowDash(player) then
 		return false, "Shadow Smoke Dash already unlocked! Press [8] to dash & gain 1.5x backstab crits."
 	end
-	if not PlayerDataService.SpendCoins(player, 7000) then
-		return false, "Need 7,000 Gold to unlock permanent Shadow Smoke Dash!"
+	local baseCost = WeaponConfig.GADGET_PRICES.ShadowDash
+	local effectiveCost, isDeal, discPct = BlackMarketService.GetEffectivePrice("ShadowDash", "ShadowDash", baseCost)
+	if not bypassGold and not PlayerDataService.SpendCoins(player, effectiveCost) then
+		return false, string.format("Need %d Gold to unlock permanent Shadow Smoke Dash!", effectiveCost)
 	end
 	PlayerDataService.UnlockShadowDash(player)
+	if isDeal and not bypassGold then
+		return true, string.format("DON VINNIE'S DROP (-%d%%)! Unlocked SHADOW SMOKE DASH for %dG (saved %dG)! Press [8]!", discPct, effectiveCost, math.max(0, baseCost - effectiveCost))
+	end
 	return true, "Unlocked SHADOW SMOKE DASH! Press [8] to blink through smoke & score 1.5x backstab crits!"
 end
 
 function BlackMarketService.TriggerShadowDash(player: Player): (boolean, string)
 	if not PlayerDataService.HasShadowDash(player) then
-		return false, "Unlock Shadow Smoke Dash (1,400G) in Black Market [M] -> Gear first!"
+		return false, string.format("Unlock Shadow Smoke Dash (%dG or 89 R$) in Black Market -> Gadgets first!", WeaponConfig.GADGET_PRICES.ShadowDash)
 	end
 	local now = os.clock()
 	local lastAt = lastShadowDashAt[player] or 0
@@ -2246,6 +2286,108 @@ function BlackMarketService.EquipWeaponMasterySkin(player: Player, weaponId: str
 	return true, string.format("Equipped %s finish on %s!", sName, wName)
 end
 
+-- ============================================================================
+-- DON VINNIE'S 5-MINUTE ROTATING SMUGGLER DROP (35% OFF DAY / 45% OFF NIGHT!)
+-- ============================================================================
+function BlackMarketService.GetActiveSmugglerDeal(): { [string]: any }
+	local nowSec = math.floor(Workspace:GetServerTimeNow())
+	local interval = WeaponConfig.SMUGGLER_DROP_INTERVAL_SEC
+	local epoch = math.floor(nowSec / interval)
+	local remSec = math.max(1, interval - (nowSec % interval))
+	local pool = WeaponConfig.SMUGGLER_DEAL_POOL
+	local entry = pool[(epoch % #pool) + 1]
+	local quips = WeaponConfig.SMUGGLER_QUIPS
+	local quip = quips[(epoch % #quips) + 1]
+	local isNight = (ReplicatedStorage:GetAttribute("IsNight") == true)
+	local discPct = if isNight then WeaponConfig.SMUGGLER_NIGHT_DISCOUNT_PCT else WeaponConfig.SMUGGLER_DAY_DISCOUNT_PCT
+
+	local displayName = entry.ItemId
+	local basePrice = 8500
+	local rarity = "Epic"
+	local previewCategory = "Weapon"
+	local previewId = entry.ItemId
+	local robuxPrice: number? = nil
+	local robuxItemId: string? = nil
+	local reqLevel = 1
+
+	if entry.Category == "Weapon" then
+		local w = WeaponConfig.WEAPONS[entry.ItemId]
+		if w then
+			displayName = w.DisplayName
+			basePrice = w.Price
+			rarity = w.Rarity
+			previewCategory = "Weapon"
+			previewId = w.Id
+			robuxPrice = w.RobuxPrice
+			robuxItemId = w.RobuxItemId
+			reqLevel = w.RequiredLevel
+		end
+	elseif entry.Category == "GuardClass" then
+		local c = BodyguardConfig.CLASSES[entry.ItemId :: BodyguardConfig.GuardClassId]
+		if c then
+			displayName = c.DisplayName
+			basePrice = c.Cost
+			rarity = c.Rarity
+			previewCategory = "Bodyguard"
+			previewId = c.Id
+			robuxPrice = c.RobuxPrice
+			robuxItemId = c.RobuxItemId
+			reqLevel = c.RequiredLevel
+		end
+	elseif entry.Category == "GuardGear" then
+		local g = BodyguardConfig.GEAR[entry.ItemId]
+		if g then
+			displayName = g.DisplayName
+			basePrice = g.Price
+			rarity = g.Rarity
+			previewCategory = "Equipment"
+			previewId = g.Id
+			robuxPrice = g.RobuxPrice
+			robuxItemId = g.RobuxItemId
+			reqLevel = g.RequiredLevel
+		end
+	else
+		displayName = "Shadow Smoke Dash"
+		basePrice = WeaponConfig.GADGET_PRICES.ShadowDash
+		rarity = "Legendary"
+		previewCategory = "Equipment"
+		previewId = "ShadowDash"
+		robuxPrice = 89
+		reqLevel = 1
+	end
+
+	local rawDeal = basePrice * (100 - discPct) / 100
+	local dealPrice = math.max(500, math.floor(rawDeal / 25 + 0.5) * 25)
+
+	return {
+		DealId = string.format("%d_%s_%s", epoch, entry.Category, entry.ItemId),
+		Epoch = epoch,
+		Category = entry.Category,
+		ItemId = entry.ItemId,
+		DisplayName = displayName,
+		Rarity = rarity,
+		BasePrice = basePrice,
+		DealPrice = dealPrice,
+		DiscountPct = discPct,
+		IsNightBonus = isNight,
+		TimeRemaining = remSec,
+		Quip = quip,
+		PreviewCategory = previewCategory,
+		PreviewId = previewId,
+		RobuxPrice = robuxPrice,
+		RobuxItemId = robuxItemId,
+		RequiredLevel = reqLevel,
+	}
+end
+
+function BlackMarketService.GetEffectivePrice(category: string, itemId: string, basePrice: number): (number, boolean, number)
+	local deal = BlackMarketService.GetActiveSmugglerDeal()
+	if deal and deal.Category == category and deal.ItemId == itemId and basePrice > 0 then
+		return deal.DealPrice, true, deal.DiscountPct
+	end
+	return basePrice, false, 0
+end
+
 function BlackMarketService.GetCatalogPayload(player: Player): { [string]: any }
 	local profile = PlayerDataService.GetProfile(player)
 	local armor = math.clamp(math.floor(profile.Armor or 0), 0, 100)
@@ -2272,6 +2414,7 @@ function BlackMarketService.GetCatalogPayload(player: Player): { [string]: any }
 		C4Charges = profile.C4Charges or 0,
 		HasShadowDash = profile.HasShadowDash == true,
 		HasAmmoDiscount = PlayerDataService.HasBusiness(player, "BackAlleyArms"),
+		SmugglerDeal = BlackMarketService.GetActiveSmugglerDeal(),
 	}
 end
 
@@ -2377,11 +2520,41 @@ function BlackMarketService.Start(): ()
 		hookPlayer(p)
 	end
 
-	print("[Food Empire] BlackMarketService started (9 Weapons, 5 Ammo Calibers, Server Reload, Kevlar Armor & CombatSFX ready)!")
+	-- Broadcast server-wide toast whenever Don Vinnie's 5-minute Smuggler Contraband Drop rotates!
+	local lastAnnouncedEpoch = BlackMarketService.GetActiveSmugglerDeal().Epoch
+	smugglerWatcherThread = task.spawn(function()
+		while isRunning do
+			task.wait(5)
+			if not isRunning then break end
+			local deal = BlackMarketService.GetActiveSmugglerDeal()
+			if deal.Epoch ~= lastAnnouncedEpoch then
+				lastAnnouncedEpoch = deal.Epoch
+				local rFolder = ReplicatedStorage:FindFirstChild("Remotes")
+				local toastEv = if rFolder then rFolder:FindFirstChild("MilestoneToast") else nil
+				if toastEv and toastEv:IsA("RemoteEvent") then
+					local prefix = if deal.IsNightBonus then "MIDNIGHT HEIST DROP" else "DON VINNIE'S BLACK MARKET DROP"
+					toastEv:FireAllClients(string.format(
+						"%s: %s is -%d%% OFF GOLD (%dG -> %dG) for 5 min! Open Black Market!",
+						prefix,
+						deal.DisplayName,
+						deal.DiscountPct,
+						deal.BasePrice,
+						deal.DealPrice
+					))
+				end
+			end
+		end
+	end)
+
+	print("[Food Empire] BlackMarketService started (13 Weapons, Contraband Economy, Rotating Smuggler Drop & CombatSFX ready)!")
 end
 
 function BlackMarketService.Stop(): ()
 	isRunning = false
+	if smugglerWatcherThread then
+		task.cancel(smugglerWatcherThread)
+		smugglerWatcherThread = nil
+	end
 	for _, c in ipairs(conns) do c:Disconnect() end
 	table.clear(conns)
 	for p, c in pairs(charConns) do c:Disconnect(); charConns[p] = nil end

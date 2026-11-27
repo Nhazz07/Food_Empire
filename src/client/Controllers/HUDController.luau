@@ -16,7 +16,7 @@ local RestaurantSecurityConfig = require(
 )
 local CurrencyIconHelper = require("./CurrencyIconHelper")
 
-export type OpenMenuCallback = (tabName: "Kitchen" | "Warehouses" | "Upgrades" | "Shop" | "BlackMarket") -> ()
+export type OpenMenuCallback = (tabName: "Kitchen" | "Warehouses" | "Upgrades" | "Market" | "BlackMarket" | "Shop") -> ()
 export type QuickServeCallback = () -> ()
 export type ReturnHomeCallback = () -> ()
 export type ToggleScooterCallback = () -> ()
@@ -97,6 +97,19 @@ local patienceHeaderLabel: TextLabel? = nil
 local patienceRows: { PatienceRowUI } = {}
 local latestPatienceList: { { [string]: any } } = {}
 local patienceReceivedAt = 0
+
+-- Left-Rail Hired Security Contracts HUD Card (shows live MM:SS remaining contract & 20s respawn timers)
+type CompanionRowUI = {
+	Row: Frame,
+	NameLbl: TextLabel,
+	TimerLbl: TextLabel,
+	BarFill: Frame,
+}
+local companionCard: Frame? = nil
+local companionHeaderLabel: TextLabel? = nil
+local companionRows: { CompanionRowUI } = {}
+local latestCompanionList: { { [string]: any } } = {}
+local companionReceivedAt = 0
 
 -- Bottom-Center Integrated Combat, Vitals & Squad Widgets
 local vitalsDockFrame: Frame? = nil
@@ -899,6 +912,118 @@ function HUDController.Init(
 	end)
 	expressAcceptBtn = expBtn
 
+	-- Card 3 (Right Rail, below Waiting Guests / Weapon HUD — zero overlap with BottomDock or Minimap!)
+	local compPanel = Instance.new("Frame")
+	compPanel.Name = "HiredSecurityCard"
+	compPanel.AnchorPoint = Vector2.new(1, 0)
+	compPanel.Position = UDim2.new(1, -14, 0, 270)
+	compPanel.Size = UDim2.fromOffset(216, 44)
+	compPanel.BackgroundColor3 = C_OBS
+	compPanel.BackgroundTransparency = 0.06
+	compPanel.Visible = false
+	compPanel.Parent = gui
+	makeCorner(compPanel, 8)
+	makeBorderStroke(compPanel, C_GOLD, 1.2)
+	companionCard = compPanel
+
+	local compHeader = Instance.new("TextLabel")
+	compHeader.Position = UDim2.new(0, 10, 0, 5)
+	compHeader.Size = UDim2.new(1, -38, 0, 15)
+	compHeader.BackgroundTransparency = 1
+	compHeader.Font = FONT_TITLE
+	compHeader.Text = "HIRED SECURITY (0)"
+	compHeader.TextSize = 10
+	compHeader.TextXAlignment = Enum.TextXAlignment.Left
+	compHeader.TextColor3 = C_GOLD
+	compHeader.Parent = compPanel
+	companionHeaderLabel = compHeader
+
+	local compRowsHolder = Instance.new("Frame")
+	compRowsHolder.Name = "Rows"
+	compRowsHolder.Position = UDim2.new(0, 0, 0, 22)
+	compRowsHolder.Size = UDim2.new(1, 0, 1, -24)
+	compRowsHolder.BackgroundTransparency = 1
+	compRowsHolder.Parent = compPanel
+
+	local compCollapsed = false
+	local collapseCompBtn = Instance.new("TextButton")
+	collapseCompBtn.Name = "CollapseBtn"
+	collapseCompBtn.AnchorPoint = Vector2.new(1, 0)
+	collapseCompBtn.Position = UDim2.new(1, -6, 0, 4)
+	collapseCompBtn.Size = UDim2.fromOffset(18, 16)
+	collapseCompBtn.BackgroundColor3 = C_INNER
+	collapseCompBtn.Font = FONT_TITLE
+	collapseCompBtn.Text = "−"
+	collapseCompBtn.TextSize = 11
+	collapseCompBtn.TextColor3 = C_ASH
+	collapseCompBtn.Parent = compPanel
+	makeCorner(collapseCompBtn, 4)
+	makeBorderStroke(collapseCompBtn, C_BORDER, 1)
+	collapseCompBtn.MouseButton1Click:Connect(function()
+		compCollapsed = not compCollapsed
+		compRowsHolder.Visible = not compCollapsed
+		collapseCompBtn.Text = if compCollapsed then "+" else "−"
+		if compCollapsed then
+			compPanel.Size = UDim2.fromOffset(216, 24)
+		end
+	end)
+
+	table.clear(companionRows)
+	for i = 1, 4 do
+		local r = Instance.new("Frame")
+		r.Name = "CompanionRow_" .. tostring(i)
+		r.Position = UDim2.new(0, 8, 0, (i - 1) * 20)
+		r.Size = UDim2.new(1, -16, 0, 18)
+		r.BackgroundTransparency = 1
+		r.Visible = false
+		r.Parent = compRowsHolder
+
+		local nLbl = Instance.new("TextLabel")
+		nLbl.Position = UDim2.new(0, 0, 0, 0)
+		nLbl.Size = UDim2.new(0.56, 0, 0, 12)
+		nLbl.BackgroundTransparency = 1
+		nLbl.Font = FONT_BODY
+		nLbl.Text = "Shadow Ninja"
+		nLbl.TextSize = 9
+		nLbl.TextXAlignment = Enum.TextXAlignment.Left
+		nLbl.TextTruncate = Enum.TextTruncate.AtEnd
+		nLbl.TextColor3 = C_BONE
+		nLbl.Parent = r
+
+		local tLbl = Instance.new("TextLabel")
+		tLbl.Position = UDim2.new(0.56, 0, 0, 0)
+		tLbl.Size = UDim2.new(0.44, 0, 0, 12)
+		tLbl.BackgroundTransparency = 1
+		tLbl.Font = FONT_TITLE
+		tLbl.Text = "05:00"
+		tLbl.TextSize = 9
+		tLbl.TextXAlignment = Enum.TextXAlignment.Right
+		tLbl.TextColor3 = C_EMERALD_BRIGHT
+		tLbl.Parent = r
+
+		local bBg = Instance.new("Frame")
+		bBg.Position = UDim2.new(0, 0, 0, 13)
+		bBg.Size = UDim2.new(1, 0, 0, 3)
+		bBg.BackgroundColor3 = C_INNER
+		bBg.BorderSizePixel = 0
+		bBg.Parent = r
+		makeCorner(bBg, 2)
+
+		local bFill = Instance.new("Frame")
+		bFill.Size = UDim2.fromScale(1, 1)
+		bFill.BackgroundColor3 = C_EMERALD_BRIGHT
+		bFill.BorderSizePixel = 0
+		bFill.Parent = bBg
+		makeCorner(bFill, 2)
+
+		table.insert(companionRows, {
+			Row = r,
+			NameLbl = nLbl,
+			TimerLbl = tLbl,
+			BarFill = bFill,
+		})
+	end
+
 	-- =========================================================================
 	-- 3. BOTTOM-LEFT: CLEAN 2x3 EMPIRE MENU DOCK (ZERO OVERLAP!)
 	-- =========================================================================
@@ -951,8 +1076,8 @@ function HUDController.Init(
 	createDockGridButton(dockGrid, "UpgradeBtn", "Empire", "U", Color3.fromRGB(154, 112, 16), Color3.fromRGB(250, 204, 21), Color3.fromRGB(255, 240, 172), 4, function()
 		onOpenMenu("Upgrades")
 	end)
-	createDockGridButton(dockGrid, "BlackMarketBtn", "Market", "M", Color3.fromRGB(158, 22, 48), Color3.fromRGB(244, 63, 94), Color3.fromRGB(255, 192, 204), 5, function()
-		onOpenMenu("BlackMarket")
+	createDockGridButton(dockGrid, "MarketBtn", "Market", "M", Color3.fromRGB(14, 132, 138), Color3.fromRGB(45, 212, 191), Color3.fromRGB(188, 255, 248), 5, function()
+		onOpenMenu("Market")
 	end)
 	createDockGridButton(dockGrid, "RobuxShopBtn", "Store", "P", Color3.fromRGB(16, 128, 68), Color3.fromRGB(52, 211, 153), Color3.fromRGB(196, 255, 224), 6, function()
 		onOpenMenu("Shop")
@@ -1575,6 +1700,65 @@ function HUDController.Init(
 			return
 		end
 		checkAcc = 0
+
+		-- Smooth live ticking for Right-Rail Hired Security Contract & 20s Respawn Card
+		if companionCard then
+			local elapsed = math.max(0, os.clock() - companionReceivedAt)
+			local shown = 0
+			for i = 1, #companionRows do
+				local rowUI = companionRows[i]
+				local entry = latestCompanionList[i]
+				if typeof(entry) == "table" and entry.State ~= "Expired" then
+					local rem = math.max(0, (tonumber(entry.TimeRemaining) or 0) - elapsed)
+					if rem > 0.05 then
+						shown += 1
+						local dur = math.max(1, tonumber(entry.DurationSeconds) or 300)
+						local isResp = entry.State == "Respawning"
+						local respRem = if isResp then math.max(0, math.ceil((tonumber(entry.RespawnRemaining) or 0) - elapsed)) else 0
+						local mins = math.floor(math.ceil(rem) / 60)
+						local secs = math.ceil(rem) % 60
+						rowUI.Row.Visible = true
+						rowUI.NameLbl.Text = tostring(entry.DisplayName or entry.CompanionType or "Guard")
+						if isResp and respRem > 0 then
+							rowUI.TimerLbl.Text = string.format("RESP %ds • %02d:%02d", respRem, mins, secs)
+							rowUI.TimerLbl.TextColor3 = C_GOLD
+							rowUI.BarFill.BackgroundColor3 = C_GOLD
+						else
+							rowUI.TimerLbl.Text = string.format("%02d:%02d LEFT", mins, secs)
+							rowUI.TimerLbl.TextColor3 = if rem <= 30 then Color3.fromRGB(242, 118, 124) else C_EMERALD_BRIGHT
+							rowUI.BarFill.BackgroundColor3 = if rem <= 30 then C_OXBLOOD else C_EMERALD_BRIGHT
+						end
+						rowUI.BarFill.Size = UDim2.fromScale(math.clamp(rem / dur, 0, 1), 1)
+					else
+						rowUI.Row.Visible = false
+					end
+				else
+					rowUI.Row.Visible = false
+				end
+			end
+			if shown > 0 then
+				companionCard.Visible = true
+				local yPos = 154
+				if patienceCard and patienceCard.Visible then
+					yPos = 154 + patienceCard.Size.Y.Offset + 8
+				end
+				local weaponGui = playerGui:FindFirstChild("WeaponCombatHUD")
+				local ammoCardRef = if weaponGui then weaponGui:FindFirstChild("WeaponAmmoCard") else nil
+				if ammoCardRef and ammoCardRef:IsA("Frame") and ammoCardRef.Visible then
+					yPos = math.max(yPos, 294)
+				end
+				companionCard.Position = UDim2.new(1, -14, 0, yPos)
+				local rowsHolder = companionCard:FindFirstChild("Rows")
+				local isMin = rowsHolder ~= nil and rowsHolder:IsA("Frame") and not rowsHolder.Visible
+				companionCard.Size = UDim2.fromOffset(216, if isMin then 24 else (24 + shown * 20))
+				if companionHeaderLabel then
+					companionHeaderLabel.Text = string.format("HIRED SECURITY (%d)", shown)
+				end
+			else
+				companionCard.Visible = false
+			end
+		end
+
 		if not activeBlockBanner then
 			return
 		end
@@ -1733,6 +1917,13 @@ function HUDController.Update(state: { [string]: any }): ()
 	else
 		latestPatienceList = {}
 		patienceReceivedAt = os.clock()
+	end
+	if typeof(state.HiredCompanions) == "table" and typeof(state.HiredCompanions.List) == "table" then
+		latestCompanionList = state.HiredCompanions.List
+		companionReceivedAt = os.clock()
+	else
+		latestCompanionList = {}
+		companionReceivedAt = os.clock()
 	end
 	if sellBadgeBtn and sellTextLabel and kitchen then
 		local ready = kitchen.ReadyTotal or 0

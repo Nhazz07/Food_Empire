@@ -408,6 +408,86 @@ function WarehouseService.ConsumeIngredients(player: Player, required: { [string
 	return true
 end
 
+-- Server-authoritative theft of actually stored warehouse ingredients (used by Nighttime Mafia Raids).
+-- Strictly steals only ingredients with positive stock in valid (and unlocked) warehouses,
+-- never produces negative quantities, never steals nonexistent items, and never touches Robux purchases
+-- or warehouse unlock levels.
+function WarehouseService.StealRandomStoredIngredients(
+	player: Player,
+	maxQuantity: number,
+	theftPercent: number?,
+	onlyUnlocked: boolean?
+): ({ [string]: number }, number)
+	local limit = math.max(0, math.floor(maxQuantity))
+	local stolen: { [string]: number } = {}
+	if limit <= 0 then
+		return stolen, 0
+	end
+
+	local state = ensureState(player)
+	local requireUnlocked = (onlyUnlocked ~= false)
+
+	-- First compute actual stealable stock across valid (unlocked) warehouses
+	local totalStealable = 0
+	for ingredient, qty in pairs(state.Stock) do
+		local cat = WarehouseConfig.IngredientToCategory[ingredient]
+		if cat ~= nil and typeof(qty) == "number" and qty > 0 then
+			if not requireUnlocked or (state.Levels[cat] or 0) >= 1 then
+				totalStealable += math.floor(qty)
+			end
+		end
+	end
+
+	-- Empty warehouse: safe no-op, zero errors, zero negative counts!
+	if totalStealable <= 0 then
+		return stolen, 0
+	end
+
+	local targetCount = limit
+	if typeof(theftPercent) == "number" and theftPercent > 0 then
+		local pctTarget = math.max(1, math.ceil(totalStealable * math.clamp(theftPercent, 0.05, 1.0)))
+		targetCount = math.min(limit, pctTarget)
+	end
+	targetCount = math.min(targetCount, totalStealable)
+
+	local totalStolen = 0
+	for _ = 1, targetCount do
+		local availableKeys: { string } = {}
+		for ingredient, qty in pairs(state.Stock) do
+			local cat = WarehouseConfig.IngredientToCategory[ingredient]
+			if cat ~= nil and typeof(qty) == "number" and qty > 0 then
+				if not requireUnlocked or (state.Levels[cat] or 0) >= 1 then
+					table.insert(availableKeys, ingredient)
+				end
+			end
+		end
+		if #availableKeys == 0 then
+			break
+		end
+		local chosen = availableKeys[math.random(1, #availableKeys)]
+		local current = state.Stock[chosen] or 0
+		if current > 0 then
+			state.Stock[chosen] = math.max(0, current - 1)
+			stolen[chosen] = (stolen[chosen] or 0) + 1
+			totalStolen += 1
+		end
+	end
+
+	if totalStolen > 0 then
+		notifyChanged(player)
+	end
+
+	return stolen, totalStolen
+end
+
+function WarehouseService.ClearAllStockForTest(player: Player): ()
+	local state = ensureState(player)
+	for ingredient in pairs(state.Stock) do
+		state.Stock[ingredient] = 0
+	end
+	notifyChanged(player)
+end
+
 function WarehouseService.TryUpgradeWarehouse(player: Player, category: WarehouseCategory, bypassGold: boolean?): (boolean, string)
 	local state = ensureState(player)
 	local currentLevel = state.Levels[category] or 0

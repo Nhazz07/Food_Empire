@@ -852,10 +852,16 @@ local function releaseSlot(player: Player): ()
 	end
 end
 
--- Active Castle Defense Turrets repel Rival AI raiders who approach upgraded bases
+-- Active Castle Defense Turrets repel Rival AI & Night Mafia raiders who approach upgraded bases
 local function runDefenseTurretTick(): ()
-	local rivals = CollectionService:GetTagged("RivalAIUnit")
-	if #rivals == 0 then
+	local targets: { Instance } = {}
+	for _, unit in ipairs(CollectionService:GetTagged("RivalAIUnit")) do
+		table.insert(targets, unit)
+	end
+	for _, unit in ipairs(CollectionService:GetTagged("NightRaidMafiaUnit")) do
+		table.insert(targets, unit)
+	end
+	if #targets == 0 then
 		return
 	end
 
@@ -868,7 +874,7 @@ local function runDefenseTurretTick(): ()
 				local range = if tier >= 3 then 145 else 115
 				local damage = if tier >= 3 then 35 else 20
 
-				for _, unit in ipairs(rivals) do
+				for _, unit in ipairs(targets) do
 					if unit:IsA("Model") then
 						local hum = unit:FindFirstChildOfClass("Humanoid")
 						local root = unit:FindFirstChild("HumanoidRootPart")

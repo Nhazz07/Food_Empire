@@ -1,7 +1,7 @@
 --!strict
 
 -- RestaurantSecurityConfig: Shared configurable tuning for Customer Patience
--- (Stage 1) and upcoming Nighttime Mafia Raids & Restaurant Defense systems.
+-- (Stage 1), Random Nighttime Mafia Raids (Stage 3), and upcoming Alarm/Defense stages.
 
 export type CustomerPatienceConfig = {
 	MinSeconds: number,
@@ -15,8 +15,446 @@ export type CustomerPatienceConfig = {
 	MaxQuickServeCookSeconds: number,
 }
 
+export type RaidGroupId = "NormalMafia" | "NinjaMafia" | "StrongMafia" | "EliteMafia"
+export type RaidPenaltyResource = "Money" | "Reputation"
+export type RaidOutcomeMode = "Money" | "Reputation" | "PerGroup"
+
+export type RaidUnitTemplate = {
+	RoleName: string,
+	VisualKind: "HarborHookCartel" | "IronCleaverSyndicate" | "ObsidianKnifeOrder" | "CrimsonDonBoss" | "NinjaMafia" | "ApexAssassin" | "ApexWarlord",
+	CombatStyle: "Ranged" | "Melee",
+	MaxHealth: number,
+	Damage: number,
+	WalkSpeed: number,
+	AttackRange: number,
+	AttackCooldown: number,
+	Scale: number,
+	IsBoss: boolean,
+	BountyGold: number,
+	BountyExp: number,
+	BountyRep: number,
+	Objective: "Restaurant" | "Warehouse",
+}
+
+export type RaidGroupSpec = {
+	Id: RaidGroupId,
+	DisplayName: string,
+	ShortTag: string,
+	AccentColor: Color3,
+	MinRestaurantLevel: number,
+	SelectionWeight: number,
+	PenaltyResource: RaidPenaltyResource,
+	MaxIngredientsToSteal: number,
+	BreachRateMultiplier: number,
+	DefenseRewardGold: number,
+	DefenseRewardExp: number,
+	DefenseRewardRep: number,
+	Squad: { RaidUnitTemplate },
+}
+
+export type NightRaidsConfig = {
+	Enabled: boolean,
+	BaseRaidChance: number,
+	ChancePerRestaurantLevel: number,
+	MaxRaidChance: number,
+	MinNightDelaySeconds: number,
+	MaxNightDelaySeconds: number,
+	NewPlayerGraceSeconds: number,
+	RaidCooldownSeconds: number,
+	MinNightsBetweenRaids: number,
+	MaxConcurrentRaidsPerBase: number,
+	WarningLeadSeconds: number,
+	MaxRaidDurationSeconds: number,
+	BreachDurationSeconds: number,
+	PenaltyPercent: number,
+	OutcomeMode: RaidOutcomeMode,
+	EnableWarehouseTheft: boolean,
+	WarehouseTheftPercent: number, -- Configurable % of stored unlocked ingredients stolen (capped by squad MaxIngredientsToSteal)
+	WarehouseTheftOnlyUnlocked: boolean, -- Strictly steal only from unlocked warehouses
+	OutcomeBannerDurationSeconds: number, -- Duration for Raid Outcome & Theft Summary Card
+	GroupOrder: { RaidGroupId },
+	Groups: { [RaidGroupId]: RaidGroupSpec },
+}
+
+export type RaidAlarmConfig = {
+	-- Verified Creator Store ProSoundEffects alarm siren ("Car Alarm Exterior Van Yelp Alarm").
+	-- To use a different custom alarm audio, replace SoundId below or set it to "" to use FallbackSoundId.
+	SoundId: string,
+	-- Guaranteed built-in Roblox sound fallback used if SoundId is empty or fails to load.
+	FallbackSoundId: string,
+	Volume: number,
+	PlaybackSpeed: number,
+	LoopedDuringWarning: boolean,
+	MinRetriggerSeconds: number,
+	TitleText: string,
+	SubtitleText: string,
+	DetailText: string,
+}
+
+export type CompanionTypeId = "Ninja" | "Assassin" | "Bodyguard" | "EliteBodyguard"
+
+export type CompanionSpec = {
+	Id: CompanionTypeId,
+	DisplayName: string,
+	ShortTitle: string,
+	RoleTag: string,
+	Description: string,
+	AccentColor: Color3,
+	-- Separate configurable combat stats (strictly lower HP than Player default 100 HP!)
+	MaxHealth: number,
+	Damage: number,
+	AttackCooldown: number,
+	AttackRange: number,
+	WalkSpeed: number,
+	DamageReduction: number, -- 0..0.35 (higher survivability without invincibility)
+	DetectionRadius: number,
+	PursuitLimitRadius: number,
+	CombatStyle: "Melee" | "Ranged",
+	AssignedPost: "PlazaPatrol" | "WarehouseFlank" | "Entrance" | "EntranceAndVault",
+	VisualKind: "NinjaGuard" | "ApexAssassin" | "BasicGuard" | "HeavyGuard",
+	PreviewCategory: "Bodyguard" | "Empire",
+	PreviewId: string,
+	Scale: number,
+	Cost5Min: number,
+	Cost10Min: number,
+	Robux5Min: number,
+	Robux10Min: number,
+}
+
+export type CombatBalanceConfig = {
+	PlayerDefaultMaxHealth: number,
+	CompanionHealthScale: number,
+	EnemyDamageScale: number,
+}
+
+export type HiredCompanionsConfig = {
+	Enabled: boolean,
+	AllowedDurationsMinutes: { number }, -- { 5, 10 }
+	RespawnDelaySeconds: number, -- Exact 20 seconds
+	MaxActiveContractsPerPlayer: number,
+	AllowDuplicateTypesPerPlayer: boolean,
+	TypeOrder: { CompanionTypeId },
+	Types: { [CompanionTypeId]: CompanionSpec },
+}
+
+export type DefenseAIConfig = {
+	TickInterval: number,
+	MaxBaseDefenseRadius: number, -- Hard outer leash from BaseCenterPos (never wander across map!)
+	BaseLocalBoundsX: number, -- Max |localX| relative to BasePivot
+	BaseLocalBoundsMinZ: number, -- Rearmost localZ (behind warehouses)
+	BaseLocalBoundsMaxZ: number, -- Frontmost localZ (just past GrandFrontGate at +112)
+	RestaurantThreatRadius: number, -- Priority 1 zone around Restaurant HQ / Pavilion
+	StorageThreatRadius: number, -- Priority 2 zone around Warehouses & Money Counter
+	EntranceThreatRadius: number, -- Priority 3 zone around Front Gate / Entrance
+	PostReturnTolerance: number, -- Stop walking once within this distance of AssignedPost
+	PostRefreshInterval: number, -- Re-sync zones if HQ expands or warehouses unlock
+	ObstacleRayHeight: number,
+	PathRecomputeInterval: number,
+	StuckDistanceThreshold: number,
+	StuckTimeoutSeconds: number,
+	HardUnstickSeconds: number,
+	RangedPreferredHoldRatio: number,
+	RangedLOSRequired: boolean,
+}
+
 export type RestaurantSecurityConfigType = {
 	CustomerPatience: CustomerPatienceConfig,
+	NightRaids: NightRaidsConfig,
+	RaidAlarm: RaidAlarmConfig,
+	CombatBalance: CombatBalanceConfig,
+	HiredCompanions: HiredCompanionsConfig,
+	DefenseAI: DefenseAIConfig,
+}
+
+local RaidGroups: { [RaidGroupId]: RaidGroupSpec } = {
+	NormalMafia = {
+		Id = "NormalMafia",
+		DisplayName = "Normal Mafia",
+		ShortTag = "NORMAL MAFIA",
+		AccentColor = Color3.fromRGB(204, 62, 68),
+		MinRestaurantLevel = 1,
+		SelectionWeight = 42,
+		PenaltyResource = "Money",
+		MaxIngredientsToSteal = 4,
+		BreachRateMultiplier = 1.0,
+		DefenseRewardGold = 240,
+		DefenseRewardExp = 85,
+		DefenseRewardRep = 28,
+		Squad = {
+			{
+				RoleName = "MAFIA ENFORCER",
+				VisualKind = "HarborHookCartel",
+				CombatStyle = "Ranged",
+				MaxHealth = 135,
+				Damage = 10,
+				WalkSpeed = 16.5,
+				AttackRange = 38,
+				AttackCooldown = 1.45,
+				Scale = 1.0,
+				IsBoss = false,
+				BountyGold = 65,
+				BountyExp = 24,
+				BountyRep = 10,
+				Objective = "Restaurant",
+			},
+			{
+				RoleName = "MAFIA GUNMAN",
+				VisualKind = "IronCleaverSyndicate",
+				CombatStyle = "Ranged",
+				MaxHealth = 150,
+				Damage = 12,
+				WalkSpeed = 16.0,
+				AttackRange = 42,
+				AttackCooldown = 1.35,
+				Scale = 1.02,
+				IsBoss = false,
+				BountyGold = 75,
+				BountyExp = 28,
+				BountyRep = 12,
+				Objective = "Restaurant",
+			},
+			{
+				RoleName = "MAFIA SMUGGLER",
+				VisualKind = "HarborHookCartel",
+				CombatStyle = "Ranged",
+				MaxHealth = 130,
+				Damage = 10,
+				WalkSpeed = 17.0,
+				AttackRange = 36,
+				AttackCooldown = 1.5,
+				Scale = 1.0,
+				IsBoss = false,
+				BountyGold = 65,
+				BountyExp = 24,
+				BountyRep = 10,
+				Objective = "Warehouse",
+			},
+		},
+	},
+	NinjaMafia = {
+		Id = "NinjaMafia",
+		DisplayName = "Ninja Mafia",
+		ShortTag = "NINJA MAFIA",
+		AccentColor = Color3.fromRGB(182, 46, 86),
+		MinRestaurantLevel = 1,
+		SelectionWeight = 30,
+		PenaltyResource = "Reputation",
+		MaxIngredientsToSteal = 6,
+		BreachRateMultiplier = 1.12,
+		DefenseRewardGold = 320,
+		DefenseRewardExp = 115,
+		DefenseRewardRep = 42,
+		Squad = {
+			{
+				RoleName = "NINJA MAFIA SHINOBI",
+				VisualKind = "NinjaMafia",
+				CombatStyle = "Melee",
+				MaxHealth = 120,
+				Damage = 14,
+				WalkSpeed = 21.5,
+				AttackRange = 9.0,
+				AttackCooldown = 0.85,
+				Scale = 0.98,
+				IsBoss = false,
+				BountyGold = 90,
+				BountyExp = 34,
+				BountyRep = 15,
+				Objective = "Restaurant",
+			},
+			{
+				RoleName = "NINJA MAFIA SHADOW",
+				VisualKind = "NinjaMafia",
+				CombatStyle = "Melee",
+				MaxHealth = 120,
+				Damage = 14,
+				WalkSpeed = 22.0,
+				AttackRange = 9.0,
+				AttackCooldown = 0.85,
+				Scale = 0.98,
+				IsBoss = false,
+				BountyGold = 90,
+				BountyExp = 34,
+				BountyRep = 15,
+				Objective = "Warehouse",
+			},
+			{
+				RoleName = "NINJA MAFIA BLADE",
+				VisualKind = "NinjaMafia",
+				CombatStyle = "Melee",
+				MaxHealth = 145,
+				Damage = 16,
+				WalkSpeed = 22.5,
+				AttackRange = 9.5,
+				AttackCooldown = 0.8,
+				Scale = 1.04,
+				IsBoss = false,
+				BountyGold = 110,
+				BountyExp = 40,
+				BountyRep = 18,
+				Objective = "Warehouse",
+			},
+		},
+	},
+	StrongMafia = {
+		Id = "StrongMafia",
+		DisplayName = "Strong Mafia",
+		ShortTag = "STRONG MAFIA",
+		AccentColor = Color3.fromRGB(228, 128, 44),
+		MinRestaurantLevel = 2,
+		SelectionWeight = 18,
+		PenaltyResource = "Money",
+		MaxIngredientsToSteal = 8,
+		BreachRateMultiplier = 1.15,
+		DefenseRewardGold = 480,
+		DefenseRewardExp = 170,
+		DefenseRewardRep = 60,
+		Squad = {
+			{
+				RoleName = "STRONG MAFIA BRUISER",
+				VisualKind = "IronCleaverSyndicate",
+				CombatStyle = "Ranged",
+				MaxHealth = 210,
+				Damage = 15,
+				WalkSpeed = 15.5,
+				AttackRange = 44,
+				AttackCooldown = 1.25,
+				Scale = 1.06,
+				IsBoss = false,
+				BountyGold = 115,
+				BountyExp = 42,
+				BountyRep = 18,
+				Objective = "Restaurant",
+			},
+			{
+				RoleName = "STRONG MAFIA GUNNER",
+				VisualKind = "ObsidianKnifeOrder",
+				CombatStyle = "Ranged",
+				MaxHealth = 225,
+				Damage = 16,
+				WalkSpeed = 16.0,
+				AttackRange = 46,
+				AttackCooldown = 1.2,
+				Scale = 1.06,
+				IsBoss = false,
+				BountyGold = 125,
+				BountyExp = 45,
+				BountyRep = 20,
+				Objective = "Warehouse",
+			},
+			{
+				RoleName = "STRONG MAFIA RAIDER",
+				VisualKind = "ObsidianKnifeOrder",
+				CombatStyle = "Ranged",
+				MaxHealth = 210,
+				Damage = 15,
+				WalkSpeed = 16.0,
+				AttackRange = 44,
+				AttackCooldown = 1.25,
+				Scale = 1.05,
+				IsBoss = false,
+				BountyGold = 115,
+				BountyExp = 42,
+				BountyRep = 18,
+				Objective = "Warehouse",
+			},
+			{
+				RoleName = "STRONG MAFIA CAPO",
+				VisualKind = "CrimsonDonBoss",
+				CombatStyle = "Ranged",
+				MaxHealth = 330,
+				Damage = 20,
+				WalkSpeed = 15.5,
+				AttackRange = 48,
+				AttackCooldown = 1.1,
+				Scale = 1.14,
+				IsBoss = true,
+				BountyGold = 210,
+				BountyExp = 75,
+				BountyRep = 35,
+				Objective = "Restaurant",
+			},
+		},
+	},
+	EliteMafia = {
+		Id = "EliteMafia",
+		DisplayName = "Elite Mafia",
+		ShortTag = "ELITE MAFIA",
+		AccentColor = Color3.fromRGB(238, 186, 62),
+		MinRestaurantLevel = 4,
+		SelectionWeight = 10,
+		PenaltyResource = "Money",
+		MaxIngredientsToSteal = 12,
+		BreachRateMultiplier = 1.25,
+		DefenseRewardGold = 780,
+		DefenseRewardExp = 275,
+		DefenseRewardRep = 95,
+		Squad = {
+			{
+				RoleName = "ELITE MAFIA HITMAN",
+				VisualKind = "ApexAssassin",
+				CombatStyle = "Ranged",
+				MaxHealth = 245,
+				Damage = 18,
+				WalkSpeed = 17.5,
+				AttackRange = 50,
+				AttackCooldown = 1.1,
+				Scale = 1.05,
+				IsBoss = false,
+				BountyGold = 155,
+				BountyExp = 58,
+				BountyRep = 24,
+				Objective = "Restaurant",
+			},
+			{
+				RoleName = "ELITE MAFIA HITMAN",
+				VisualKind = "ApexAssassin",
+				CombatStyle = "Ranged",
+				MaxHealth = 245,
+				Damage = 18,
+				WalkSpeed = 17.5,
+				AttackRange = 50,
+				AttackCooldown = 1.1,
+				Scale = 1.05,
+				IsBoss = false,
+				BountyGold = 155,
+				BountyExp = 58,
+				BountyRep = 24,
+				Objective = "Warehouse",
+			},
+			{
+				RoleName = "ELITE NINJA VANGUARD",
+				VisualKind = "NinjaMafia",
+				CombatStyle = "Melee",
+				MaxHealth = 205,
+				Damage = 20,
+				WalkSpeed = 23.0,
+				AttackRange = 9.5,
+				AttackCooldown = 0.75,
+				Scale = 1.04,
+				IsBoss = false,
+				BountyGold = 165,
+				BountyExp = 62,
+				BountyRep = 26,
+				Objective = "Warehouse",
+			},
+			{
+				RoleName = "ELITE MAFIA WARLORD",
+				VisualKind = "ApexWarlord",
+				CombatStyle = "Ranged",
+				MaxHealth = 420,
+				Damage = 24,
+				WalkSpeed = 16.0,
+				AttackRange = 52,
+				AttackCooldown = 1.0,
+				Scale = 1.18,
+				IsBoss = true,
+				BountyGold = 320,
+				BountyExp = 115,
+				BountyRep = 52,
+				Objective = "Restaurant",
+			},
+		},
+	},
 }
 
 local RestaurantSecurityConfig: RestaurantSecurityConfigType = {
@@ -30,6 +468,182 @@ local RestaurantSecurityConfig: RestaurantSecurityConfigType = {
 		UnhappyPauseSeconds = 1.4,
 		ReplacementSpawnDelay = 3.5,
 		MaxQuickServeCookSeconds = 8.5,
+	},
+	NightRaids = {
+		Enabled = true,
+		BaseRaidChance = 0.42, -- Genuinely random on eligible nights (NOT every night!)
+		ChancePerRestaurantLevel = 0.02,
+		MaxRaidChance = 0.65,
+		MinNightDelaySeconds = 12,
+		MaxNightDelaySeconds = 26,
+		NewPlayerGraceSeconds = 75,
+		RaidCooldownSeconds = 300, -- 5 min real-time cooldown after a raid resolves
+		MinNightsBetweenRaids = 1, -- Guarantees at least 1 peaceful night between raids
+		MaxConcurrentRaidsPerBase = 1,
+		WarningLeadSeconds = 8, -- Pre-attack warning window before raiders spawn (Stage 4)
+		MaxRaidDurationSeconds = 95,
+		BreachDurationSeconds = 34,
+		PenaltyPercent = 0.20, -- Exact 20% of Money OR Reputation (never both!)
+		OutcomeMode = "PerGroup", -- "Money" | "Reputation" | "PerGroup"
+		EnableWarehouseTheft = true,
+		WarehouseTheftPercent = 0.25, -- Steals up to 25% of stored stock, capped at squad MaxIngredientsToSteal
+		WarehouseTheftOnlyUnlocked = true,
+		OutcomeBannerDurationSeconds = 7.5,
+		GroupOrder = { "NormalMafia", "NinjaMafia", "StrongMafia", "EliteMafia" },
+		Groups = RaidGroups,
+	},
+	RaidAlarm = {
+		SoundId = "rbxassetid://9113719289", -- Official ProSoundEffects Alarm Yelp (verified public free asset)
+		FallbackSoundId = "rbxasset://sounds/electronicpingshort.wav", -- Built-in Roblox fallback
+		Volume = 0.55,
+		PlaybackSpeed = 1.0,
+		LoopedDuringWarning = true,
+		MinRetriggerSeconds = 5, -- Prevents alarm spam / rapid re-triggers
+		TitleText = "WARNING! MAFIA RAID DETECTED!",
+		SubtitleText = "Enemies are approaching your restaurant!",
+		DetailText = "Protect your money and warehouse supplies!",
+	},
+	-- Separate configurable health & combat scaling for Players vs Companions vs Enemies.
+	-- Companions NEVER copy player HP and stay strictly lower than PlayerDefaultMaxHealth (100) by default!
+	CombatBalance = {
+		PlayerDefaultMaxHealth = 100,
+		CompanionHealthScale = 1.0,
+		EnemyDamageScale = 1.0,
+	},
+	HiredCompanions = {
+		Enabled = true,
+		AllowedDurationsMinutes = { 5, 10 },
+		RespawnDelaySeconds = 20, -- Exact 20-second respawn while contract remains active
+		MaxActiveContractsPerPlayer = 4,
+		AllowDuplicateTypesPerPlayer = false, -- Prevents multiple copies of the same hired companion
+		TypeOrder = { "Ninja", "Assassin", "Bodyguard", "EliteBodyguard" },
+		Types = {
+			Ninja = {
+				Id = "Ninja",
+				DisplayName = "Shadow Ninja",
+				ShortTitle = "HIRED NINJA",
+				RoleTag = "FAST INTERCEPTOR",
+				Description = "Fast movement, strikes nearby Mafia with dual blades & pursues within the restaurant defense perimeter.",
+				AccentColor = Color3.fromRGB(168, 85, 247),
+				MaxHealth = 68, -- < 100 Player HP
+				Damage = 18,
+				AttackCooldown = 0.72,
+				AttackRange = 9.5,
+				WalkSpeed = 23.5,
+				DamageReduction = 0.0,
+				DetectionRadius = 74,
+				PursuitLimitRadius = 96,
+				CombatStyle = "Melee",
+				AssignedPost = "PlazaPatrol",
+				VisualKind = "NinjaGuard",
+				PreviewCategory = "Bodyguard",
+				PreviewId = "NinjaGuard",
+				Scale = 0.98,
+				Cost5Min = 600,
+				Cost10Min = 1050,
+				Robux5Min = 19,
+				Robux10Min = 35,
+			},
+			Assassin = {
+				Id = "Assassin",
+				DisplayName = "Crimson Assassin",
+				ShortTitle = "HIRED ASSASSIN",
+				RoleTag = "HIGH-DPS STRIKER",
+				Description = "High attack damage with rapid lethal strikes. Pricier contract that shreds Mafia & Ninja raiders quickly.",
+				AccentColor = Color3.fromRGB(224, 58, 76),
+				MaxHealth = 62, -- < 100 Player HP (glass-cannon high DPS)
+				Damage = 28,
+				AttackCooldown = 0.52,
+				AttackRange = 10.5,
+				WalkSpeed = 25.0,
+				DamageReduction = 0.0,
+				DetectionRadius = 82,
+				PursuitLimitRadius = 104,
+				CombatStyle = "Melee",
+				AssignedPost = "WarehouseFlank",
+				VisualKind = "ApexAssassin",
+				PreviewCategory = "Bodyguard",
+				PreviewId = "CrimsonAssassin",
+				Scale = 1.0,
+				Cost5Min = 1450,
+				Cost10Min = 2550,
+				Robux5Min = 39,
+				Robux10Min = 69,
+			},
+			Bodyguard = {
+				Id = "Bodyguard",
+				DisplayName = "Restaurant Bodyguard",
+				ShortTitle = "HIRED BODYGUARD",
+				RoleTag = "ENTRANCE DEFENDER",
+				Description = "Protects your restaurant entrance, prioritizes defending the front gate & engages incoming Mafia threats.",
+				AccentColor = Color3.fromRGB(66, 152, 232),
+				MaxHealth = 82, -- < 100 Player HP
+				Damage = 15,
+				AttackCooldown = 0.92,
+				AttackRange = 42,
+				WalkSpeed = 16.5,
+				DamageReduction = 0.08,
+				DetectionRadius = 68,
+				PursuitLimitRadius = 78,
+				CombatStyle = "Ranged",
+				AssignedPost = "Entrance",
+				VisualKind = "BasicGuard",
+				PreviewCategory = "Bodyguard",
+				PreviewId = "BasicGuard",
+				Scale = 1.02,
+				Cost5Min = 750,
+				Cost10Min = 1300,
+				Robux5Min = 25,
+				Robux10Min = 45,
+			},
+			EliteBodyguard = {
+				Id = "EliteBodyguard",
+				DisplayName = "Elite Bodyguard",
+				ShortTitle = "ELITE BODYGUARD",
+				RoleTag = "HEAVY DEFENDER",
+				Description = "Armored heavy defender with higher survivability & stronger firepower protecting your entrance and vault.",
+				AccentColor = Color3.fromRGB(238, 186, 56),
+				MaxHealth = 95, -- Strictly < 100 Player HP (highest companion survivability without invincibility!)
+				Damage = 22,
+				AttackCooldown = 0.78,
+				AttackRange = 48,
+				WalkSpeed = 17.5,
+				DamageReduction = 0.18,
+				DetectionRadius = 76,
+				PursuitLimitRadius = 86,
+				CombatStyle = "Ranged",
+				AssignedPost = "EntranceAndVault",
+				VisualKind = "HeavyGuard",
+				PreviewCategory = "Bodyguard",
+				PreviewId = "HeavyGuard",
+				Scale = 1.08,
+				Cost5Min = 1900,
+				Cost10Min = 3350,
+				Robux5Min = 49,
+				Robux10Min = 89,
+			},
+		},
+	},
+	-- Stage 6: Restaurant Defense AI priorities, obstacle navigation & hard property leash
+	-- Matched to physical Castle Base walls: local X in [-164..164], rear Z=-172, GrandFrontGate Z=+109
+	DefenseAI = {
+		TickInterval = 0.25,
+		MaxBaseDefenseRadius = 198, -- Covers rear corner warehouses (dist ~147) while local box locks to base walls
+		BaseLocalBoundsX = 152,
+		BaseLocalBoundsMinZ = -162, -- Covers all 4 rear Ingredient Warehouses (local Z=-128) cleanly
+		BaseLocalBoundsMaxZ = 122, -- Stops right at GrandFrontGate (Z=+109); never chases into city!
+		RestaurantThreatRadius = 56, -- Priority 1: Mafia attacking/inside Restaurant HQ & Pavilion
+		StorageThreatRadius = 62, -- Priority 2: Threats near Warehouses & Money Counter storage
+		EntranceThreatRadius = 68, -- Priority 3: Threats approaching Front Gate / Entrance
+		PostReturnTolerance = 4.2, -- Priority 4: Return smoothly to assigned defensive post
+		PostRefreshInterval = 6.0,
+		ObstacleRayHeight = 2.6,
+		PathRecomputeInterval = 1.5,
+		StuckDistanceThreshold = 0.65,
+		StuckTimeoutSeconds = 1.6,
+		HardUnstickSeconds = 5.5,
+		RangedPreferredHoldRatio = 0.78,
+		RangedLOSRequired = true,
 	},
 }
 
