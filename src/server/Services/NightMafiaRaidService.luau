@@ -144,21 +144,22 @@ local aiThread: thread? = nil
 local nightConn: RBXScriptConnection? = nil
 local playerAddedConn: RBXScriptConnection? = nil
 local playerRemovingConn: RBXScriptConnection? = nil
+local unsubBaseReleased: (() -> ())? = nil
 local testBridge: BindableFunction? = nil
 
 local nightCycleId = 0
 local raidSerial = 0
 
 local playerJoinedAt: { [Player]: number } = {}
-local lastEvaluatedNightCycle: { [Player]: number } = {}
-local lastRaidEndedAt: { [Player]: number } = {}
-local lastRaidNightCycle: { [Player]: number } = {}
-local activeRaidsByPlayer: { [Player]: ActiveRaid } = {}
-local pendingRaidByPlayer: { [Player]: thread } = {}
-local warningStateByPlayer: { [Player]: RaidWarningPayload } = {}
+local lastEvaluatedNightCycle: { [BaseService.BaseSlot]: number } = {}
+local lastRaidEndedAt: { [BaseService.BaseSlot]: number } = {}
+local lastRaidNightCycle: { [BaseService.BaseSlot]: number } = {}
+local activeRaidsBySlot: { [BaseService.BaseSlot]: ActiveRaid } = {}
+local pendingRaidBySlot: { [BaseService.BaseSlot]: thread } = {}
+local warningStateBySlot: { [BaseService.BaseSlot]: RaidWarningPayload } = {}
 local lastAlertPhaseKeyByPlayer: { [Player]: string } = {}
 local resolvedRaidIds: { [string]: boolean } = {}
-local lastResultByPlayer: { [Player]: RaidResultSummary } = {}
+local lastResultBySlot: { [BaseService.BaseSlot]: RaidResultSummary } = {}
 local raidAlertRemote: RemoteEvent? = nil
 
 local warningListeners: { (payload: RaidWarningPayload) -> () } = {}
@@ -203,7 +204,7 @@ local function getAffectedRestaurantName(player: Player, slot: BaseService.BaseS
 	return string.format("%s Restaurant (%s)", slot, bistroName)
 end
 
--- Owner-only alert remote with deduplication by raidId:phase (prevents alarm spam & duplicates)
+-- Owner-team alert remote with deduplication by raidId:phase (notifies ALL co-op partners in the targeted base!)
 local function fireOwnerRaidAlert(player: Player, payload: { [string]: any }): ()
 	if not player.Parent then
 		return
@@ -222,6 +223,12 @@ local function fireOwnerRaidAlert(player: Player, payload: { [string]: any }): (
 	ev:FireClient(player, payload)
 end
 
+local function fireBaseRaidAlert(slot: BaseService.BaseSlot, payload: { [string]: any }): ()
+	for _, member in ipairs(BaseService.GetBasePlayers(slot)) do
+		fireOwnerRaidAlert(member, payload)
+	end
+end
+
 local function sendToast(player: Player, msg: string): ()
 	if not player.Parent then
 		return
@@ -230,6 +237,12 @@ local function sendToast(player: Player, msg: string): ()
 	local ev = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
 	if ev and ev:IsA("RemoteEvent") then
 		ev:FireClient(player, msg)
+	end
+end
+
+local function sendBaseToast(slot: BaseService.BaseSlot, msg: string): ()
+	for _, member in ipairs(BaseService.GetBasePlayers(slot)) do
+		sendToast(member, msg)
 	end
 end
 
@@ -268,18 +281,18 @@ local function syncBaseRaidAttributes(baseModel: Model?, raid: ActiveRaid?, aliv
 	end
 end
 
-local function clearPendingRoll(player: Player, cancelReason: string?): ()
-	local th = pendingRaidByPlayer[player]
+local function clearPendingRollForSlot(slot: BaseService.BaseSlot, cancelReason: string?): ()
+	local th = pendingRaidBySlot[slot]
 	if th then
-		pendingRaidByPlayer[player] = nil
+		pendingRaidBySlot[slot] = nil
 		if coroutine.running() ~= th then
 			pcall(task.cancel, th)
 		end
 	end
-	local prevWarn = warningStateByPlayer[player]
-	warningStateByPlayer[player] = nil
+	local prevWarn = warningStateBySlot[slot]
+	warningStateBySlot[slot] = nil
 	if prevWarn and cancelReason ~= nil then
-		fireOwnerRaidAlert(player, {
+		fireBaseRaidAlert(slot, {
 			Phase = "Cancelled",
 			RaidId = prevWarn.RaidId,
 			GroupId = prevWarn.GroupId,
@@ -327,7 +340,7 @@ local function computeBaseWaypoints(baseModel: Model, slot: BaseService.BaseSlot
 	end
 
 	-- Warehouse attack zone: pick an unlocked WarehousePlot (preferring one that holds stock!)
-	local whPos = (baseCF * CFrame.new(-42, 0, -76)).Position
+	local whPos = (baseCF * CFrame.new(-36, 0, -112)).Position
 	whPos = Vector3.new(whPos.X, 4, whPos.Z)
 	local bestStock = -1
 	local inv = WarehouseService.GetInventorySnapshot(owner)
@@ -342,10 +355,10 @@ local function computeBaseWaypoints(baseModel: Model, slot: BaseService.BaseSlot
 					local catTotal = inv.CategoryTotals[cat] or 0
 					if catTotal > bestStock then
 						bestStock = catTotal
-						-- Stand just in front of the CargoDoor facing the base center
-						local toCenter = Vector3.new(baseCenter.X - pad.Position.X, 0, baseCenter.Z - pad.Position.Z)
-						local frontDir = if toCenter.Magnitude > 1 then toCenter.Unit else Vector3.new(0, 0, 1)
-						whPos = Vector3.new(pad.Position.X, 4, pad.Position.Z) + frontDir * 14
+						-- Stand just in front of the CargoDoor apron (+22 studs along base +Z toward plaza)
+						local toPlaza = Vector3.new(baseCenter.X - pad.Position.X, 0, baseCenter.Z - pad.Position.Z)
+						local frontDir = if toPlaza.Magnitude > 1 then toPlaza.Unit else Vector3.new(0, 0, 1)
+						whPos = Vector3.new(pad.Position.X, 4, pad.Position.Z) + frontDir * 22
 					end
 				end
 			end
@@ -481,6 +494,10 @@ local function spawnRaiderUnit(
 	model:SetAttribute("RaidGroup", groupSpec.Id)
 	model:SetAttribute("RaidGroupName", groupSpec.DisplayName)
 	model:SetAttribute("RaidOwnerUserId", owner.UserId)
+	local ownerSlot = BaseService.GetPlayerBaseSlot(owner)
+	if ownerSlot then
+		model:SetAttribute("RaidBaseSlot", ownerSlot)
+	end
 	model:SetAttribute("RaidObjective", tpl.Objective)
 	model:SetAttribute("RaidRole", tpl.RoleName)
 	model:SetAttribute("MafiaTitle", tpl.RoleName)
@@ -538,32 +555,34 @@ local function destroyRemainingRaidUnits(raid: ActiveRaid): ()
 end
 
 local function finalizeRaid(raid: ActiveRaid, summary: RaidResultSummary, setCooldown: boolean): ()
-	if activeRaidsByPlayer[raid.Owner] == raid then
-		activeRaidsByPlayer[raid.Owner] = nil
+	local slot = raid.BaseSlot
+	if activeRaidsBySlot[slot] == raid then
+		activeRaidsBySlot[slot] = nil
 	end
-	warningStateByPlayer[raid.Owner] = nil
+	warningStateBySlot[slot] = nil
 	syncBaseRaidAttributes(raid.BaseModel, nil, 0)
 
-	if setCooldown and raid.Owner.Parent then
-		lastRaidEndedAt[raid.Owner] = os.clock()
-		lastRaidNightCycle[raid.Owner] = raid.NightCycleId
+	if setCooldown and BaseService.GetBasePlayerCount(slot) > 0 then
+		lastRaidEndedAt[slot] = os.clock()
+		lastRaidNightCycle[slot] = raid.NightCycleId
 	end
 
 	destroyRemainingRaidUnits(raid)
-	lastResultByPlayer[raid.Owner] = summary
+	lastResultBySlot[slot] = summary
 
 	local stolenText = if summary.TotalIngredientsStolen > 0
 		then formatStolenIngredients(summary.StolenIngredients)
 		else ""
 	local cfg = getCfg()
+	local lead = BaseService.GetBaseLeadPlayer(slot) or raid.Owner
 
-	fireOwnerRaidAlert(raid.Owner, {
+	fireBaseRaidAlert(slot, {
 		Phase = "Ended",
 		RaidId = raid.RaidId,
 		GroupId = raid.GroupSpec.Id,
 		GroupName = raid.GroupSpec.DisplayName,
-		BaseSlot = raid.BaseSlot,
-		RestaurantName = getAffectedRestaurantName(raid.Owner, raid.BaseSlot),
+		BaseSlot = slot,
+		RestaurantName = getAffectedRestaurantName(lead, slot),
 		Outcome = summary.Outcome,
 		PenaltyResource = summary.PenaltyResource,
 		CoinsLost = summary.CoinsLost,
@@ -590,30 +609,34 @@ local function resolveRaidDefeated(raid: ActiveRaid): ()
 	resolvedRaidIds[raid.RaidId] = true
 
 	local g = raid.GroupSpec
-	local owner = raid.Owner
+	local slot = raid.BaseSlot
+	local members = BaseService.GetBasePlayers(slot)
+	local lead = members[1] or raid.Owner
 	local rGold, rExp, rRep = 0, 0, 0
-	if owner.Parent then
+	if #members > 0 then
 		rGold = g.DefenseRewardGold
 		rExp = g.DefenseRewardExp
 		rRep = g.DefenseRewardRep
-		PlayerDataService.AddRewards(owner, rGold, rExp, rRep)
-		sendToast(
-			owner,
-			string.format(
-				"RESTAURANT PROTECTED! You defeated the %s Night Raid! (+%dG, +%d Rep)",
-				g.DisplayName,
-				rGold,
-				rRep
+		for _, member in ipairs(members) do
+			PlayerDataService.AddRewards(member, rGold, rExp, rRep)
+			sendToast(
+				member,
+				string.format(
+					"RESTAURANT PROTECTED! Your team defeated the %s Night Raid! (+%dG, +%d Rep)",
+					g.DisplayName,
+					rGold,
+					rRep
+				)
 			)
-		)
+		end
 	end
 
 	print(
 		string.format(
-			"[NightMafiaRaidService] Raid %s (%s) on %s DEFEATED! Rewarded +%dG +%dRep.",
+			"[NightMafiaRaidService] Raid %s (%s) on %s Base DEFEATED! Rewarded +%dG +%dRep.",
 			raid.RaidId,
 			g.DisplayName,
-			owner.Name,
+			slot,
 			rGold,
 			rRep
 		)
@@ -621,8 +644,8 @@ local function resolveRaidDefeated(raid: ActiveRaid): ()
 
 	finalizeRaid(raid, {
 		RaidId = raid.RaidId,
-		OwnerUserId = owner.UserId,
-		BaseSlot = raid.BaseSlot,
+		OwnerUserId = lead.UserId,
+		BaseSlot = slot,
 		GroupId = g.Id,
 		GroupName = g.DisplayName,
 		Outcome = "Defeated",
@@ -646,54 +669,63 @@ local function resolveRaidSucceeded(raid: ActiveRaid): ()
 
 	local cfg = getCfg()
 	local g = raid.GroupSpec
-	local owner = raid.Owner
+	local slot = raid.BaseSlot
+	local members = BaseService.GetBasePlayers(slot)
+	local lead = members[1] or raid.Owner
 	local penaltyResource = pickPenaltyResource(g)
 	local coinsLost = 0
 	local repLost = 0
 	local stolenMap: { [string]: number } = {}
 	local totalStolen = 0
 
-	if owner.Parent then
-		local profile = PlayerDataService.GetProfile(owner)
+	if #members > 0 then
 		local pct = math.clamp(cfg.PenaltyPercent, 0, 0.5)
 
-		-- Strictly deduct 20% of Money OR 20% of Reputation — NEVER both!
-		if penaltyResource == "Money" then
-			local rawLoss = math.floor(math.max(0, profile.Coins) * pct)
-			coinsLost = PlayerDataService.DeductCoinsClamped(owner, rawLoss)
-		else
-			local rawLoss = math.floor(math.max(0, profile.Reputation) * pct)
-			repLost = PlayerDataService.DeductReputation(owner, rawLoss)
-		end
-
-		-- Configurable theft of actually stored unlocked warehouse ingredients (never negative, never Robux items!)
+		-- Steal stored warehouse ingredients ONCE from the shared base warehouse!
 		if cfg.EnableWarehouseTheft and g.MaxIngredientsToSteal > 0 then
 			stolenMap, totalStolen = WarehouseService.StealRandomStoredIngredients(
-				owner,
+				lead,
 				g.MaxIngredientsToSteal,
 				cfg.WarehouseTheftPercent,
 				cfg.WarehouseTheftOnlyUnlocked
 			)
 		end
 
-		local penaltyText = if penaltyResource == "Money"
-			then string.format("-%d Gold (20%%)", coinsLost)
-			else string.format("-%d Reputation (20%%)", repLost)
 		local theftText = if totalStolen > 0
 			then (" | Stole: " .. formatStolenIngredients(stolenMap))
 			else " | Warehouse empty (0 supplies stolen)"
-		sendToast(
-			owner,
-			string.format("NIGHT RAID FAILED! %s robbed your restaurant: %s%s", g.DisplayName, penaltyText, theftText)
-		)
+
+		for _, member in ipairs(members) do
+			local profile = PlayerDataService.GetProfile(member)
+			local mCoinsLost = 0
+			local mRepLost = 0
+			-- Strictly deduct 20% of Money OR 20% of Reputation — NEVER both!
+			if penaltyResource == "Money" then
+				local rawLoss = math.floor(math.max(0, profile.Coins) * pct)
+				mCoinsLost = PlayerDataService.DeductCoinsClamped(member, rawLoss)
+				coinsLost = math.max(coinsLost, mCoinsLost)
+			else
+				local rawLoss = math.floor(math.max(0, profile.Reputation) * pct)
+				mRepLost = PlayerDataService.DeductReputation(member, rawLoss)
+				repLost = math.max(repLost, mRepLost)
+			end
+
+			local penaltyText = if penaltyResource == "Money"
+				then string.format("-%d Gold (20%%)", mCoinsLost)
+				else string.format("-%d Reputation (20%%)", mRepLost)
+			sendToast(
+				member,
+				string.format("NIGHT RAID FAILED! %s robbed your base: %s%s", g.DisplayName, penaltyText, theftText)
+			)
+		end
 	end
 
 	print(
 		string.format(
-			"[NightMafiaRaidService] Raid %s (%s) on %s SUCCEEDED: resource=%s coinsLost=%d repLost=%d ingredientsStolen=%d",
+			"[NightMafiaRaidService] Raid %s (%s) on %s Base SUCCEEDED: resource=%s coinsLost=%d repLost=%d ingredientsStolen=%d",
 			raid.RaidId,
 			g.DisplayName,
-			owner.Name,
+			slot,
 			penaltyResource,
 			coinsLost,
 			repLost,
@@ -703,8 +735,8 @@ local function resolveRaidSucceeded(raid: ActiveRaid): ()
 
 	finalizeRaid(raid, {
 		RaidId = raid.RaidId,
-		OwnerUserId = owner.UserId,
-		BaseSlot = raid.BaseSlot,
+		OwnerUserId = lead.UserId,
+		BaseSlot = slot,
 		GroupId = g.Id,
 		GroupName = g.DisplayName,
 		Outcome = "Succeeded",
@@ -727,20 +759,21 @@ local function resolveRaidRetreated(raid: ActiveRaid, outcome: "RetreatedDawn" |
 	resolvedRaidIds[raid.RaidId] = true
 
 	local g = raid.GroupSpec
-	local owner = raid.Owner
-	if owner.Parent and outcome == "RetreatedDawn" then
-		sendToast(
-			owner,
+	local slot = raid.BaseSlot
+	local lead = BaseService.GetBaseLeadPlayer(slot) or raid.Owner
+	if outcome == "RetreatedDawn" then
+		sendBaseToast(
+			slot,
 			string.format("SUNRISE! The %s squad retreated before completing their heist!", g.DisplayName)
 		)
 	end
 
 	print(
 		string.format(
-			"[NightMafiaRaidService] Raid %s (%s) on %s ended (%s: %s).",
+			"[NightMafiaRaidService] Raid %s (%s) on %s Base ended (%s: %s).",
 			raid.RaidId,
 			g.DisplayName,
-			owner.Name,
+			slot,
 			outcome,
 			reasonText or "cleanup"
 		)
@@ -748,8 +781,8 @@ local function resolveRaidRetreated(raid: ActiveRaid, outcome: "RetreatedDawn" |
 
 	finalizeRaid(raid, {
 		RaidId = raid.RaidId,
-		OwnerUserId = owner.UserId,
-		BaseSlot = raid.BaseSlot,
+		OwnerUserId = lead.UserId,
+		BaseSlot = slot,
 		GroupId = g.Id,
 		GroupName = g.DisplayName,
 		Outcome = outcome,
@@ -885,9 +918,15 @@ local function stepActiveRaid(raid: ActiveRaid, now: number, dt: number): ()
 		return
 	end
 
-	if not raid.Owner.Parent or not raid.BaseModel.Parent then
-		resolveRaidRetreated(raid, "Cancelled", "owner_left")
+	if BaseService.GetBasePlayerCount(raid.BaseSlot) == 0 or not raid.BaseModel.Parent then
+		resolveRaidRetreated(raid, "Cancelled", "base_empty")
 		return
+	end
+	if not raid.Owner.Parent then
+		local lead = BaseService.GetBaseLeadPlayer(raid.BaseSlot)
+		if lead then
+			raid.Owner = lead
+		end
 	end
 
 	if not raid.IgnoreDaylight and not DayNightService.IsNight() then
@@ -1018,13 +1057,15 @@ local function selectWeightedGroupForPlayer(player: Player): RestaurantSecurityC
 end
 
 function NightMafiaRaidService.IsRaidActive(player: Player): boolean
-	local raid = activeRaidsByPlayer[player]
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local raid = if slot then activeRaidsBySlot[slot] else nil
 	return raid ~= nil and not raid.Resolved
 end
 
 function NightMafiaRaidService.GetActiveRaidUnitsForPlayer(player: Player): { Model }
 	local out: { Model } = {}
-	local raid = activeRaidsByPlayer[player]
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local raid = if slot then activeRaidsBySlot[slot] else nil
 	if not raid or raid.Resolved then
 		return out
 	end
@@ -1039,10 +1080,11 @@ end
 function NightMafiaRaidService.GetSnapshot(player: Player): RaidSnapshot
 	local cfg = getCfg()
 	local now = os.clock()
-	local lastEnd = lastRaidEndedAt[player]
+	local curSlot = BaseService.GetPlayerBaseSlot(player)
+	local lastEnd = if curSlot then lastRaidEndedAt[curSlot] else nil
 	local cdRem = if lastEnd then math.max(0, math.ceil(cfg.RaidCooldownSeconds - (now - lastEnd))) else 0
 
-	local raid = activeRaidsByPlayer[player]
+	local raid = if curSlot then activeRaidsBySlot[curSlot] else nil
 	if raid and not raid.Resolved then
 		local alive = 0
 		for _, u in ipairs(raid.Units) do
@@ -1067,7 +1109,7 @@ function NightMafiaRaidService.GetSnapshot(player: Player): RaidSnapshot
 		}
 	end
 
-	local warnState = warningStateByPlayer[player]
+	local warnState = if curSlot then warningStateBySlot[curSlot] else nil
 	if warnState then
 		return {
 			IsActive = false,
@@ -1086,7 +1128,6 @@ function NightMafiaRaidService.GetSnapshot(player: Player): RaidSnapshot
 		}
 	end
 
-	local curSlot = BaseService.GetPlayerBaseSlot(player)
 	return {
 		IsActive = false,
 		Phase = "Idle",
@@ -1119,21 +1160,27 @@ function NightMafiaRaidService.EvaluateNightEligibility(player: Player, ignoreGr
 	if not slot or not BaseService.GetBaseModel(slot) then
 		return false, "No claimed restaurant base"
 	end
-	if activeRaidsByPlayer[player] ~= nil or warningStateByPlayer[player] ~= nil then
+	if activeRaidsBySlot[slot] ~= nil or warningStateBySlot[slot] ~= nil then
 		return false, "Raid already active or pending on this restaurant"
 	end
 	local now = os.clock()
 	if not ignoreGrace then
-		local joined = playerJoinedAt[player] or now
-		if (now - joined) < cfg.NewPlayerGraceSeconds then
-			return false, string.format("New player grace (%ds left)", math.ceil(cfg.NewPlayerGraceSeconds - (now - joined)))
+		local earliestJoin = playerJoinedAt[player] or now
+		for _, m in ipairs(BaseService.GetBasePlayers(slot)) do
+			local j = playerJoinedAt[m]
+			if j and j < earliestJoin then
+				earliestJoin = j
+			end
+		end
+		if (now - earliestJoin) < cfg.NewPlayerGraceSeconds then
+			return false, string.format("New player grace (%ds left)", math.ceil(cfg.NewPlayerGraceSeconds - (now - earliestJoin)))
 		end
 	end
-	local lastEnd = lastRaidEndedAt[player]
+	local lastEnd = lastRaidEndedAt[slot]
 	if lastEnd and (now - lastEnd) < cfg.RaidCooldownSeconds then
 		return false, string.format("Raid cooldown (%ds left)", math.ceil(cfg.RaidCooldownSeconds - (now - lastEnd)))
 	end
-	local lastNight = lastRaidNightCycle[player]
+	local lastNight = lastRaidNightCycle[slot]
 	if lastNight and nightCycleId > 0 and (nightCycleId - lastNight) <= cfg.MinNightsBetweenRaids then
 		return false, "Protected peaceful night between raids"
 	end
@@ -1154,7 +1201,14 @@ function NightMafiaRaidService.StartRaidForPlayer(
 	if not opts.IgnoreDaylight and not DayNightService.IsNight() then
 		return false, "Night Mafia Raids can only occur at night"
 	end
-	if activeRaidsByPlayer[player] ~= nil or warningStateByPlayer[player] ~= nil then
+
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local baseModel = if slot then BaseService.GetBaseModel(slot) else nil
+	if not slot or not baseModel then
+		return false, "Player does not own a restaurant base yet"
+	end
+
+	if activeRaidsBySlot[slot] ~= nil or warningStateBySlot[slot] ~= nil then
 		return false, "A raid or raid warning is already active against this restaurant"
 	end
 	if not opts.IgnoreCooldown then
@@ -1162,12 +1216,6 @@ function NightMafiaRaidService.StartRaidForPlayer(
 		if not okElig then
 			return false, reason
 		end
-	end
-
-	local slot = BaseService.GetPlayerBaseSlot(player)
-	local baseModel = if slot then BaseService.GetBaseModel(slot) else nil
-	if not slot or not baseModel then
-		return false, "Player does not own a restaurant base yet"
 	end
 
 	local groupSpec: RestaurantSecurityConfig.RaidGroupSpec? = nil
@@ -1180,9 +1228,9 @@ function NightMafiaRaidService.StartRaidForPlayer(
 		return false, "Invalid raid group"
 	end
 
-	clearPendingRoll(player, nil)
+	clearPendingRollForSlot(slot, nil)
 	raidSerial += 1
-	local raidId = string.format("NR_%d_%d", player.UserId, raidSerial)
+	local raidId = string.format("NR_%s_%d", slot, raidSerial)
 	local restaurantName = getAffectedRestaurantName(player, slot)
 	local leadSec = if opts.SkipWarning
 		then 0
@@ -1201,13 +1249,14 @@ function NightMafiaRaidService.StartRaidForPlayer(
 	}
 
 	local function spawnSquadNow(): (boolean, string)
-		if not player.Parent or not baseModel.Parent then
-			warningStateByPlayer[player] = nil
-			return false, "Player or base unavailable"
+		local leadPlr = BaseService.GetBaseLeadPlayer(slot)
+		if not leadPlr or not baseModel.Parent then
+			warningStateBySlot[slot] = nil
+			return false, "Base unavailable or empty"
 		end
 		if not opts.IgnoreDaylight and not DayNightService.IsNight() then
-			warningStateByPlayer[player] = nil
-			fireOwnerRaidAlert(player, {
+			warningStateBySlot[slot] = nil
+			fireBaseRaidAlert(slot, {
 				Phase = "Cancelled",
 				RaidId = raidId,
 				GroupId = groupSpec.Id,
@@ -1218,12 +1267,12 @@ function NightMafiaRaidService.StartRaidForPlayer(
 			})
 			return false, "Daybreak cancelled raid"
 		end
-		if activeRaidsByPlayer[player] ~= nil then
-			warningStateByPlayer[player] = nil
+		if activeRaidsBySlot[slot] ~= nil then
+			warningStateBySlot[slot] = nil
 			return false, "A raid is already active against this restaurant"
 		end
 
-		local baseCenter, gatePos, restPos, whPos, baseCF = computeBaseWaypoints(baseModel, slot, player)
+		local baseCenter, gatePos, restPos, whPos, baseCF = computeBaseWaypoints(baseModel, slot, leadPlr)
 		local units: { RaiderUnit } = {}
 		local squadCount = #groupSpec.Squad
 
@@ -1236,14 +1285,14 @@ function NightMafiaRaidService.StartRaidForPlayer(
 				then CFrame.lookAt(groundedPos, lookTarget)
 				else CFrame.new(groundedPos)
 			local objPos = if tpl.Objective == "Warehouse" then whPos else restPos
-			local unit = spawnRaiderUnit(raidId, player, groupSpec, tpl, idx, spawnCF, objPos)
+			local unit = spawnRaiderUnit(raidId, leadPlr, groupSpec, tpl, idx, spawnCF, objPos)
 			table.insert(units, unit)
 		end
 
 		local now = os.clock()
 		local raid: ActiveRaid = {
 			RaidId = raidId,
-			Owner = player,
+			Owner = leadPlr,
 			BaseSlot = slot,
 			BaseModel = baseModel,
 			GroupSpec = groupSpec,
@@ -1260,12 +1309,12 @@ function NightMafiaRaidService.StartRaidForPlayer(
 			IgnoreDaylight = opts.IgnoreDaylight == true,
 		}
 
-		warningStateByPlayer[player] = nil
-		activeRaidsByPlayer[player] = raid
+		warningStateBySlot[slot] = nil
+		activeRaidsBySlot[slot] = raid
 		syncBaseRaidAttributes(baseModel, raid, #units)
 
-		-- Dismiss pre-attack warning banner & stop alarm now that the raid has begun!
-		fireOwnerRaidAlert(player, {
+		-- Dismiss pre-attack warning banner & stop alarm for all co-op partners!
+		fireBaseRaidAlert(slot, {
 			Phase = "Started",
 			RaidId = raidId,
 			GroupId = groupSpec.Id,
@@ -1276,10 +1325,10 @@ function NightMafiaRaidService.StartRaidForPlayer(
 			TotalCount = #units,
 		})
 
-		sendToast(
-			player,
+		sendBaseToast(
+			slot,
 			string.format(
-				"RAID UNDERWAY! %s (%d raiders) are storming %s! Defend your vault & warehouses!",
+				"RAID UNDERWAY! %s (%d raiders) are storming %s! Defend your vault & warehouses together!",
 				string.upper(groupSpec.DisplayName),
 				#units,
 				restaurantName
@@ -1288,11 +1337,10 @@ function NightMafiaRaidService.StartRaidForPlayer(
 
 		print(
 			string.format(
-				"[NightMafiaRaidService] Started %s (%s, %d units) on %s's %s Base!",
+				"[NightMafiaRaidService] Started %s (%s, %d units) on %s Co-op Base!",
 				raidId,
 				groupSpec.DisplayName,
 				#units,
-				player.Name,
 				slot
 			)
 		)
@@ -1303,11 +1351,11 @@ function NightMafiaRaidService.StartRaidForPlayer(
 		return true, string.format("Started %s raid (%d units)", groupSpec.DisplayName, #units)
 	end
 
-	-- Stage 4: Pre-attack warning & alarm period strictly for the restaurant owner!
+	-- Stage 4: Pre-attack warning & alarm period for ALL co-op partners in the targeted base!
 	if warningPayload.LeadSeconds > 0 then
-		warningStateByPlayer[player] = warningPayload
+		warningStateBySlot[slot] = warningPayload
 		local alarmCfg = RestaurantSecurityConfig.RaidAlarm
-		fireOwnerRaidAlert(player, {
+		fireBaseRaidAlert(slot, {
 			Phase = "Warning",
 			RaidId = raidId,
 			GroupId = groupSpec.Id,
@@ -1333,8 +1381,8 @@ function NightMafiaRaidService.StartRaidForPlayer(
 		for _, cb in ipairs(warningListeners) do
 			task.spawn(cb, warningPayload)
 		end
-		pendingRaidByPlayer[player] = task.delay(warningPayload.LeadSeconds, function()
-			pendingRaidByPlayer[player] = nil
+		pendingRaidBySlot[slot] = task.delay(warningPayload.LeadSeconds, function()
+			pendingRaidBySlot[slot] = nil
 			spawnSquadNow()
 		end)
 		return true, string.format("Warning active (%ds) for %s raid", warningPayload.LeadSeconds, groupSpec.DisplayName)
@@ -1366,9 +1414,13 @@ function NightMafiaRaidService.TryRollNightRaidForPlayer(player: Player, ignoreG
 end
 
 function NightMafiaRaidService.CancelRaidForPlayer(player: Player, reason: string?): boolean
-	local hadWarn = warningStateByPlayer[player] ~= nil
-	clearPendingRoll(player, reason or "manual_cancel")
-	local raid = activeRaidsByPlayer[player]
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if not slot then
+		return false
+	end
+	local hadWarn = warningStateBySlot[slot] ~= nil
+	clearPendingRollForSlot(slot, reason or "manual_cancel")
+	local raid = activeRaidsBySlot[slot]
 	if not raid or raid.Resolved then
 		return hadWarn
 	end
@@ -1406,19 +1458,23 @@ function NightMafiaRaidService.OnRaidEnded(cb: (summary: RaidResultSummary) -> (
 	end
 end
 
-local function scheduleNightEvaluationForPlayer(player: Player, cycleId: number): ()
-	if lastEvaluatedNightCycle[player] == cycleId then
+local function scheduleNightEvaluationForSlot(slot: BaseService.BaseSlot, cycleId: number): ()
+	if lastEvaluatedNightCycle[slot] == cycleId then
 		return
 	end
-	lastEvaluatedNightCycle[player] = cycleId
+	local lead = BaseService.GetBaseLeadPlayer(slot)
+	if not lead then
+		return
+	end
+	lastEvaluatedNightCycle[slot] = cycleId
 
-	local okElig, reason = NightMafiaRaidService.EvaluateNightEligibility(player, false)
+	local okElig, _ = NightMafiaRaidService.EvaluateNightEligibility(lead, false)
 	if not okElig then
 		return
 	end
 
 	local cfg = getCfg()
-	local profile = PlayerDataService.GetProfile(player)
+	local profile = PlayerDataService.GetProfile(lead)
 	local hqLevel = math.max(1, profile.RestaurantLevel or 1)
 	local chance = math.min(cfg.MaxRaidChance, cfg.BaseRaidChance + math.max(0, hqLevel - 1) * cfg.ChancePerRestaurantLevel)
 	local roll = math.random()
@@ -1426,9 +1482,9 @@ local function scheduleNightEvaluationForPlayer(player: Player, cycleId: number)
 	if roll > chance then
 		print(
 			string.format(
-				"[NightMafiaRaidService] Night #%d for %s: peaceful night (roll %.2f > %.2f).",
+				"[NightMafiaRaidService] Night #%d for %s Base: peaceful night (roll %.2f > %.2f).",
 				cycleId,
-				player.Name,
+				slot,
 				roll,
 				chance
 			)
@@ -1442,23 +1498,24 @@ local function scheduleNightEvaluationForPlayer(player: Player, cycleId: number)
 
 	print(
 		string.format(
-			"[NightMafiaRaidService] Night #%d for %s: raid rolled! Arriving in %.1fs.",
+			"[NightMafiaRaidService] Night #%d for %s Base: raid rolled! Arriving in %.1fs.",
 			cycleId,
-			player.Name,
+			slot,
 			delaySec
 		)
 	)
 
-	clearPendingRoll(player)
-	pendingRaidByPlayer[player] = task.delay(delaySec, function()
-		pendingRaidByPlayer[player] = nil
-		if not isRunning or not player.Parent or not DayNightService.IsNight() then
+	clearPendingRollForSlot(slot)
+	pendingRaidBySlot[slot] = task.delay(delaySec, function()
+		pendingRaidBySlot[slot] = nil
+		local activeLead = BaseService.GetBaseLeadPlayer(slot)
+		if not isRunning or not activeLead or not DayNightService.IsNight() then
 			return
 		end
 		if nightCycleId ~= cycleId then
 			return
 		end
-		NightMafiaRaidService.StartRaidForPlayer(player, nil, nil)
+		NightMafiaRaidService.StartRaidForPlayer(activeLead, nil, nil)
 	end)
 end
 
@@ -1467,16 +1524,16 @@ local function handleNightStateChanged(): ()
 	if isNight then
 		nightCycleId += 1
 		local thisCycle = nightCycleId
-		for _, plr in ipairs(Players:GetPlayers()) do
-			scheduleNightEvaluationForPlayer(plr, thisCycle)
+		for _, slot in ipairs(BaseService.GetSlotOrder()) do
+			scheduleNightEvaluationForSlot(slot, thisCycle)
 		end
 	else
 		-- Sunrise: cancel pending night rolls/warnings and make any active raids retreat cleanly
-		for _, plr in ipairs(Players:GetPlayers()) do
-			clearPendingRoll(plr, "sunrise")
+		for _, slot in ipairs(BaseService.GetSlotOrder()) do
+			clearPendingRollForSlot(slot, "sunrise")
 		end
 		local activeList: { ActiveRaid } = {}
-		for _, raid in pairs(activeRaidsByPlayer) do
+		for _, raid in pairs(activeRaidsBySlot) do
 			table.insert(activeList, raid)
 		end
 		for _, raid in ipairs(activeList) do
@@ -1503,6 +1560,7 @@ local function setupStudioTestBridge(): ()
 		local plr = if typeof(arg1) == "Instance" and arg1:IsA("Player")
 			then arg1
 			else Players:GetPlayers()[1]
+		local slot = if plr then BaseService.GetPlayerBaseSlot(plr) else nil
 
 		if action == "GetState" then
 			local prof = if plr then PlayerDataService.GetProfile(plr) else nil
@@ -1510,7 +1568,7 @@ local function setupStudioTestBridge(): ()
 				IsNight = DayNightService.IsNight(),
 				NightCycleId = nightCycleId,
 				Snapshot = if plr then NightMafiaRaidService.GetSnapshot(plr) else nil,
-				LastResult = if plr then lastResultByPlayer[plr] else nil,
+				LastResult = if slot then lastResultBySlot[slot] else nil,
 				Coins = if prof then prof.Coins else 0,
 				Reputation = if prof then prof.Reputation else 0,
 				HasDualStove = if prof then prof.HasDualStove else false,
@@ -1526,9 +1584,11 @@ local function setupStudioTestBridge(): ()
 			end
 			return DayNightService.IsNight()
 		elseif action == "ResetCooldown" and plr then
-			lastRaidEndedAt[plr] = nil
-			lastRaidNightCycle[plr] = nil
-			lastEvaluatedNightCycle[plr] = nil
+			if slot then
+				lastRaidEndedAt[slot] = nil
+				lastRaidNightCycle[slot] = nil
+				lastEvaluatedNightCycle[slot] = nil
+			end
 			playerJoinedAt[plr] = os.clock() - 999
 			return true
 		elseif action == "EvaluateEligibility" and plr then
@@ -1537,8 +1597,8 @@ local function setupStudioTestBridge(): ()
 		elseif action == "StartRaid" and plr then
 			local ok, msg = NightMafiaRaidService.StartRaidForPlayer(plr, arg2, arg3)
 			return { Ok = ok, Message = msg, Snapshot = NightMafiaRaidService.GetSnapshot(plr) }
-		elseif action == "ForceCompleteBreach" and plr then
-			local raid = activeRaidsByPlayer[plr]
+		elseif action == "ForceCompleteBreach" and plr and slot then
+			local raid = activeRaidsBySlot[slot]
 			if not raid or raid.Resolved then
 				return { Ok = false, Message = "No active raid" }
 			end
@@ -1549,7 +1609,7 @@ local function setupStudioTestBridge(): ()
 			resolveRaidDefeated(raid)
 			return {
 				Ok = true,
-				Result = lastResultByPlayer[plr],
+				Result = lastResultBySlot[slot],
 				Coins = PlayerDataService.GetProfile(plr).Coins,
 				Reputation = PlayerDataService.GetProfile(plr).Reputation,
 				Warehouse = WarehouseService.GetInventorySnapshot(plr),
@@ -1563,8 +1623,8 @@ local function setupStudioTestBridge(): ()
 			prof.HasVIPBooths = true
 			prof.OwnsMotorbike = true
 			return { HasDualStove = prof.HasDualStove, HasVIPBooths = prof.HasVIPBooths, OwnsMotorbike = prof.OwnsMotorbike }
-		elseif action == "KillAllRaiders" and plr then
-			local raid = activeRaidsByPlayer[plr]
+		elseif action == "KillAllRaiders" and plr and slot then
+			local raid = activeRaidsBySlot[slot]
 			if not raid or raid.Resolved then
 				return { Ok = false, Message = "No active raid" }
 			end
@@ -1620,16 +1680,29 @@ function NightMafiaRaidService.Start(): ()
 	end)
 
 	playerRemovingConn = Players.PlayerRemoving:Connect(function(plr)
-		clearPendingRoll(plr, nil)
-		local raid = activeRaidsByPlayer[plr]
-		if raid and not raid.Resolved then
-			resolveRaidRetreated(raid, "Cancelled", "player_left")
-		end
 		playerJoinedAt[plr] = nil
-		lastEvaluatedNightCycle[plr] = nil
-		lastRaidEndedAt[plr] = nil
-		lastRaidNightCycle[plr] = nil
 		lastAlertPhaseKeyByPlayer[plr] = nil
+	end)
+
+	unsubBaseReleased = BaseService.OnBaseReleased(function(slot, _, remainingCount)
+		if remainingCount == 0 then
+			clearPendingRollForSlot(slot, nil)
+			local raid = activeRaidsBySlot[slot]
+			if raid and not raid.Resolved then
+				resolveRaidRetreated(raid, "Cancelled", "base_empty")
+			end
+			lastEvaluatedNightCycle[slot] = nil
+			lastRaidEndedAt[slot] = nil
+			lastRaidNightCycle[slot] = nil
+		else
+			local raid = activeRaidsBySlot[slot]
+			if raid and not raid.Owner.Parent then
+				local lead = BaseService.GetBaseLeadPlayer(slot)
+				if lead then
+					raid.Owner = lead
+				end
+			end
+		end
 	end)
 
 	nightConn = ReplicatedStorage:GetAttributeChangedSignal("IsNight"):Connect(handleNightStateChanged)
@@ -1650,17 +1723,17 @@ function NightMafiaRaidService.Start(): ()
 			local dt = math.clamp(t - last, 0.05, 1.5)
 			last = t
 
-			-- Catch players who claimed their base mid-night so they are evaluated once this night
+			-- Catch bases claimed mid-night so each occupied base is evaluated ONCE per night
 			if DayNightService.IsNight() and nightCycleId > 0 then
-				for _, plr in ipairs(Players:GetPlayers()) do
-					if lastEvaluatedNightCycle[plr] ~= nightCycleId and BaseService.GetPlayerBaseSlot(plr) ~= nil then
-						scheduleNightEvaluationForPlayer(plr, nightCycleId)
+				for _, slot in ipairs(BaseService.GetSlotOrder()) do
+					if lastEvaluatedNightCycle[slot] ~= nightCycleId and BaseService.GetBasePlayerCount(slot) > 0 then
+						scheduleNightEvaluationForSlot(slot, nightCycleId)
 					end
 				end
 			end
 
 			local snapshotList: { ActiveRaid } = {}
-			for _, raid in pairs(activeRaidsByPlayer) do
+			for _, raid in pairs(activeRaidsBySlot) do
 				table.insert(snapshotList, raid)
 			end
 			for _, raid in ipairs(snapshotList) do
@@ -1669,7 +1742,7 @@ function NightMafiaRaidService.Start(): ()
 		end
 	end)
 
-	print("[Food Empire] NightMafiaRaidService started (Random Nighttime Mafia Raids: Normal, Ninja, Strong & Elite Mafia active)!")
+	print("[Food Empire] NightMafiaRaidService started (Co-op Per-Base Nighttime Mafia Raids: Normal, Ninja, Strong & Elite Mafia active)!")
 end
 
 function NightMafiaRaidService.Stop(): ()
@@ -1690,15 +1763,19 @@ function NightMafiaRaidService.Stop(): ()
 		playerRemovingConn:Disconnect()
 		playerRemovingConn = nil
 	end
+	if unsubBaseReleased then
+		unsubBaseReleased()
+		unsubBaseReleased = nil
+	end
 	if testBridge then
 		testBridge:Destroy()
 		testBridge = nil
 	end
-	for plr in pairs(pendingRaidByPlayer) do
-		clearPendingRoll(plr)
+	for slot in pairs(pendingRaidBySlot) do
+		clearPendingRollForSlot(slot)
 	end
 	local activeList: { ActiveRaid } = {}
-	for _, raid in pairs(activeRaidsByPlayer) do
+	for _, raid in pairs(activeRaidsBySlot) do
 		table.insert(activeList, raid)
 	end
 	for _, raid in ipairs(activeList) do

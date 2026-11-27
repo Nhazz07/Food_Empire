@@ -277,20 +277,79 @@ function PlayerDataService.AddRewards(player: Player, coins: number, exp: number
 	notifyChanged(player)
 end
 
+local function syncSharedBaseProgress(player: Player, mutator: (p: PlayerProfile) -> ()): ()
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if slot then
+		for _, member in ipairs(BaseService.GetBasePlayers(slot)) do
+			local p = PlayerDataService.GetProfile(member)
+			mutator(p)
+			notifyChanged(member)
+		end
+	else
+		local p = PlayerDataService.GetProfile(player)
+		mutator(p)
+		notifyChanged(player)
+	end
+end
+
+function PlayerDataService.ReconcileCoopBaseProfiles(slot: BaseService.BaseSlot): ()
+	local members = BaseService.GetBasePlayers(slot)
+	if #members == 0 then
+		return
+	end
+	local maxRestLv = 1
+	local maxDefLv = 1
+	local maxCrew = 0
+	local maxWaiters = 0
+	local maxDishes = 0
+	local anyDual = false
+	local anyVIP = false
+
+	for _, m in ipairs(members) do
+		local p = PlayerDataService.GetProfile(m)
+		maxRestLv = math.max(maxRestLv, p.RestaurantLevel or 1)
+		maxDefLv = math.max(maxDefLv, p.DefenseLevel or 1)
+		maxCrew = math.max(maxCrew, p.CrewCount or 0)
+		maxWaiters = math.max(maxWaiters, p.WaiterCount or 0)
+		maxDishes = math.max(maxDishes, p.TotalDishesServed or 0)
+		if p.HasDualStove then anyDual = true end
+		if p.HasVIPBooths then anyVIP = true end
+	end
+
+	for _, m in ipairs(members) do
+		local p = PlayerDataService.GetProfile(m)
+		p.RestaurantLevel = maxRestLv
+		p.DefenseLevel = maxDefLv
+		p.CrewCount = maxCrew
+		p.WaiterCount = maxWaiters
+		p.TotalDishesServed = maxDishes
+		p.HasDualStove = anyDual
+		p.HasVIPBooths = anyVIP
+	end
+
+	BaseService.SetDefenseTier(slot, maxDefLv)
+	BaseService.SyncInteriorStations(slot, anyDual, anyVIP)
+
+	for _, m in ipairs(members) do
+		notifyChanged(m)
+	end
+end
+
 function PlayerDataService.SetRestaurantLevel(player: Player, level: number): ()
-	local profile = PlayerDataService.GetProfile(player)
-	profile.RestaurantLevel = math.clamp(math.floor(level), 1, 15)
-	notifyChanged(player)
+	local clamped = math.clamp(math.floor(level), 1, 15)
+	syncSharedBaseProgress(player, function(p)
+		p.RestaurantLevel = clamped
+	end)
 end
 
 function PlayerDataService.AddDishesServed(player: Player, count: number): number
-	local profile = PlayerDataService.GetProfile(player)
 	local add = math.max(0, math.floor(count))
 	if add > 0 then
-		profile.TotalDishesServed = (profile.TotalDishesServed or 0) + add
-		notifyChanged(player)
+		syncSharedBaseProgress(player, function(p)
+			p.TotalDishesServed = (p.TotalDishesServed or 0) + add
+		end)
 	end
-	return profile.TotalDishesServed or 0
+	return PlayerDataService.GetProfile(player).TotalDishesServed or 0
 end
 
 function PlayerDataService.GetDishesServed(player: Player): number
@@ -299,26 +358,30 @@ function PlayerDataService.GetDishesServed(player: Player): number
 end
 
 function PlayerDataService.SetDefenseLevel(player: Player, level: number): ()
-	local profile = PlayerDataService.GetProfile(player)
-	profile.DefenseLevel = math.clamp(math.floor(level), 1, 3)
+	local clamped = math.clamp(math.floor(level), 1, 3)
+	syncSharedBaseProgress(player, function(p)
+		p.DefenseLevel = clamped
+	end)
 	local slot = BaseService.GetPlayerBaseSlot(player)
 	if slot then
-		BaseService.SetDefenseTier(slot, profile.DefenseLevel)
+		local profile = PlayerDataService.GetProfile(player)
+		BaseService.SetDefenseTier(slot, clamped)
 		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
 	end
-	notifyChanged(player)
 end
 
 function PlayerDataService.SetCrewCount(player: Player, count: number): ()
-	local profile = PlayerDataService.GetProfile(player)
-	profile.CrewCount = math.max(0, math.floor(count))
-	notifyChanged(player)
+	local clamped = math.max(0, math.floor(count))
+	syncSharedBaseProgress(player, function(p)
+		p.CrewCount = clamped
+	end)
 end
 
 function PlayerDataService.SetWaiterCount(player: Player, count: number): ()
-	local profile = PlayerDataService.GetProfile(player)
-	profile.WaiterCount = math.clamp(math.floor(count), 0, 5)
-	notifyChanged(player)
+	local clamped = math.clamp(math.floor(count), 0, 5)
+	syncSharedBaseProgress(player, function(p)
+		p.WaiterCount = clamped
+	end)
 end
 
 function PlayerDataService.SetCourierCount(player: Player, count: number): ()
@@ -432,23 +495,25 @@ function PlayerDataService.SetOwnsMotorbike(player: Player, owned: boolean): ()
 end
 
 function PlayerDataService.SetHasDualStove(player: Player, owned: boolean): ()
-	local profile = PlayerDataService.GetProfile(player)
-	profile.HasDualStove = owned
+	syncSharedBaseProgress(player, function(p)
+		p.HasDualStove = owned
+	end)
 	local slot = BaseService.GetPlayerBaseSlot(player)
 	if slot then
+		local profile = PlayerDataService.GetProfile(player)
 		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
 	end
-	notifyChanged(player)
 end
 
 function PlayerDataService.SetHasVIPBooths(player: Player, owned: boolean): ()
-	local profile = PlayerDataService.GetProfile(player)
-	profile.HasVIPBooths = owned
+	syncSharedBaseProgress(player, function(p)
+		p.HasVIPBooths = owned
+	end)
 	local slot = BaseService.GetPlayerBaseSlot(player)
 	if slot then
+		local profile = PlayerDataService.GetProfile(player)
 		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
 	end
-	notifyChanged(player)
 end
 
 function PlayerDataService.SetOwnsMafiaSedan(player: Player, owned: boolean): ()
@@ -891,11 +956,10 @@ local function loadPlayer(player: Player): ()
 
 	local slot = BaseService.GetPlayerBaseSlot(player)
 	if slot then
-		BaseService.SetDefenseTier(slot, profile.DefenseLevel)
-		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
+		PlayerDataService.ReconcileCoopBaseProfiles(slot)
+	else
+		notifyChanged(player)
 	end
-
-	notifyChanged(player)
 end
 
 local function savePlayer(player: Player): ()
@@ -974,10 +1038,7 @@ function PlayerDataService.Start(): ()
 	WarehouseService.SetSpendCoinsHandler(PlayerDataService.SpendCoins)
 
 	BaseService.OnBaseAssigned(function(player, slot)
-		local profile = PlayerDataService.GetProfile(player)
-		BaseService.SetDefenseTier(slot, profile.DefenseLevel)
-		BaseService.SyncInteriorStations(slot, profile.HasDualStove, profile.HasVIPBooths)
-		notifyChanged(player)
+		PlayerDataService.ReconcileCoopBaseProfiles(slot)
 	end)
 
 	playerAddedConn = Players.PlayerAdded:Connect(function(player)

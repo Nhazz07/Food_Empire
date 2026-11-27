@@ -1987,7 +1987,16 @@ function HUDController.Update(state: { [string]: any }): ()
 
 	local slot = state.BaseSlot
 	if baseBadge and typeof(slot) == "string" then
-		baseBadge.Text = string.upper(slot) .. " BASE"
+		local coop = state.CoopTeam
+		local mCount = if typeof(coop) == "table" and typeof(coop.MemberCount) == "number" then coop.MemberCount else 1
+		local mMax = if typeof(coop) == "table" and typeof(coop.MaxMembers) == "number" then coop.MaxMembers else 2
+		local partners = if typeof(coop) == "table" and typeof(coop.PartnerNames) == "table" then coop.PartnerNames else nil
+		local partnerName = if partners and typeof(partners[1]) == "string" and partners[1] ~= "" then partners[1] else nil
+		if partnerName then
+			baseBadge.Text = string.format("%s CO-OP • %s", string.upper(slot), string.upper(partnerName))
+		else
+			baseBadge.Text = string.format("%s BASE (%d/%d)", string.upper(slot), mCount, mMax)
+		end
 		local col = SectorConfig.FactionColors[slot]
 		if col and baseAccentBar then
 			baseAccentBar.BackgroundColor3 = col
@@ -2264,7 +2273,7 @@ function HUDController.Update(state: { [string]: any }): ()
 			turfProgressFill.Size = UDim2.fromScale(math.clamp(owned / math.max(1, total), 0, 1), 1)
 		end
 		if turfAlertLabel and typeof(turf.Blocks) == "table" then
-			local myFaction = "Player_" .. tostring(Players.LocalPlayer.UserId)
+			local myFaction = if typeof(slot) == "string" and slot ~= "" then ("Base_" .. slot) else ("Player_" .. tostring(Players.LocalPlayer.UserId))
 			local underAttackName: string? = nil
 			for _, b in pairs(turf.Blocks) do
 				if typeof(b) == "table" and b.Owner == myFaction and b.UnderAttack == true then

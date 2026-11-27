@@ -649,10 +649,16 @@ local function evaluateDefenseDirective(contract: CompanionContract, myPos: Vect
 	local owner = contract.Owner
 
 	local ownerPosInBase: Vector3? = nil
-	if owner.Character then
-		local oRoot = owner.Character:FindFirstChild("HumanoidRootPart")
-		if oRoot and oRoot:IsA("BasePart") and isInsideBaseDefenseBounds(oRoot.Position, zones, 8) then
-			ownerPosInBase = oRoot.Position
+	local baseMembers = BaseService.GetBasePlayers(contract.BaseSlot)
+	for _, member in ipairs(baseMembers) do
+		if member.Character then
+			local oRoot = member.Character:FindFirstChild("HumanoidRootPart")
+			if oRoot and oRoot:IsA("BasePart") and isInsideBaseDefenseBounds(oRoot.Position, zones, 8) then
+				ownerPosInBase = oRoot.Position
+				if member == owner then
+					break
+				end
+			end
 		end
 	end
 
@@ -691,10 +697,14 @@ local function evaluateDefenseDirective(contract: CompanionContract, myPos: Vect
 				local enemyPos = root.Position
 				local isNightRaider = CollectionService:HasTag(inst, "NightRaidMafiaUnit")
 				local raidOwnerId = inst:GetAttribute("RaidOwnerUserId")
-				local isMyRaider = isNightRaider and (raidOwnerId == owner.UserId)
+				local raidSlot = inst:GetAttribute("RaidBaseSlot")
+				local isMyRaider = isNightRaider and (
+					(typeof(raidSlot) == "string" and raidSlot == contract.BaseSlot)
+					or (raidOwnerId == owner.UserId)
+				)
 
-				-- Ignore night raiders belonging to another player's base
-				if isNightRaider and raidOwnerId ~= nil and raidOwnerId ~= owner.UserId then
+				-- Ignore night raiders belonging to another base
+				if isNightRaider and not isMyRaider and (raidSlot ~= nil or raidOwnerId ~= nil) then
 					continue
 				end
 
@@ -1803,14 +1813,15 @@ function DefenseCompanionService.Start(): ()
 	if not raidWarningHooked then
 		raidWarningHooked = true
 		NightMafiaRaidService.OnRaidWarning(function(payload)
-			local map = contractsByPlayer[payload.Owner]
-			if not map then
-				return
-			end
 			local now = os.clock()
-			for _, c in pairs(map) do
-				if c.State == "Active" then
-					refreshContractZonesIfNeeded(c, now, true)
+			for _, member in ipairs(BaseService.GetBasePlayers(payload.BaseSlot)) do
+				local map = contractsByPlayer[member]
+				if map then
+					for _, c in pairs(map) do
+						if c.State == "Active" then
+							refreshContractZonesIfNeeded(c, now, true)
+						end
+					end
 				end
 			end
 		end)

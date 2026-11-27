@@ -159,7 +159,7 @@ local function wireTerritoryPickupCrates(): ()
 							if not liveSector then
 								return
 							end
-							local ownerId = "Player_" .. tostring(player.UserId)
+							local ownerId = BaseService.GetPlayerFactionId(player)
 							if liveSector.Owner ~= ownerId then
 								sendToast(player, "Capture " .. liveSector.DisplayName .. " first to grab big Supply Crates!")
 								return
@@ -212,7 +212,7 @@ local function wireResourceNodeHarvesting(): ()
 							if not liveSector then
 								return
 							end
-							local ownerId = "Player_" .. tostring(player.UserId)
+							local ownerId = BaseService.GetPlayerFactionId(player)
 							if liveSector.Owner ~= ownerId and liveSector.Owner ~= "Neutral" then
 								sendToast(player, "Defeat Rival Chef & capture " .. liveSector.DisplayName .. " to harvest here!")
 								return
@@ -281,7 +281,7 @@ local function wireWarehouseDropoffs(): ()
 			prompt.Name = "DeliverCratePrompt"
 			prompt.KeyboardKeyCode = Enum.KeyCode.F
 			prompt.HoldDuration = 0.15
-			prompt.MaxActivationDistance = 14
+			prompt.MaxActivationDistance = 18
 			prompt.RequiresLineOfSight = false
 			prompt.ActionText = "Deliver " .. spec.ShortLabel .. " Crate"
 			prompt.ObjectText = spec.DisplayName

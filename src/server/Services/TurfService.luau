@@ -51,7 +51,7 @@ type TurfAgent = {
 type ActiveRaid = {
 	TargetBlockId: string,
 	MafiaFactionId: string,
-	OwnerPlayer: Player?,
+	OwnerFaction: string,
 	Raiders: { TurfAgent },
 	StartedAt: number,
 }
@@ -89,6 +89,7 @@ local captureThread: thread? = nil
 local aiThread: thread? = nil
 local economyThread: thread? = nil
 local unsubBase: (() -> ())? = nil
+local unsubBaseReleased: (() -> ())? = nil
 local lastBroadcastAt = 0
 
 local function sendToast(player: Player, msg: string): ()
@@ -128,12 +129,13 @@ function TurfService.OnTurfChanged(cb: TurfChangedCallback): () -> ()
 	end
 end
 
+local function getPlayersFromFaction(factionId: string): { Player }
+	return BaseService.GetPlayersForFaction(factionId)
+end
+
 local function getPlayerFromFaction(factionId: string): Player?
-	local uidStr = string.match(factionId, "^Player_(%d+)$")
-	if not uidStr then
-		return nil
-	end
-	return Players:GetPlayerByUserId(tonumber(uidStr) or 0)
+	local list = BaseService.GetPlayersForFaction(factionId)
+	return list[1]
 end
 
 local function spawnCaptureBurst(pos: Vector3, color: Color3): ()
@@ -384,10 +386,20 @@ local function buildTurfAgentModel(
 	end)
 
 	local ownerUidStr = string.match(factionId, "^Player_(%d+)$")
-	local ownerUid = if ownerUidStr then tonumber(ownerUidStr) else nil
+	local ownerSlotStr = string.match(factionId, "^Base_(%a+)$")
+	local ownerUid: number? = if ownerUidStr then tonumber(ownerUidStr) else nil
+	if not ownerUid and ownerSlotStr then
+		local lead = BaseService.GetBaseLeadPlayer(ownerSlotStr :: BaseService.BaseSlot)
+		if lead then
+			ownerUid = lead.UserId
+		end
+	end
 
 	model.PrimaryPart = root
 	model:SetAttribute("Faction", factionId)
+	if ownerSlotStr then
+		model:SetAttribute("BaseSlot", ownerSlotStr)
+	end
 	model:SetAttribute("BlockId", homeBlockId)
 	model:SetAttribute("IsMafiaBoss", isBoss)
 	model:SetAttribute("IsTurfUnit", true)
@@ -516,8 +528,10 @@ end
 local function isInsideSafePlayerBase(pos: Vector3): boolean
 	for _, base in ipairs(CollectionService:GetTagged("PlayerBase")) do
 		if base:IsA("Model") and base:IsDescendantOf(Workspace) then
-			local piv = base:GetPivot().Position
-			if math.abs(pos.X - piv.X) <= 112 and math.abs(pos.Z - piv.Z) <= 112 then
+			local bp = base:FindFirstChild("BasePivot")
+			local refCF = if bp and bp:IsA("BasePart") then bp.CFrame else base:GetPivot()
+			local rel = refCF:PointToObjectSpace(pos)
+			if math.abs(rel.X) <= 168 and rel.Z >= -176 and rel.Z <= 112 then
 				return true
 			end
 		end
@@ -569,7 +583,7 @@ local function findBestEnemyTarget(agent: TurfAgent): (Humanoid?, BasePart?, Mod
 	end
 
 	for _, player in ipairs(Players:GetPlayers()) do
-		local pFaction = "Player_" .. tostring(player.UserId)
+		local pFaction = BaseService.GetPlayerFactionId(player)
 		if pFaction ~= myFaction and player.Character then
 			local r = player.Character:FindFirstChild("HumanoidRootPart")
 			if r and r:IsA("BasePart") then
@@ -591,10 +605,20 @@ local function findBestEnemyTarget(agent: TurfAgent): (Humanoid?, BasePart?, Mod
 			if unit:IsA("Model") then
 				local fAttr = unit:GetAttribute("Faction")
 				local ownerUid = unit:GetAttribute("OwnerUserId")
-				local resolvedFaction = if typeof(fAttr) == "string"
-					then fAttr
-					elseif typeof(ownerUid) == "number" then ("Player_" .. tostring(ownerUid))
-					else "Player_Unknown"
+				local unitSlot = unit:GetAttribute("BaseSlot")
+				local resolvedFaction: string
+				if typeof(fAttr) == "string" and (string.sub(fAttr, 1, 5) == "Base_" or TurfConfig.MafiaFactions[fAttr]) then
+					resolvedFaction = fAttr
+				elseif typeof(unitSlot) == "string" and unitSlot ~= "" then
+					resolvedFaction = "Base_" .. unitSlot
+				elseif typeof(ownerUid) == "number" then
+					local ownerP = Players:GetPlayerByUserId(ownerUid)
+					resolvedFaction = if ownerP then BaseService.GetPlayerFactionId(ownerP) else ("Player_" .. tostring(ownerUid))
+				elseif typeof(fAttr) == "string" then
+					resolvedFaction = fAttr
+				else
+					resolvedFaction = "Player_Unknown"
+				end
 				if resolvedFaction ~= myFaction then
 					if isMafia then
 						local ur = unit:FindFirstChild("HumanoidRootPart")
@@ -768,22 +792,30 @@ local function transferBlockOwnership(blockId: string, newOwner: string): ()
 	spawnCaptureBurst(st.Spec.PlazaPos, newColor)
 	BlackMarketService.BroadcastSFX("MeleeHit", st.Spec.PlazaPos)
 
-	-- Reward Player capturer & notify former Player owner!
-	local winnerPlayer = getPlayerFromFaction(newOwner)
-	if winnerPlayer then
-		local passMult = MonetizationService.GetPayoutMultiplier(winnerPlayer)
-		local repMult = MonetizationService.GetRepMultiplier(winnerPlayer)
-		local gold = math.floor(st.Spec.CaptureBountyGold * passMult)
-		local rep = math.floor(st.Spec.CaptureBountyRep * repMult)
-		PlayerDataService.AddRewards(winnerPlayer, gold, 45, rep)
-		broadcastToast(string.format("🏙️ %s captured %s from %s! (+%dG, +%d Rep)", winnerPlayer.DisplayName, st.Spec.DisplayName, oldName, gold, rep))
+	-- Reward all Co-op teammates in winning faction & notify all teammates of former owner!
+	local winnerPlayers = getPlayersFromFaction(newOwner)
+	if #winnerPlayers > 0 then
+		local bestGold = st.Spec.CaptureBountyGold
+		local bestRep = st.Spec.CaptureBountyRep
+		for _, wp in ipairs(winnerPlayers) do
+			local passMult = MonetizationService.GetPayoutMultiplier(wp)
+			local repMult = MonetizationService.GetRepMultiplier(wp)
+			local gold = math.floor(st.Spec.CaptureBountyGold * passMult)
+			local rep = math.floor(st.Spec.CaptureBountyRep * repMult)
+			bestGold = math.max(bestGold, gold)
+			bestRep = math.max(bestRep, rep)
+			PlayerDataService.AddRewards(wp, gold, 45, rep)
+		end
+		broadcastToast(string.format("🏙️ %s captured %s from %s! (+%dG, +%d Rep)", newName, st.Spec.DisplayName, oldName, bestGold, bestRep))
 	else
 		broadcastToast(string.format("🕶️ %s seized %s from %s!", newName, st.Spec.DisplayName, oldName))
 	end
 
-	local loserPlayer = getPlayerFromFaction(oldOwner)
-	if loserPlayer and loserPlayer ~= winnerPlayer then
-		sendToast(loserPlayer, string.format("🚨 YOU LOST %s to %s! Fight back to reclaim it!", st.Spec.DisplayName, newName))
+	local loserPlayers = getPlayersFromFaction(oldOwner)
+	for _, lp in ipairs(loserPlayers) do
+		if not table.find(winnerPlayers, lp) then
+			sendToast(lp, string.format("🚨 YOUR TEAM LOST %s to %s! Fight back to reclaim it!", st.Spec.DisplayName, newName))
+		end
 	end
 
 	print(string.format("[TurfService] Block %s transferred: %s -> %s", blockId, oldOwner, newOwner))
@@ -803,14 +835,14 @@ local function collectPlazaOccupants(st: TurfBlockState): { [string]: number }
 		end
 	end
 
-	-- 1. Living Players (only those who claimed a Castle Base!)
+	-- 1. Living Players (only those who claimed a Castle Base — co-op teammates share Base_<Slot> faction!)
 	for _, player in ipairs(Players:GetPlayers()) do
 		if BaseService.GetPlayerBaseSlot(player) or player:GetAttribute("BaseSlot") ~= nil then
 			local char = player.Character
 			local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
 			local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
 			if hum and hum.Health > 0 and root and root:IsA("BasePart") then
-				addIfInside(root, "Player_" .. tostring(player.UserId))
+				addIfInside(root, BaseService.GetPlayerFactionId(player))
 			end
 		end
 	end
@@ -895,12 +927,14 @@ local function stepBlockCapture(st: TurfBlockState, dt: number, now: number): ()
 			if st.CapturingFaction ~= activeFaction then
 				st.CapturingFaction = activeFaction
 				st.CaptureProgress = 0
-				-- Warn player owner if someone starts capturing their turf!
-				local ownerPlayer = getPlayerFromFaction(st.Owner)
-				if ownerPlayer then
+				-- Warn ALL co-op teammates if someone starts capturing their shared turf!
+				local ownerPlayers = getPlayersFromFaction(st.Owner)
+				if #ownerPlayers > 0 then
 					st.UnderAttackUntil = now + 12
 					st.AttackerName = TurfConfig.GetFactionDisplayName(activeFaction)
-					sendToast(ownerPlayer, string.format("⚠️ %s is capturing your block %s!", st.AttackerName or "Rivals", st.Spec.DisplayName))
+					for _, op in ipairs(ownerPlayers) do
+						sendToast(op, string.format("⚠️ %s is capturing your team's block %s!", st.AttackerName or "Rivals", st.Spec.DisplayName))
+					end
 				end
 			end
 
@@ -963,8 +997,8 @@ local function tryLaunchMafiaRaid(): ()
 	end
 
 	local target = playerOwnedBlocks[math.random(1, #playerOwnedBlocks)]
-	local ownerPlayer = getPlayerFromFaction(target.Owner)
-	if not ownerPlayer then
+	local ownerPlayers = getPlayersFromFaction(target.Owner)
+	if #ownerPlayers == 0 then
 		return
 	end
 
@@ -1018,12 +1052,14 @@ local function tryLaunchMafiaRaid(): ()
 	table.insert(activeRaids, {
 		TargetBlockId = target.Id,
 		MafiaFactionId = attackingMafia,
-		OwnerPlayer = ownerPlayer,
+		OwnerFaction = target.Owner,
 		Raiders = raiders,
 		StartedAt = os.clock(),
 	})
 
-	sendToast(ownerPlayer, string.format("%s is raiding %s! Defend your territory!", mafiaName, target.Spec.DisplayName))
+	for _, op in ipairs(ownerPlayers) do
+		sendToast(op, string.format("%s is raiding %s! Defend your team's territory!", mafiaName, target.Spec.DisplayName))
+	end
 	notifyChanged(true)
 	print(string.format("[TurfService] %s launched a %d-unit raid on %s!", mafiaName, raiderCount, target.Id))
 end
@@ -1040,10 +1076,12 @@ local function updateActiveRaids(now: number): ()
 
 		local st = blockStates[raid.TargetBlockId]
 		if alive == 0 then
-			-- Raid defeated -> reward defender!
-			if raid.OwnerPlayer and raid.OwnerPlayer.Parent and st and st.Owner == ("Player_" .. tostring(raid.OwnerPlayer.UserId)) then
-				PlayerDataService.AddRewards(raid.OwnerPlayer, 110, 40, 25)
-				sendToast(raid.OwnerPlayer, string.format("🛡️ DEFENDED %s! Repelled %s raid (+110G, +25 Rep)!", st.Spec.DisplayName, TurfConfig.GetFactionDisplayName(raid.MafiaFactionId)))
+			-- Raid defeated -> reward all co-op base defenders!
+			if st and st.Owner == raid.OwnerFaction then
+				for _, op in ipairs(getPlayersFromFaction(raid.OwnerFaction)) do
+					PlayerDataService.AddRewards(op, 110, 40, 25)
+					sendToast(op, string.format("🛡️ DEFENDED %s! Repelled %s raid (+110G, +25 Rep)!", st.Spec.DisplayName, TurfConfig.GetFactionDisplayName(raid.MafiaFactionId)))
+				end
 				st.UnderAttackUntil = 0
 			end
 			table.remove(activeRaids, i)
@@ -1064,10 +1102,10 @@ local function updateActiveRaids(now: number): ()
 	end
 end
 
--- Passive Territory Income + Quadrant Monopoly Bonus!
+-- Passive Territory Income + Quadrant Monopoly Bonus (paid to every active co-op teammate of the owning base!)
 local function payPassiveTurfIncome(): ()
 	for _, player in ipairs(Players:GetPlayers()) do
-		local factionId = "Player_" .. tostring(player.UserId)
+		local factionId = BaseService.GetPlayerFactionId(player)
 		local totalGold = 0
 		local totalRep = 0
 		local ownedCount = 0
@@ -1114,7 +1152,7 @@ local function wireInteractivePOIs(): ()
 				prompt.Triggered:Connect(function(player: Player)
 					local st = blockStates[blockIdAttr]
 					if not st then return end
-					local myFaction = "Player_" .. tostring(player.UserId)
+					local myFaction = BaseService.GetPlayerFactionId(player)
 					local key = tostring(player.UserId) .. "_" .. blockIdAttr
 					local now = os.clock()
 					local readyAt = vaultCooldowns[key] or 0
@@ -1161,7 +1199,7 @@ local function wireInteractivePOIs(): ()
 						return
 					end
 
-					local myFaction = "Player_" .. tostring(player.UserId)
+					local myFaction = BaseService.GetPlayerFactionId(player)
 					local isFree = (st.Owner == myFaction)
 					if not isFree then
 						if not PlayerDataService.SpendCoins(player, 25) then
@@ -1216,7 +1254,7 @@ end
 
 -- Public API for RaiderChefService & RestaurantService
 function TurfService.GetBestCaptureTargetForPlayer(player: Player, fromPos: Vector3): (string?, Vector3?)
-	local myFaction = "Player_" .. tostring(player.UserId)
+	local myFaction = BaseService.GetPlayerFactionId(player)
 	local bestId: string? = nil
 	local bestPos: Vector3? = nil
 	local bestScore = -math.huge
@@ -1245,7 +1283,7 @@ function TurfService.GetBestCaptureTargetForPlayer(player: Player, fromPos: Vect
 end
 
 function TurfService.GetSnapshotForPlayer(player: Player): { [string]: any }
-	local myFaction = "Player_" .. tostring(player.UserId)
+	local myFaction = BaseService.GetPlayerFactionId(player)
 	local blocksOut: { [string]: any } = {}
 	local ownedCount = 0
 	local totalIncome = 0
@@ -1390,36 +1428,47 @@ function TurfService.Start(): ()
 
 	wireInteractivePOIs()
 
-	-- Re-sync colors if a player claims a Castle Base (so their territories always match their Base Color!)
-	unsubBase = BaseService.OnBaseAssigned(function(player: Player)
-		local myFaction = "Player_" .. tostring(player.UserId)
+	-- Re-sync colors & team names whenever a player joins a Castle Base!
+	unsubBase = BaseService.OnBaseAssigned(function(_, slot)
+		local baseFaction = BaseService.GetBaseFactionId(slot)
 		for blockId, st in pairs(blockStates) do
-			if st.Owner == myFaction then
+			if st.Owner == baseFaction then
 				syncBlockVisuals(blockId)
 			end
 		end
 		notifyChanged(true)
 	end)
 
-	-- If a player leaves, return their controlled blocks cleanly to their original Main Mafia Faction
-	table.insert(
-		conns,
-		Players.PlayerRemoving:Connect(function(player: Player)
-			local myFaction = "Player_" .. tostring(player.UserId)
+	-- ONLY return controlled blocks back to Mafia when the LAST co-op teammate leaves the base!
+	unsubBaseReleased = BaseService.OnBaseReleased(function(slot, _, remainingCount)
+		local baseFaction = BaseService.GetBaseFactionId(slot)
+		if remainingCount == 0 then
 			for blockId, st in pairs(blockStates) do
-				if st.Owner == myFaction then
+				if st.Owner == baseFaction then
 					st.Owner = st.Spec.InitialOwner
 					st.Status = "Controlled"
 					st.CaptureProgress = 0
 					st.CapturingFaction = nil
 					st.UnderAttackUntil = 0
-					clearBlockGarrison(blockId, myFaction)
+					clearBlockGarrison(blockId, baseFaction)
 					populateBlockGarrison(blockId)
 					syncBlockVisuals(blockId)
 				end
 			end
+		else
+			for blockId, st in pairs(blockStates) do
+				if st.Owner == baseFaction then
+					syncBlockVisuals(blockId)
+				end
+			end
+		end
+		notifyChanged(true)
+	end)
+
+	table.insert(
+		conns,
+		Players.PlayerRemoving:Connect(function(player: Player)
 			kioskCooldowns[player.UserId] = nil
-			notifyChanged(true)
 		end)
 	)
 
@@ -1513,6 +1562,7 @@ function TurfService.Stop(): ()
 	if aiThread then task.cancel(aiThread); aiThread = nil end
 	if economyThread then task.cancel(economyThread); economyThread = nil end
 	if unsubBase then unsubBase(); unsubBase = nil end
+	if unsubBaseReleased then unsubBaseReleased(); unsubBaseReleased = nil end
 	for _, c in ipairs(conns) do c:Disconnect() end
 	table.clear(conns)
 	if npcFolder then npcFolder:ClearAllChildren() end

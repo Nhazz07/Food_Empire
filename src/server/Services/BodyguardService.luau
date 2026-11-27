@@ -382,7 +382,11 @@ local function buildBodyguardModel(owner: Player, slotIndex: number, classSpec: 
 	model.PrimaryPart = root
 	model:SetAttribute("OwnerUserId", owner.UserId)
 	model:SetAttribute("GuardClassId", classSpec.Id)
-	model:SetAttribute("Faction", "Player_" .. tostring(owner.UserId))
+	model:SetAttribute("Faction", BaseService.GetPlayerFactionId(owner))
+	local ownerSlot = BaseService.GetPlayerBaseSlot(owner)
+	if ownerSlot then
+		model:SetAttribute("BaseSlot", ownerSlot)
+	end
 	CollectionService:AddTag(model, "PlayerBodyguardUnit")
 	CollectionService:AddTag(model, "AnimatedRaiderLimbs")
 	model.Parent = guardFolder or Workspace

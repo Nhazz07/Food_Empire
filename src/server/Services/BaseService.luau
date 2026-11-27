@@ -7,16 +7,19 @@ local RestaurantExpansionBuilder = require("./RestaurantExpansionBuilder")
 
 export type BaseSlot = "North" | "South" | "East" | "West"
 export type BaseAssignedCallback = (player: Player, slot: BaseSlot) -> ()
+export type BaseReleasedCallback = (slot: BaseSlot, leavingPlayer: Player, remainingCount: number) -> ()
 
 local BaseService = {}
 
+BaseService.MAX_PLAYERS_PER_BASE = 2
+
 local SLOT_ORDER: { BaseSlot } = { "North", "South", "East", "West" }
 
-local slotOwners: { [BaseSlot]: Player? } = {
-	North = nil,
-	South = nil,
-	East = nil,
-	West = nil,
+local slotMembers: { [BaseSlot]: { Player } } = {
+	North = {},
+	South = {},
+	East = {},
+	West = {},
 }
 local playerSlots: { [Player]: BaseSlot } = {}
 local baseDefenseTiers: { [BaseSlot]: number } = {
@@ -25,13 +28,24 @@ local baseDefenseTiers: { [BaseSlot]: number } = {
 	East = 1,
 	West = 1,
 }
+local baseInteriorFlags: { [BaseSlot]: { HasDualStove: boolean, HasVIPBooths: boolean } } = {
+	North = { HasDualStove = false, HasVIPBooths = false },
+	South = { HasDualStove = false, HasVIPBooths = false },
+	East = { HasDualStove = false, HasVIPBooths = false },
+	West = { HasDualStove = false, HasVIPBooths = false },
+}
 
 local listeners: { BaseAssignedCallback } = {}
+local releaseListeners: { BaseReleasedCallback } = {}
 local isRunning = false
 local playerAddedConn: RBXScriptConnection? = nil
 local playerRemovingConn: RBXScriptConnection? = nil
 local charConnections: { [Player]: RBXScriptConnection } = {}
 local turretThread: thread? = nil
+
+function BaseService.GetSlotOrder(): { BaseSlot }
+	return SLOT_ORDER
+end
 
 function BaseService.GetBaseModel(slot: BaseSlot): Model?
 	if typeof(slot) ~= "string" then
@@ -53,6 +67,81 @@ end
 
 function BaseService.GetPlayerBaseSlot(player: Player): BaseSlot?
 	return playerSlots[player]
+end
+
+function BaseService.GetBasePlayers(slot: BaseSlot): { Player }
+	local out: { Player } = {}
+	local members = slotMembers[slot]
+	if members then
+		for _, p in ipairs(members) do
+			if p.Parent then
+				table.insert(out, p)
+			end
+		end
+	end
+	return out
+end
+
+function BaseService.GetBasePlayerCount(slot: BaseSlot): number
+	return #BaseService.GetBasePlayers(slot)
+end
+
+function BaseService.GetBaseLeadPlayer(slot: BaseSlot): Player?
+	local members = BaseService.GetBasePlayers(slot)
+	return members[1]
+end
+
+function BaseService.GetTeammates(player: Player): { Player }
+	local slot = playerSlots[player]
+	if not slot then
+		return {}
+	end
+	local out: { Player } = {}
+	for _, p in ipairs(BaseService.GetBasePlayers(slot)) do
+		if p ~= player then
+			table.insert(out, p)
+		end
+	end
+	return out
+end
+
+function BaseService.AreBaseTeammates(a: Player, b: Player): boolean
+	if a == b then
+		return true
+	end
+	local slotA = playerSlots[a]
+	return slotA ~= nil and slotA == playerSlots[b]
+end
+
+function BaseService.GetBaseFactionId(slot: BaseSlot): string
+	return "Base_" .. slot
+end
+
+function BaseService.GetPlayerFactionId(player: Player): string
+	local slot = playerSlots[player]
+	if slot then
+		return "Base_" .. slot
+	end
+	local slotAttr = player:GetAttribute("BaseSlot")
+	if typeof(slotAttr) == "string" and slotAttr ~= "" then
+		return "Base_" .. slotAttr
+	end
+	return "Player_" .. tostring(player.UserId)
+end
+
+function BaseService.GetPlayersForFaction(factionId: string): { Player }
+	local slotStr = string.match(factionId, "^Base_(%a+)$")
+	if slotStr and slotMembers[slotStr :: BaseSlot] then
+		return BaseService.GetBasePlayers(slotStr :: BaseSlot)
+	end
+	local uidStr = string.match(factionId, "^Player_(%d+)$")
+	if uidStr then
+		local p = Players:GetPlayerByUserId(tonumber(uidStr) or 0)
+		if p then
+			return { p }
+		end
+	end
+	return {}
 end
 
 function BaseService.GetDefenseTier(slot: BaseSlot): number
@@ -165,19 +254,48 @@ function BaseService.OnBaseAssigned(callback: BaseAssignedCallback): () -> ()
 	end
 end
 
-local function teleportToBaseSpawn(player: Player, character: Model): ()
+function BaseService.OnBaseReleased(callback: BaseReleasedCallback): () -> ()
+	table.insert(releaseListeners, callback)
+	return function()
+		local idx = table.find(releaseListeners, callback)
+		if idx then
+			table.remove(releaseListeners, idx)
+		end
+	end
+end
+
+function BaseService.GetSpawnCFrameForPlayer(player: Player): CFrame?
 	local slot = playerSlots[player]
 	if not slot then
-		return
+		return nil
 	end
 
 	local baseModel = BaseService.GetBaseModel(slot)
 	if not baseModel then
-		return
+		return nil
+	end
+
+	local members = BaseService.GetBasePlayers(slot)
+	local memberIndex = table.find(members, player) or 1
+	local infra = baseModel:FindFirstChild("BaseCoopInfrastructure")
+	local coopPadName = if memberIndex == 1 then "CoopSpawn_1" else "CoopSpawn_2"
+	local coopPad = if infra then infra:FindFirstChild(coopPadName) else nil
+	if coopPad and coopPad:IsA("BasePart") then
+		return coopPad.CFrame + Vector3.new(0, 4.5, 0)
 	end
 
 	local spawnPart = baseModel:FindFirstChild("BaseSpawn")
 	if not spawnPart or not spawnPart:IsA("BasePart") then
+		return nil
+	end
+
+	local sideOffset = if memberIndex == 1 then -11 else 11
+	return (spawnPart.CFrame * CFrame.new(sideOffset, 0, 0)) + Vector3.new(0, 5.0, 0)
+end
+
+local function teleportToBaseSpawn(player: Player, character: Model): ()
+	local spawnCF = BaseService.GetSpawnCFrameForPlayer(player)
+	if not spawnCF then
 		return
 	end
 
@@ -185,16 +303,16 @@ local function teleportToBaseSpawn(player: Player, character: Model): ()
 	if root and root:IsA("BasePart") then
 		task.spawn(function()
 			pcall(function()
-				player:RequestStreamAroundAsync(spawnPart.Position)
+				player:RequestStreamAroundAsync(spawnCF.Position)
 			end)
 			if character.Parent then
-				character:PivotTo(spawnPart.CFrame + Vector3.new(0, 5.5, 0))
+				character:PivotTo(spawnCF)
 			end
 		end)
 	end
 end
 
-local function updateGateOwnerSign(slot: BaseSlot, ownerName: string?): ()
+local function updateGateOwnerSign(slot: BaseSlot): ()
 	local baseModel = BaseService.GetBaseModel(slot)
 	if not baseModel then
 		return
@@ -239,7 +357,39 @@ local function updateGateOwnerSign(slot: BaseSlot, ownerName: string?): ()
 		label.Parent = newGui
 	end
 
-	label.Text = if ownerName then (string.upper(ownerName) .. "'S EMPIRE") else (string.upper(slot) .. " SYNDICATE")
+	local members = BaseService.GetBasePlayers(slot)
+	if #members >= 2 then
+		label.Text = string.format("%s & %s (CO-OP 2/2)", string.upper(members[1].DisplayName), string.upper(members[2].DisplayName))
+	elseif #members == 1 then
+		label.Text = string.format("%s'S EMPIRE (1/2)", string.upper(members[1].DisplayName))
+	else
+		label.Text = string.format("%s CO-OP BASE (0/2)", string.upper(slot))
+	end
+end
+
+local function syncBaseTeamAttributes(slot: BaseSlot): ()
+	local members = BaseService.GetBasePlayers(slot)
+	local baseModel = BaseService.GetBaseModel(slot)
+	if baseModel then
+		baseModel:SetAttribute("OwnerUserId", if members[1] then members[1].UserId else nil)
+		baseModel:SetAttribute("CoopCount", #members)
+		local idParts: { string } = {}
+		for _, m in ipairs(members) do
+			table.insert(idParts, tostring(m.UserId))
+		end
+		baseModel:SetAttribute("CoopMemberIds", table.concat(idParts, ","))
+	end
+
+	for idx, m in ipairs(members) do
+		m:SetAttribute("BaseSlot", slot)
+		m:SetAttribute("BaseFactionId", "Base_" .. slot)
+		m:SetAttribute("BaseMemberIndex", idx)
+		local partner = if idx == 1 then members[2] else members[1]
+		m:SetAttribute("CoopPartnerName", if partner then partner.DisplayName else "")
+		m:SetAttribute("BaseTeamCount", #members)
+	end
+
+	updateGateOwnerSign(slot)
 end
 
 type RestaurantThemeSpec = {
@@ -651,6 +801,10 @@ local function applyDistinctRestaurantTheme(slot: BaseSlot): ()
 end
 
 function BaseService.SyncInteriorStations(slot: BaseSlot, hasDualStove: boolean, hasVIPBooths: boolean): ()
+	baseInteriorFlags[slot] = {
+		HasDualStove = hasDualStove,
+		HasVIPBooths = hasVIPBooths,
+	}
 	local baseModel = BaseService.GetBaseModel(slot)
 	local hq = if baseModel then baseModel:FindFirstChild("RestaurantHQ") else nil
 	if not hq or not hq:IsA("Model") or not hq.PrimaryPart then
@@ -658,10 +812,11 @@ function BaseService.SyncInteriorStations(slot: BaseSlot, hasDualStove: boolean,
 	end
 	local hqCF = hq.PrimaryPart.CFrame
 	local theme = RESTAURANT_THEMES[slot] or RESTAURANT_THEMES.East
+	local showSecondRange = hasDualStove or (BaseService.GetBasePlayerCount(slot) >= 2)
 
 	local oldStove2 = hq:FindFirstChild("DualStoveExpansion")
 	if oldStove2 then oldStove2:Destroy() end
-	if hasDualStove then
+	if showSecondRange then
 		local stFolder = Instance.new("Model")
 		stFolder.Name = "DualStoveExpansion"
 		local function sPart(name: string, sz: Vector3, relCF: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?): Part
@@ -693,8 +848,10 @@ function BaseService.SyncInteriorStations(slot: BaseSlot, hasDualStove: boolean,
 			end
 		end
 		sPart("BraisingPan2", Vector3.new(0.55, 1.5, 1.5), CFrame.new(-9.2, 4.45, -18.7) * CFrame.Angles(0, 0, math.rad(90)), copper, Enum.Material.Metal, Enum.PartType.Cylinder)
-		sPart("Hood2", Vector3.new(8.0, 2.0, 5.8), CFrame.new(-7.4, 16.4, -17.5), darkSteel, Enum.Material.Metal, nil)
-		sPart("Hood2Brass", Vector3.new(8.1, 0.22, 5.9), CFrame.new(-7.4, 15.42, -17.5), theme.BrassAccent, Enum.Material.Metal, nil)
+		if hasDualStove then
+			sPart("Hood2", Vector3.new(8.0, 2.0, 5.8), CFrame.new(-7.4, 16.4, -17.5), darkSteel, Enum.Material.Metal, nil)
+			sPart("Hood2Brass", Vector3.new(8.1, 0.22, 5.9), CFrame.new(-7.4, 15.42, -17.5), theme.BrassAccent, Enum.Material.Metal, nil)
+		end
 		stFolder.Parent = hq
 	end
 
@@ -745,18 +902,24 @@ local function teleportToCentralLobby(character: Model): ()
 	end
 end
 
-function BaseService.GetSlotAvailability(): { [string]: string? }
-	local out: { [string]: string? } = {}
+function BaseService.GetSlotAvailability(): { [string]: any }
+	local out: { [string]: any } = {}
 	for _, slot in ipairs(SLOT_ORDER) do
-		local owner = slotOwners[slot]
-		out[slot] = if owner then owner.DisplayName else nil
+		local members = BaseService.GetBasePlayers(slot)
+		if #members == 0 then
+			out[slot] = nil
+		elseif #members == 1 then
+			out[slot] = members[1].DisplayName .. " (1/2)"
+		else
+			out[slot] = string.format("%s & %s (2/2)", members[1].DisplayName, members[2].DisplayName)
+		end
 	end
 	return out
 end
 
 function BaseService.ClaimBaseSlot(player: Player, slot: BaseSlot): (boolean, string)
 	if playerSlots[player] then
-		return false, "You already own " .. playerSlots[player] .. " Castle Base!"
+		return false, "You are already on " .. playerSlots[player] .. " Co-op Base!"
 	end
 
 	local isValid = false
@@ -770,21 +933,23 @@ function BaseService.ClaimBaseSlot(player: Player, slot: BaseSlot): (boolean, st
 		return false, "Invalid Castle Base choice"
 	end
 
-	if slotOwners[slot] ~= nil then
-		return false, slot .. " Castle Base is already taken — choose another!"
+	local members = BaseService.GetBasePlayers(slot)
+	slotMembers[slot] = members
+	if #members >= BaseService.MAX_PLAYERS_PER_BASE then
+		return false, string.format("%s Co-op Base is full (%d/%d) — choose another!", slot, #members, BaseService.MAX_PLAYERS_PER_BASE)
 	end
 
-	slotOwners[slot] = player
+	local partner = members[1]
+	table.insert(members, player)
 	playerSlots[player] = slot
-	player:SetAttribute("BaseSlot", slot)
+	syncBaseTeamAttributes(slot)
 
-	local baseModel = BaseService.GetBaseModel(slot)
-	if baseModel then
-		baseModel:SetAttribute("OwnerUserId", player.UserId)
+	local flags = baseInteriorFlags[slot]
+	if flags then
+		BaseService.SyncInteriorStations(slot, flags.HasDualStove, flags.HasVIPBooths)
 	end
-	updateGateOwnerSign(slot, player.DisplayName)
 
-	print(string.format("[BaseService] %s claimed %s Castle Base!", player.Name, slot))
+	print(string.format("[BaseService] %s joined %s Co-op Base (%d/%d)!", player.Name, slot, #members, BaseService.MAX_PLAYERS_PER_BASE))
 
 	for _, cb in ipairs(listeners) do
 		task.spawn(cb, player, slot)
@@ -800,23 +965,34 @@ function BaseService.ClaimBaseSlot(player: Player, slot: BaseSlot): (boolean, st
 		teleportToBaseSpawn(player, player.Character)
 	end
 
-	return true, string.format("Welcome to %s Castle Base! Starter Seafood & Fish Ingredient Warehouse unlocked!", slot)
+	if partner and partner.Parent then
+		return true, string.format("Joined %s Co-op Base with %s! You share Restaurant, Warehouses & Territory!", slot, partner.DisplayName)
+	end
+	return true, string.format("Welcome to %s Co-op Base (1/2)! A co-op partner can join to run this empire together!", slot)
 end
 
 function BaseService.AssignRandomAvailableBase(player: Player): (boolean, string)
 	if playerSlots[player] then
-		return true, "Already assigned to " .. playerSlots[player] .. " Castle Base"
+		return true, "Already assigned to " .. playerSlots[player] .. " Co-op Base"
 	end
-	local open: { BaseSlot } = {}
+	-- Balanced 8-player co-op assignment: fill empty bases first (1 per base), then pair up to 2/2 across all 4 bases!
+	local minCount = BaseService.MAX_PLAYERS_PER_BASE
 	for _, slot in ipairs(SLOT_ORDER) do
-		if slotOwners[slot] == nil then
-			table.insert(open, slot)
+		local c = BaseService.GetBasePlayerCount(slot)
+		if c < minCount then
+			minCount = c
 		end
 	end
-	if #open == 0 then
-		return false, "All 4 Castle Bases are currently occupied!"
+	if minCount >= BaseService.MAX_PLAYERS_PER_BASE then
+		return false, "All 4 Co-op Bases are currently full (8/8 players)!"
 	end
-	local chosen = open[math.random(1, #open)]
+	local candidates: { BaseSlot } = {}
+	for _, slot in ipairs(SLOT_ORDER) do
+		if BaseService.GetBasePlayerCount(slot) == minCount then
+			table.insert(candidates, slot)
+		end
+	end
+	local chosen = candidates[math.random(1, #candidates)]
 	return BaseService.ClaimBaseSlot(player, chosen)
 end
 
@@ -831,18 +1007,39 @@ end
 local function releaseSlot(player: Player): ()
 	local slot = playerSlots[player]
 	if slot then
-		slotOwners[slot] = nil
 		playerSlots[player] = nil
-		BaseService.SetDefenseTier(slot, 1)
-		updateGateOwnerSign(slot, nil)
-		local baseModel = BaseService.GetBaseModel(slot)
-		if baseModel then
-			baseModel:SetAttribute("OwnerUserId", nil)
-			local hq = baseModel:FindFirstChild("RestaurantHQ")
-			if hq and hq:IsA("Model") then
-				RestaurantExpansionBuilder.BuildTierForHQ(baseModel, hq, slot, 1)
+		local members = slotMembers[slot]
+		if members then
+			for i = #members, 1, -1 do
+				if members[i] == player or not members[i].Parent then
+					table.remove(members, i)
+				end
 			end
-			RestaurantExpansionBuilder.BuildFrontWoodPavilion(baseModel, slot, 1)
+		end
+		local remaining = BaseService.GetBasePlayerCount(slot)
+		syncBaseTeamAttributes(slot)
+
+		if remaining == 0 then
+			BaseService.SetDefenseTier(slot, 1)
+			baseInteriorFlags[slot] = { HasDualStove = false, HasVIPBooths = false }
+			BaseService.SyncInteriorStations(slot, false, false)
+			local baseModel = BaseService.GetBaseModel(slot)
+			if baseModel then
+				local hq = baseModel:FindFirstChild("RestaurantHQ")
+				if hq and hq:IsA("Model") then
+					RestaurantExpansionBuilder.BuildTierForHQ(baseModel, hq, slot, 1)
+				end
+				RestaurantExpansionBuilder.BuildFrontWoodPavilion(baseModel, slot, 1)
+			end
+		else
+			local flags = baseInteriorFlags[slot]
+			if flags then
+				BaseService.SyncInteriorStations(slot, flags.HasDualStove, flags.HasVIPBooths)
+			end
+		end
+
+		for _, cb in ipairs(releaseListeners) do
+			task.spawn(cb, slot, player, remaining)
 		end
 	end
 
@@ -867,7 +1064,7 @@ local function runDefenseTurretTick(): ()
 
 	for _, slot in ipairs(SLOT_ORDER) do
 		local tier = baseDefenseTiers[slot] or 1
-		if tier >= 2 and slotOwners[slot] ~= nil then
+		if tier >= 2 and BaseService.GetBasePlayerCount(slot) > 0 then
 			local baseModel = BaseService.GetBaseModel(slot)
 			if baseModel and baseModel.PrimaryPart then
 				local basePos = baseModel.PrimaryPart.Position
@@ -890,10 +1087,11 @@ local function runDefenseTurretTick(): ()
 	end
 end
 
--- Expands every Castle Base estate from 224x224 to a spacious 336x288 Grand Estate
+-- Expands every Castle Base estate from 224x224 to a spacious 336x288 2-Player Co-op Estate
 -- (keeps BasePivot.CFrame & GrandFrontGate at Z=+112 100% locked to the City Road,
--- widens +/-X by +56 studs each side, deepens -Z rear by +64 studs, and shifts
--- WarehousePlots & rear gardens rearward by -46 studs for huge Lv.1-10 Restaurant growth!).
+-- widens +/-X by +56 studs each side, deepens -Z rear by +64 studs, reorganizes the 4 existing
+-- WarehousePlots with wide 72-stud spacing & unobstructed aprons, and adds paved low-poly
+-- dual-player circulation paths & dual spawn medallions — ZERO duplicated buildings!).
 local function expandBaseEstate(slot: BaseSlot): ()
 	local baseModel = BaseService.GetBaseModel(slot)
 	if not baseModel or baseModel:GetAttribute("EstateExpandedV2") == true then
@@ -908,7 +1106,6 @@ local function expandBaseEstate(slot: BaseSlot): ()
 	local bCF = bp.CFrame
 	local SIDE_EXPAND = 56 -- +/-112 -> +/-168 (336 studs wide!)
 	local REAR_EXPAND = 64 -- -112 -> -176 (288 studs deep!)
-	local WH_SHIFT_Z = -46 -- Push WarehousePlots & rear garden back 46 studs (huge rear room for HQ!)
 
 	-- 1. Seamless Estate Ground Apron Extensions (keeps BasePivot.CFrame untouched!)
 	local oldExt = baseModel:FindFirstChild("BaseEstateExtension")
@@ -932,31 +1129,153 @@ local function expandBaseEstate(slot: BaseSlot): ()
 
 	local floorY = 0
 	local floorH = math.max(0.8, bp.Size.Y)
-	-- Left & Right 56-stud wide estate extensions (spanning full Z = -176..+112)
 	addFloorSlab("EstateSlab_Left", Vector3.new(SIDE_EXPAND + 2, floorH, 288 + 2), Vector3.new(-112 - SIDE_EXPAND * 0.5, floorY, -REAR_EXPAND * 0.5))
 	addFloorSlab("EstateSlab_Right", Vector3.new(SIDE_EXPAND + 2, floorH, 288 + 2), Vector3.new(112 + SIDE_EXPAND * 0.5, floorY, -REAR_EXPAND * 0.5))
-	-- Rear 64-stud deep estate extension (spanning center X = -112..+112)
 	addFloorSlab("EstateSlab_Rear", Vector3.new(224 + 4, floorH, REAR_EXPAND + 2), Vector3.new(0, floorY, -112 - REAR_EXPAND * 0.5))
 	extFolder.Parent = baseModel
 
-	-- 2. Shift WarehousePlots & rear landscaping rearward by -46 studs so HQ can expand rearward up to Z = -76!
-	local shiftList = { "WarehousePlots", "GardenTurf_1", "GardenTurf_2", "GardenCanopy_1", "GardenCanopy_2", "GardenTrunk_1", "GardenTrunk_2", "Bush_1", "Bush_2" }
-	for _, childName in ipairs(shiftList) do
-		local obj = baseModel:FindFirstChild(childName)
-		if obj then
-			if obj:IsA("BasePart") then
-				local rel = bCF:ToObjectSpace(obj.CFrame)
-				obj.CFrame = bCF * (CFrame.new(0, 0, WH_SHIFT_Z) * rel)
-			else
-				for _, d in ipairs(obj:GetDescendants()) do
-					if d:IsA("BasePart") then
-						local rel = bCF:ToObjectSpace(d.CFrame)
-						d.CFrame = bCF * (CFrame.new(0, 0, WH_SHIFT_Z) * rel)
+	-- 2. Reorganize the 4 EXISTING WarehousePlots across the 336-stud rear estate with wide 72-stud spacing
+	--    (36-stud open walking alleys between every warehouse, 45+ studs clear logistics apron in front of CargoDoors!)
+	local WAREHOUSE_COOP_SLOTS: { [number]: Vector3 } = {
+		[1] = Vector3.new(-108, 0, -134),
+		[2] = Vector3.new(-36, 0, -134),
+		[3] = Vector3.new(36, 0, -134),
+		[4] = Vector3.new(108, 0, -134),
+	}
+	local CATEGORY_FALLBACK_IDX: { [string]: number } = {
+		Fish = 1,
+		Vegetable = 2,
+		Fruit = 3,
+		Meat = 4,
+	}
+	local whFolder = baseModel:FindFirstChild("WarehousePlots")
+	if whFolder then
+		for _, plot in ipairs(whFolder:GetChildren()) do
+			if plot:IsA("Model") then
+				local pivotPart = plot:FindFirstChild("PlotPivot")
+				if pivotPart and pivotPart:IsA("BasePart") then
+					local idxAttr = plot:GetAttribute("PlotIndex")
+					local catAttr = plot:GetAttribute("Category")
+					local pIdx = if typeof(idxAttr) == "number"
+						then idxAttr
+						elseif typeof(catAttr) == "string" then (CATEGORY_FALLBACK_IDX[catAttr] or 1)
+						else 1
+					local targetXZ = WAREHOUSE_COOP_SLOTS[pIdx] or WAREHOUSE_COOP_SLOTS[1]
+					local curRel = bCF:PointToObjectSpace(pivotPart.Position)
+					local dx = targetXZ.X - curRel.X
+					local dz = targetXZ.Z - curRel.Z
+					for _, d in ipairs(plot:GetDescendants()) do
+						if d:IsA("BasePart") then
+							local rel = bCF:ToObjectSpace(d.CFrame)
+							d.CFrame = bCF * (CFrame.new(dx, 0, dz) * rel)
+						end
 					end
 				end
 			end
 		end
 	end
+
+	-- Move rear garden landscaping cleanly into the far rear corners (X = +/-148, Z = -152) so ZERO trees block warehouse CargoDoors!
+	local rearGardenShifts: { { Prefix: string, TargetX: number, TargetZ: number } } = {
+		{ Prefix = "_1", TargetX = -148, TargetZ = -152 },
+		{ Prefix = "_2", TargetX = 148, TargetZ = -152 },
+	}
+	for _, g in ipairs(rearGardenShifts) do
+		local turf = baseModel:FindFirstChild("GardenTurf" .. g.Prefix)
+		if turf and turf:IsA("BasePart") then
+			local curRel = bCF:PointToObjectSpace(turf.Position)
+			local dx = g.TargetX - curRel.X
+			local dz = g.TargetZ - curRel.Z
+			for _, child in ipairs(baseModel:GetChildren()) do
+				if child:IsA("BasePart") and (
+					child.Name == ("GardenTurf" .. g.Prefix)
+					or child.Name == ("GardenTrunk" .. g.Prefix)
+					or child.Name == ("GardenCanopy" .. g.Prefix)
+					or child.Name == ("Bush" .. g.Prefix)
+				) then
+					local rel = bCF:ToObjectSpace(child.CFrame)
+					child.CFrame = bCF * (CFrame.new(dx, 0, dz) * rel)
+				end
+			end
+		end
+	end
+
+	-- 2B. Build Low-Poly 2-Player Co-op Circulation Network, Loading Aprons & Dual Spawn Medallions!
+	local oldInfra = baseModel:FindFirstChild("BaseCoopInfrastructure")
+	if oldInfra then oldInfra:Destroy() end
+	local infraFolder = Instance.new("Folder")
+	infraFolder.Name = "BaseCoopInfrastructure"
+
+	local mainPath = baseModel:FindFirstChild("CourtyardPath_Main")
+	local pathColor = if mainPath and mainPath:IsA("BasePart") then mainPath.Color else Color3.fromRGB(146, 142, 134)
+	local pathMat = if mainPath and mainPath:IsA("BasePart") then mainPath.Material else Enum.Material.Cobblestone
+	local curbColor = Color3.fromRGB(98, 96, 92)
+	local accentAttr = baseModel:GetAttribute("AccentColor")
+	local teamAccent = if typeof(accentAttr) == "Color3" then accentAttr else Color3.fromRGB(184, 152, 86)
+
+	-- Widen existing main courtyard boulevard & front cross connector for smooth 2-player traffic
+	if mainPath and mainPath:IsA("BasePart") then
+		mainPath.Size = Vector3.new(32, mainPath.Size.Y, mainPath.Size.Z)
+	end
+	local cross2 = baseModel:FindFirstChild("CourtyardPath_Cross2")
+	if cross2 and cross2:IsA("BasePart") then
+		cross2.Size = Vector3.new(320, cross2.Size.Y, 16)
+	end
+	local frontPlaza = baseModel:FindFirstChild("FrontDiningPlaza")
+	local backAlley = if frontPlaza then frontPlaza:FindFirstChild("BackServiceAlley") else nil
+	if backAlley and backAlley:IsA("BasePart") then
+		backAlley.Transparency = 1
+	end
+
+	local function addPathSlab(name: string, sz: Vector3, relPos: Vector3, col: Color3?, mat: Enum.Material?, collide: boolean?): Part
+		local p = Instance.new("Part")
+		p.Name = name
+		p.Size = sz
+		p.CFrame = bCF * CFrame.new(relPos)
+		p.Color = col or pathColor
+		p.Material = mat or pathMat
+		p.Anchored = true
+		p.CanCollide = if collide == nil then false else collide
+		p.CanTouch = false
+		p.CanQuery = false
+		p.TopSurface = Enum.SurfaceType.Smooth
+		p.BottomSurface = Enum.SurfaceType.Smooth
+		p.Parent = infraFolder
+		return p
+	end
+
+	-- Rear Warehouse Logistics Boulevard (22 studs wide across full 324-stud span in front of all 4 CargoDoors!)
+	addPathSlab("CoopWarehouseBoulevard", Vector3.new(324, 0.14, 22), Vector3.new(0, 0.34, -102), pathColor, pathMat, false)
+	addPathSlab("CoopWarehouseCurbN", Vector3.new(324, 0.18, 1.0), Vector3.new(0, 0.38, -113.2), curbColor, Enum.Material.Concrete, false)
+	addPathSlab("CoopWarehouseCurbS", Vector3.new(324, 0.18, 1.0), Vector3.new(0, 0.38, -90.8), curbColor, Enum.Material.Concrete, false)
+
+	-- 4 Spacious Warehouse Loading Aprons connecting Boulevard directly to each CargoDoor (X = -108, -36, +36, +108)
+	for idx, wx in ipairs({ -108, -36, 36, 108 }) do
+		addPathSlab("WarehouseApron_" .. tostring(idx), Vector3.new(26, 0.14, 18), Vector3.new(wx, 0.34, -116), pathColor, pathMat, false)
+		addPathSlab("WarehouseApronStripe_" .. tostring(idx), Vector3.new(18, 0.16, 0.9), Vector3.new(wx, 0.36, -110.5), teamAccent, Enum.Material.SmoothPlastic, false)
+	end
+
+	-- Twin Outer Perimeter Co-op Bypass Avenues (X = +/-158.5 -> 100% clear even at Max HQ Lv.15 wings at +/-150!)
+	for _, side in ipairs({ -1, 1 }) do
+		local tag = if side < 0 then "West" else "East"
+		addPathSlab("CoopOuterBypass_" .. tag, Vector3.new(13, 0.14, 208), Vector3.new(side * 158.5, 0.34, -8), pathColor, pathMat, false)
+		-- Inner Courtyard Fast-Loop Lanes (connect front courtyard around Lv.1-5 restaurant straight to rear boulevard)
+		addPathSlab("CoopInnerLoop_" .. tag, Vector3.new(12, 0.14, 104), Vector3.new(side * 96, 0.32, -50), pathColor, pathMat, false)
+	end
+
+	-- Rear Restaurant-to-Warehouse Direct Service Spines (serves Lv.3-15 Rear Atrium Archway at X=+12 AND Lv.1-2 Back/West Kitchen Doors!)
+	addPathSlab("CoopRearServiceSpine_Main", Vector3.new(18, 0.14, 48), Vector3.new(12, 0.34, -78), pathColor, pathMat, false)
+	addPathSlab("CoopRearServiceSpine_Lv1Back", Vector3.new(14, 0.14, 48), Vector3.new(28.5, 0.33, -78), pathColor, pathMat, false)
+	addPathSlab("CoopRearServiceSpine_WestKitchen", Vector3.new(12, 0.14, 74), Vector3.new(-46, 0.33, -65), pathColor, pathMat, false)
+
+	-- Dual Co-op Spawn Medallions (flanking BaseSpawn at X = -11 and +11 so 2 teammates never spawn stacked!)
+	for idx, sx in ipairs({ -11, 11 }) do
+		local pad = addPathSlab("CoopSpawn_" .. tostring(idx), Vector3.new(8.2, 0.38, 8.2), Vector3.new(sx, 0.48, 72.0), Color3.fromRGB(48, 52, 60), Enum.Material.Slate, true)
+		pad.CanQuery = true
+		addPathSlab("CoopSpawnTrim_" .. tostring(idx), Vector3.new(8.8, 0.18, 8.8), Vector3.new(sx, 0.42, 72.0), teamAccent, Enum.Material.Metal, false)
+	end
+
+	infraFolder.Parent = baseModel
 
 	-- 3. Expand Perimeter Castle Defenses outward cleanly while keeping GrandFrontGate at Z = +112 locked to City Road!
 	local defenses = baseModel:FindFirstChild("Defenses")
@@ -977,14 +1296,11 @@ local function expandBaseEstate(slot: BaseSlot): ()
 				local isFrontFlank = pz > 92 and math.abs(px) > 16
 
 				if isSideWall and isRear then
-					-- Rear corner towers & corner pillars move outward in BOTH X and -Z
 					px += (if px > 0 then SIDE_EXPAND else -SIDE_EXPAND)
 					pz -= REAR_EXPAND
 				elseif isSideWall and isFrontFlank then
-					-- Front corner towers move outward in X only (staying flush with front road at Z = +112)
 					px += (if px > 0 then SIDE_EXPAND else -SIDE_EXPAND)
 				elseif isSideWall then
-					-- Long Left/Right side walls shift outward by +/-56 and lengthen rearward to close the +64 depth!
 					px += (if px > 0 then SIDE_EXPAND else -SIDE_EXPAND)
 					if sz > sx and sz >= 30 then
 						sz += REAR_EXPAND
@@ -994,7 +1310,6 @@ local function expandBaseEstate(slot: BaseSlot): ()
 						pz -= REAR_EXPAND * 0.5
 					end
 				elseif isRear then
-					-- Long Rear wall shifts back -64 and widens +112 across the full 336-stud width!
 					pz -= REAR_EXPAND
 					if sx > sz and sx >= 30 then
 						sx += SIDE_EXPAND * 2
@@ -1002,7 +1317,6 @@ local function expandBaseEstate(slot: BaseSlot): ()
 						sz += SIDE_EXPAND * 2
 					end
 				elseif isFrontFlank then
-					-- Left & Right front wall wings extend outward to meet the widened front corner towers!
 					local signX = if px > 0 then 1 else -1
 					if sx > sz and sx >= 20 then
 						sx += SIDE_EXPAND
@@ -1037,7 +1351,7 @@ function BaseService.Start(): ()
 			RestaurantExpansionBuilder.BuildTierForHQ(bm, hq, slot, 1)
 			RestaurantExpansionBuilder.BuildFrontWoodPavilion(bm, slot, 1)
 		end
-		updateGateOwnerSign(slot, nil)
+		syncBaseTeamAttributes(slot)
 	end
 
 	local function hookPendingPlayer(player: Player)
@@ -1054,7 +1368,6 @@ function BaseService.Start(): ()
 				teleportToCentralLobby(character)
 			end
 		end)
-		-- Automatically pick a random available Castle Base for the player (no manual base picker needed!)
 		task.defer(function()
 			if player.Parent and not playerSlots[player] then
 				BaseService.AssignRandomAvailableBase(player)
@@ -1081,7 +1394,7 @@ function BaseService.Start(): ()
 		end
 	end)
 
-	print("[Food Empire] BaseService started (4 Cardinal Castle Bases + Tier 1-3 Defenses ready)!")
+	print("[Food Empire] BaseService started (4 Co-op Bases x 2 Players = 8-Player Co-op + Expanded Dual-Access Layouts ready)!")
 end
 
 function BaseService.Stop(): ()

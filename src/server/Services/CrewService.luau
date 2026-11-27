@@ -28,7 +28,7 @@ local CREW_SPEED_BONUS_PER_MEMBER = 0.15
 local AUTO_COOK_INTERVAL = 4.2
 local AUTO_WAITER_INTERVAL = 2.6
 
-local crewModels: { [Player]: { Model } } = {}
+local crewModels: { [BaseService.BaseSlot]: { Model } } = {}
 local autoServeHandler: AutoServeCallback? = nil
 local autoCookOnlyHandler: AutoCookOnlyCallback? = nil
 local autoWaiterHandler: AutoWaiterCallback? = nil
@@ -40,6 +40,7 @@ local chefChoreoThread: thread? = nil
 local playerRemovingConn: RBXScriptConnection? = nil
 local unsubscribeProfile: (() -> ())? = nil
 local unsubscribeBase: (() -> ())? = nil
+local unsubscribeBaseReleased: (() -> ())? = nil
 
 -- Spacious Rear Commercial Kitchen Line Stations (supports up to 12 Chefs across HQ Lv.1-15 + VIP bonuses!)
 local CREW_STATIONS: { { Pos: Vector3, Action: string, Label: string } } = {
@@ -116,8 +117,8 @@ function CrewService.GetCookSpeedMultiplier(player: Player): number
 	return 1 + count * CREW_SPEED_BONUS_PER_MEMBER
 end
 
-local function clearCrewVisuals(player: Player): ()
-	local list = crewModels[player]
+local function clearCrewVisualsForSlot(slot: BaseService.BaseSlot): ()
+	local list = crewModels[slot]
 	if not list then
 		return
 	end
@@ -126,7 +127,7 @@ local function clearCrewVisuals(player: Player): ()
 			m:Destroy()
 		end
 	end
-	crewModels[player] = nil
+	crewModels[slot] = nil
 end
 
 local function spawnCrewChef(parent: Instance, index: number, worldCF: CFrame, accentColor: Color3, initialAction: string, initialLabel: string): Model
@@ -219,15 +220,14 @@ local function spawnCrewChef(parent: Instance, index: number, worldCF: CFrame, a
 end
 
 function CrewService.SyncCrewVisuals(player: Player): ()
-	clearCrewVisuals(player)
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if not slot then
+		return
+	end
+	clearCrewVisualsForSlot(slot)
 
 	local count = CrewService.GetCrewCount(player)
 	if count <= 0 then
-		return
-	end
-
-	local slot = BaseService.GetPlayerBaseSlot(player)
-	if not slot then
 		return
 	end
 
@@ -251,7 +251,7 @@ function CrewService.SyncCrewVisuals(player: Player): ()
 		local worldCF = hq.PrimaryPart.CFrame * CFrame.new(st.Pos)
 		table.insert(spawned, spawnCrewChef(hq, i, worldCF, accentColor, st.Action, st.Label))
 	end
-	crewModels[player] = spawned
+	crewModels[slot] = spawned
 end
 
 function CrewService.TryHireCrew(player: Player, bypassGold: boolean?): (boolean, string)
@@ -303,38 +303,45 @@ function CrewService.Start(): ()
 		CrewService.SyncCrewVisuals(player)
 	end)
 
+	unsubscribeBaseReleased = BaseService.OnBaseReleased(function(slot, _, remainingCount)
+		if remainingCount == 0 then
+			clearCrewVisualsForSlot(slot)
+		end
+	end)
+
 	unsubscribeProfile = PlayerDataService.OnProfileChanged(function(player)
-		local existing = crewModels[player]
+		local slot = BaseService.GetPlayerBaseSlot(player)
+		if not slot then
+			return
+		end
+		local existing = crewModels[slot]
 		local targetCount = CrewService.GetCrewCount(player)
-		if (existing and #existing or 0) ~= targetCount then
+		if (if existing then #existing else 0) ~= targetCount then
 			CrewService.SyncCrewVisuals(player)
 		end
 	end)
 
-	playerRemovingConn = Players.PlayerRemoving:Connect(function(player)
-		clearCrewVisuals(player)
-	end)
-
-	-- Hired Chefs loop: fetch ingredients from Warehouse & cook dishes onto the Kitchen Counter!
+	-- Hired Chefs loop: run ONCE per occupied Co-op Base (never double-cook for 2 teammates!)
 	loopThread = task.spawn(function()
 		while isRunning do
 			task.wait(AUTO_COOK_INTERVAL)
 			if not isRunning then
 				break
 			end
-			for _, player in ipairs(Players:GetPlayers()) do
-				if CrewService.GetCrewCount(player) > 0 then
+			for _, slot in ipairs(BaseService.GetSlotOrder()) do
+				local lead = BaseService.GetBaseLeadPlayer(slot)
+				if lead and CrewService.GetCrewCount(lead) > 0 then
 					if autoCookOnlyHandler then
-						autoCookOnlyHandler(player)
+						autoCookOnlyHandler(lead)
 					elseif autoServeHandler then
-						autoServeHandler(player)
+						autoServeHandler(lead)
 					end
 				end
 			end
 		end
 	end)
 
-	-- Hired Waiters loop: pick up ready dishes from Kitchen Counter & deliver them to Customers!
+	-- Hired Waiters loop: run ONCE per occupied Co-op Base!
 	waiterThread = task.spawn(function()
 		while isRunning do
 			task.wait(AUTO_WAITER_INTERVAL)
@@ -342,9 +349,10 @@ function CrewService.Start(): ()
 				break
 			end
 			if autoWaiterHandler then
-				for _, player in ipairs(Players:GetPlayers()) do
-					if CrewService.GetWaiterCount(player) > 0 then
-						autoWaiterHandler(player)
+				for _, slot in ipairs(BaseService.GetSlotOrder()) do
+					local lead = BaseService.GetBaseLeadPlayer(slot)
+					if lead and CrewService.GetWaiterCount(lead) > 0 then
+						autoWaiterHandler(lead)
 					end
 				end
 			end
@@ -397,6 +405,10 @@ function CrewService.Stop(): ()
 		unsubscribeBase()
 		unsubscribeBase = nil
 	end
+	if unsubscribeBaseReleased then
+		unsubscribeBaseReleased()
+		unsubscribeBaseReleased = nil
+	end
 	if unsubscribeProfile then
 		unsubscribeProfile()
 		unsubscribeProfile = nil
@@ -405,8 +417,8 @@ function CrewService.Stop(): ()
 		playerRemovingConn:Disconnect()
 		playerRemovingConn = nil
 	end
-	for player in pairs(crewModels) do
-		clearCrewVisuals(player)
+	for slot in pairs(crewModels) do
+		clearCrewVisualsForSlot(slot)
 	end
 end
 

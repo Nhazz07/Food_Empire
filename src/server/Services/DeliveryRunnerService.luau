@@ -260,7 +260,10 @@ local function buildBikeCourierNPC(
 
 	model.PrimaryPart = root
 	model:SetAttribute("OwnerUserId", owner.UserId)
-	model:SetAttribute("Faction", "Player_" .. tostring(owner.UserId))
+	model:SetAttribute("Faction", BaseService.GetPlayerFactionId(owner))
+	if slot then
+		model:SetAttribute("BaseSlot", slot)
+	end
 	CollectionService:AddTag(model, "PlayerDeliveryRunner")
 	model.Parent = runnerFolder or Workspace
 

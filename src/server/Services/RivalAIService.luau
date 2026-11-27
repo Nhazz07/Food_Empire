@@ -60,7 +60,9 @@ local function getHighestPlayerProgression(): (number, number, number)
 		if prof.Reputation > maxRep then
 			maxRep = prof.Reputation
 		end
-		local owned = SectorService.GetOwnedSectors("Player_" .. tostring(p.UserId))
+		local slotAttr = p:GetAttribute("BaseSlot")
+		local pFaction = if typeof(slotAttr) == "string" and slotAttr ~= "" then ("Base_" .. slotAttr) else ("Player_" .. tostring(p.UserId))
+		local owned = SectorService.GetOwnedSectors(pFaction)
 		if #owned > maxSectors then
 			maxSectors = #owned
 		end

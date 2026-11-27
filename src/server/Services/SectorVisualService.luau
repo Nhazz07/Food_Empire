@@ -23,6 +23,11 @@ local function getFactionColor(factionId: string?): Color3
 		return SectorConfig.FactionColors.Rival
 	end
 
+	local baseSlotStr = string.match(factionId, "^Base_(%a+)$")
+	if baseSlotStr and SectorConfig.FactionColors[baseSlotStr] then
+		return SectorConfig.FactionColors[baseSlotStr]
+	end
+
 	local userIdStr = string.match(factionId, "^Player_(%d+)$")
 	if userIdStr then
 		local player = Players:GetPlayerByUserId(tonumber(userIdStr) or 0)
@@ -49,6 +54,23 @@ local function getOwnerLabel(sector: SectorService.SectorData): (string, Color3)
 
 	if sector.Owner == "Rival" then
 		return "RIVAL TERRITORY", SectorConfig.FactionColors.Rival
+	end
+
+	local baseSlotStr = string.match(sector.Owner, "^Base_(%a+)$")
+	if baseSlotStr then
+		local color = getFactionColor(sector.Owner)
+		local names: { string } = {}
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p:GetAttribute("BaseSlot") == baseSlotStr then
+				table.insert(names, string.upper(p.DisplayName))
+			end
+		end
+		if #names >= 2 then
+			return "OWNED BY " .. names[1] .. " & " .. names[2], color
+		elseif #names == 1 then
+			return "OWNED BY " .. names[1], color
+		end
+		return string.upper(baseSlotStr) .. " TEAM TERRITORY", color
 	end
 
 	local userIdStr = string.match(sector.Owner, "^Player_(%d+)$")

@@ -420,7 +420,11 @@ function SyndicateContractService.StartSmugglerConvoy(player: Player): (boolean,
 
 	convoy.PrimaryPart = root
 	convoy:SetAttribute("OwnerUserId", player.UserId)
-	convoy:SetAttribute("Faction", "Player_" .. tostring(player.UserId))
+	convoy:SetAttribute("Faction", BaseService.GetPlayerFactionId(player))
+	local cSlot = BaseService.GetPlayerBaseSlot(player)
+	if cSlot then
+		convoy:SetAttribute("BaseSlot", cSlot)
+	end
 	CollectionService:AddTag(convoy, "PlayerDeliveryRunner")
 	convoy.Parent = serviceFolder or Workspace
 	activeConvoys[player] = convoy

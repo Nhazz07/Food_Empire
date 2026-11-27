@@ -1427,7 +1427,13 @@ function TurfConfig.ResolveFactionColor(factionId: string?): Color3
 		return mafiaSpec.BaseColor
 	end
 
-	-- 2. Player Factions ("Player_<UserId>") -> read live AccentColor from their claimed Castle Base!
+	-- 2. Co-op Base Factions ("Base_<Slot>") -> read live AccentColor from that Castle Base!
+	local baseSlotStr = string.match(factionId, "^Base_(%a+)$")
+	if baseSlotStr then
+		return TurfConfig.ResolveBaseSlotColor(baseSlotStr)
+	end
+
+	-- 3. Player Factions ("Player_<UserId>") -> read live AccentColor from their claimed Castle Base!
 	local userIdStr = string.match(factionId, "^Player_(%d+)$")
 	if userIdStr then
 		local uid = tonumber(userIdStr) or 0
@@ -1473,6 +1479,21 @@ function TurfConfig.GetFactionDisplayName(factionId: string?): string
 	local mafia = TurfConfig.MafiaFactions[factionId]
 	if mafia then
 		return mafia.ShortName
+	end
+	local baseSlotStr = string.match(factionId, "^Base_(%a+)$")
+	if baseSlotStr then
+		local names: { string } = {}
+		for _, p in ipairs(Players:GetPlayers()) do
+			if p:GetAttribute("BaseSlot") == baseSlotStr then
+				table.insert(names, string.upper(p.DisplayName))
+			end
+		end
+		if #names >= 2 then
+			return names[1] .. " & " .. names[2]
+		elseif #names == 1 then
+			return names[1]
+		end
+		return string.upper(baseSlotStr) .. " TEAM"
 	end
 	local userIdStr = string.match(factionId, "^Player_(%d+)$")
 	if userIdStr then

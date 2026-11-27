@@ -396,12 +396,13 @@ function MafiaService.Start(): ()
 			if shakedownTimer >= SHAKEDOWN_INTERVAL then
 				shakedownTimer = 0
 				local eligiblePlayers: { Player } = {}
-				for _, p in ipairs(Players:GetPlayers()) do
-					if BaseService.GetPlayerBaseSlot(p)
-						and not NightMafiaRaidService.IsRaidActive(p)
-						and PlayerDataService.GetProfile(p).Coins >= 60
+				for _, slot in ipairs(BaseService.GetSlotOrder()) do
+					local lead = BaseService.GetBaseLeadPlayer(slot)
+					if lead
+						and not NightMafiaRaidService.IsRaidActive(lead)
+						and PlayerDataService.GetProfile(lead).Coins >= 60
 					then
-						table.insert(eligiblePlayers, p)
+						table.insert(eligiblePlayers, lead)
 					end
 				end
 				if #eligiblePlayers > 0 then
@@ -410,7 +411,14 @@ function MafiaService.Start(): ()
 						if not agent.IsBoss and not agent.ShakedownTarget and agent.Humanoid.Health > 0 then
 							agent.ShakedownTarget = victim
 							agent.ShakedownDeadline = os.clock() + SHAKEDOWN_WINDOW
-							sendToast(victim, "🕶️ FOOD MAFIA heading to your front gate for Protection Tax! Fight them off!")
+							local vSlot = BaseService.GetPlayerBaseSlot(victim)
+							if vSlot then
+								for _, m in ipairs(BaseService.GetBasePlayers(vSlot)) do
+									sendToast(m, "🕶️ FOOD MAFIA heading to your front gate for Protection Tax! Defend together!")
+								end
+							else
+								sendToast(victim, "🕶️ FOOD MAFIA heading to your front gate for Protection Tax! Fight them off!")
+							end
 							break
 						end
 					end

@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 
+local BaseService = require("./BaseService")
 local SectorService = require("./SectorService")
 
 local SectorCaptureService = {}
@@ -44,7 +45,7 @@ local function collectOccupants(zone: BasePart): { [string]: number }
 	for _, player in ipairs(Players:GetPlayers()) do
 		local root = getLivingRoot(player.Character)
 		if root and isPositionInsideZone(root.Position, zone) then
-			local factionId = "Player_" .. tostring(player.UserId)
+			local factionId = BaseService.GetPlayerFactionId(player)
 			factionCounts[factionId] = (factionCounts[factionId] or 0) + 1
 		end
 	end

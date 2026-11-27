@@ -9,6 +9,7 @@ local TweenService = game:GetService("TweenService")
 local MafiaVisualBuilder = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("utils"):WaitForChild("MafiaVisualBuilder")
 )
+local BaseService = require("./BaseService")
 local PlayerDataService = require("./PlayerDataService")
 local BlackMarketService = require("./BlackMarketService")
 local MonetizationService = require("./MonetizationService")
@@ -458,10 +459,16 @@ local function findBestEnemyForMerc(owner: Player, c: MercenaryContract, anchor:
 	local bestM: Model? = nil
 	local bestD = if c.Mode == "Attack" then 145 else 36
 	local ownerStole = hasPlayerStolenShipment(owner)
+	local myFaction = BaseService.GetPlayerFactionId(owner)
+	local mySlot = BaseService.GetPlayerBaseSlot(owner)
 	for _, tagName in ipairs({ "MafiaUnit", "ApexMafiaUnit", "PenthouseBossUnit", "RivalSamuraiUnit", "RivalAIUnit", "TurfGuardUnit" }) do
 		for _, u in ipairs(CollectionService:GetTagged(tagName)) do
 			if u:IsA("Model") then
-				if tagName == "TurfGuardUnit" and u:GetAttribute("OwnerUserId") == owner.UserId then
+				if tagName == "TurfGuardUnit" and (
+					u:GetAttribute("OwnerUserId") == owner.UserId
+					or u:GetAttribute("Faction") == myFaction
+					or (mySlot ~= nil and u:GetAttribute("BaseSlot") == mySlot)
+				) then
 					continue
 				end
 				if tagName == "RivalSamuraiUnit" or tagName == "ApexMafiaUnit" then

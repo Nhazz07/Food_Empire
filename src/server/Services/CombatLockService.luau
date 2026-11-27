@@ -8,6 +8,8 @@
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 
+local BaseService = require("./BaseService")
+
 type CombatState = {
 	LastHitAt: number,
 	LockUntil: number,
@@ -70,7 +72,7 @@ local function ensureInit(): ()
 end
 
 local function findNearestLivingHostileDist(player: Player, playerPos: Vector3): number
-	local myFaction = "Player_" .. tostring(player.UserId)
+	local myFaction = BaseService.GetPlayerFactionId(player)
 	local nearest = math.huge
 	for _, tagName in ipairs(HOSTILE_TAGS) do
 		for _, unit in ipairs(CollectionService:GetTagged(tagName)) do

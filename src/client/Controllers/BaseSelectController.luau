@@ -101,7 +101,7 @@ function BaseSelectController.Init(parentGui: ScreenGui, onChooseBase: ChooseBas
 	sub.BackgroundTransparency = 1
 	sub.Font = Enum.Font.GothamBold
 	sub.TextWrapped = true
-	sub.Text = "Choose your 1 Castle Base below! Includes your Restaurant HQ & starter Seafood & Fish Ingredient Warehouse (unlock Vegetable, Fruit & Meat Warehouses with Gold)."
+	sub.Text = "Join a 2-Player Co-op Castle Base below! Share 1 Restaurant HQ, 4 Ingredient Warehouses, and Base Territory with your partner."
 	sub.TextSize = 13
 	sub.TextColor3 = Color3.fromRGB(224, 232, 248)
 	sub.ZIndex = 22

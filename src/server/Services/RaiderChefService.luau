@@ -153,7 +153,10 @@ local function buildRaiderChefModel(owner: Player, index: number, spawnPos: Vect
 	end)
 
 	model.PrimaryPart = root
-	model:SetAttribute("Faction", "Player_" .. tostring(owner.UserId))
+	model:SetAttribute("Faction", BaseService.GetPlayerFactionId(owner))
+	if slot then
+		model:SetAttribute("BaseSlot", slot)
+	end
 	model:SetAttribute("OwnerUserId", owner.UserId)
 	CollectionService:AddTag(model, "PlayerRaiderUnit")
 	CollectionService:AddTag(model, "AnimatedRaiderLimbs")
@@ -245,7 +248,7 @@ function RaiderChefService.TryHireRaider(player: Player): (boolean, string)
 end
 
 local function pickTargetSectorForRaider(owner: Player, currentPos: Vector3, index: number): string?
-	local myFaction = "Player_" .. tostring(owner.UserId)
+	local myFaction = BaseService.GetPlayerFactionId(owner)
 	local bestId: string? = nil
 	local bestScore = -math.huge
 
@@ -285,7 +288,7 @@ local function stepRaiderAgent(agent: RaiderAgent): ()
 
 	-- 1. Defend Owner & engage Mafia / Rival Chefs / Enemy Turf Guards!
 	local now = os.clock()
-	local myFaction = "Player_" .. tostring(agent.Owner.UserId)
+	local myFaction = BaseService.GetPlayerFactionId(agent.Owner)
 	local ownerChar = agent.Owner.Character
 	local ownerRoot = if ownerChar then ownerChar:FindFirstChild("HumanoidRootPart") else nil
 	for _, tagName in ipairs({ "MafiaUnit", "RivalAIUnit", "TurfGuardUnit" }) do

@@ -26,13 +26,15 @@ type PlayerWarehouseState = {
 
 local WarehouseService = {}
 
-local states: { [Player]: PlayerWarehouseState } = {}
+local slotStates: { [BaseService.BaseSlot]: PlayerWarehouseState } = {}
+local unboundStates: { [Player]: PlayerWarehouseState } = {}
 local listeners: { InventoryChangedCallback } = {}
 local spendCoinsHandler: SpendCoinsFn? = nil
 local isRunning = false
 local playerAddedConn: RBXScriptConnection? = nil
 local playerRemovingConn: RBXScriptConnection? = nil
 local unsubscribeBaseAssigned: (() -> ())? = nil
+local unsubscribeBaseReleased: (() -> ())? = nil
 local promptConnections: { RBXScriptConnection } = {}
 
 local function createDefaultState(): PlayerWarehouseState
@@ -53,13 +55,72 @@ local function createDefaultState(): PlayerWarehouseState
 	}
 end
 
-local function ensureState(player: Player): PlayerWarehouseState
-	local existing = states[player]
+local function getCategoryTotalFromState(state: PlayerWarehouseState, category: WarehouseCategory): number
+	local spec = WarehouseConfig.Specs[category]
+	if not spec then
+		return 0
+	end
+	local total = 0
+	for _, ingredient in ipairs(spec.Ingredients) do
+		total += state.Stock[ingredient] or 0
+	end
+	return total
+end
+
+local function getCapacityFromState(state: PlayerWarehouseState, category: WarehouseCategory): number
+	local level = state.Levels[category] or 0
+	if level <= 0 then
+		return 0
+	end
+	local tier = WarehouseConfig.Tiers[level] or WarehouseConfig.Tiers[1]
+	return tier.Capacity
+end
+
+local function mergeWarehouseStates(target: PlayerWarehouseState, incoming: PlayerWarehouseState): ()
+	for _, category in ipairs(WarehouseConfig.Categories) do
+		local minLv = if category == "Fish" then 1 else 0
+		local lvA = target.Levels[category] or minLv
+		local lvB = incoming.Levels[category] or minLv
+		target.Levels[category] = math.clamp(math.max(lvA, lvB), minLv, WarehouseConfig.MaxLevel)
+	end
+	for _, category in ipairs(WarehouseConfig.Categories) do
+		local spec = WarehouseConfig.Specs[category]
+		if spec then
+			local cap = getCapacityFromState(target, category)
+			local curTotal = getCategoryTotalFromState(target, category)
+			local spaceLeft = math.max(0, cap - curTotal)
+			for _, ing in ipairs(spec.Ingredients) do
+				local addQty = math.min(math.max(0, math.floor(incoming.Stock[ing] or 0)), spaceLeft)
+				if addQty > 0 then
+					target.Stock[ing] = (target.Stock[ing] or 0) + addQty
+					spaceLeft -= addQty
+				end
+			end
+		end
+	end
+end
+
+local function ensureSlotState(slot: BaseService.BaseSlot): PlayerWarehouseState
+	local existing = slotStates[slot]
 	if existing then
 		return existing
 	end
 	local created = createDefaultState()
-	states[player] = created
+	slotStates[slot] = created
+	return created
+end
+
+local function ensureState(player: Player): PlayerWarehouseState
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if slot then
+		return ensureSlotState(slot)
+	end
+	local existing = unboundStates[player]
+	if existing then
+		return existing
+	end
+	local created = createDefaultState()
+	unboundStates[player] = created
 	return created
 end
 
@@ -131,21 +192,16 @@ function WarehouseService.GetInventorySnapshot(player: Player): WarehouseSnapsho
 	}
 end
 
-local function updateWarehouseVisualsForPlayer(player: Player): ()
-	local slot = BaseService.GetPlayerBaseSlot(player)
-	if not slot then
-		return
-	end
-
+local function updateWarehouseVisualsForSlot(slot: BaseService.BaseSlot, state: PlayerWarehouseState): ()
 	for _, plot in ipairs(CollectionService:GetTagged("WarehousePlot")) do
 		if plot:GetAttribute("BaseSlot") == slot then
 			local catAttr = plot:GetAttribute("Category")
 			if typeof(catAttr) == "string" and WarehouseConfig.Specs[catAttr :: WarehouseCategory] then
 				local category = catAttr :: WarehouseCategory
 				local spec = WarehouseConfig.Specs[category]
-				local level = WarehouseService.GetWarehouseLevel(player, category)
-				local total = WarehouseService.GetCategoryTotal(player, category)
-				local cap = WarehouseService.GetCapacity(player, category)
+				local level = state.Levels[category] or 0
+				local total = getCategoryTotalFromState(state, category)
+				local cap = getCapacityFromState(state, category)
 
 				-- Update progressive Lv.2 -> Lv.10 visual architecture on the 3D Warehouse building!
 				local tier2Folder = plot:FindFirstChild("Tier2")
@@ -341,11 +397,29 @@ local function updateWarehouseVisualsForPlayer(player: Player): ()
 	end
 end
 
+local function updateWarehouseVisualsForPlayer(player: Player): ()
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if not slot then
+		return
+	end
+	updateWarehouseVisualsForSlot(slot, ensureSlotState(slot))
+end
+
 local function notifyChanged(player: Player): ()
-	updateWarehouseVisualsForPlayer(player)
-	local snapshot = WarehouseService.GetInventorySnapshot(player)
-	for _, cb in ipairs(listeners) do
-		task.spawn(cb, player, snapshot)
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if slot then
+		updateWarehouseVisualsForSlot(slot, ensureSlotState(slot))
+		for _, member in ipairs(BaseService.GetBasePlayers(slot)) do
+			local snapshot = WarehouseService.GetInventorySnapshot(member)
+			for _, cb in ipairs(listeners) do
+				task.spawn(cb, member, snapshot)
+			end
+		end
+	else
+		local snapshot = WarehouseService.GetInventorySnapshot(player)
+		for _, cb in ipairs(listeners) do
+			task.spawn(cb, player, snapshot)
+		end
 	end
 end
 
@@ -591,13 +665,13 @@ function WarehouseService.LoadPlayerState(
 	savedLevels: { [string]: number }?,
 	savedStock: { [string]: number }?
 ): ()
-	local state = ensureState(player)
+	local loaded = createDefaultState()
 	if savedLevels then
 		for _, category in ipairs(WarehouseConfig.Categories) do
 			local lv = savedLevels[category]
 			if typeof(lv) == "number" then
 				local minLv = if category == "Fish" then 1 else 0
-				state.Levels[category] = math.clamp(math.floor(lv), minLv, WarehouseConfig.MaxLevel)
+				loaded.Levels[category] = math.clamp(math.floor(lv), minLv, WarehouseConfig.MaxLevel)
 			end
 		end
 	end
@@ -605,9 +679,20 @@ function WarehouseService.LoadPlayerState(
 		for ingredient in pairs(WarehouseConfig.IngredientToCategory) do
 			local qty = savedStock[ingredient]
 			if typeof(qty) == "number" and qty >= 0 then
-				state.Stock[ingredient] = math.floor(qty)
+				loaded.Stock[ingredient] = math.floor(qty)
 			end
 		end
+	end
+
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if slot then
+		if slotStates[slot] and BaseService.GetBasePlayerCount(slot) >= 2 then
+			mergeWarehouseStates(slotStates[slot], loaded)
+		else
+			slotStates[slot] = loaded
+		end
+	else
+		unboundStates[player] = loaded
 	end
 	notifyChanged(player)
 end
@@ -630,12 +715,13 @@ local function wireWarehousePrompts(): ()
 			local prompt: ProximityPrompt
 			if existing and existing:IsA("ProximityPrompt") then
 				prompt = existing
+				prompt.MaxActivationDistance = 18
 			else
 				prompt = Instance.new("ProximityPrompt")
 				prompt.Name = "WarehouseUpgradePrompt"
 				prompt.KeyboardKeyCode = Enum.KeyCode.E
 				prompt.HoldDuration = 0.35
-				prompt.MaxActivationDistance = 14
+				prompt.MaxActivationDistance = 18
 				prompt.RequiresLineOfSight = false
 				prompt.ActionText = "Upgrade Warehouse"
 				prompt.ObjectText = WarehouseConfig.Specs[category].DisplayName
@@ -667,12 +753,25 @@ function WarehouseService.Start(): ()
 	end)
 
 	playerRemovingConn = Players.PlayerRemoving:Connect(function(player)
-		states[player] = nil
+		unboundStates[player] = nil
 	end)
 
-	unsubscribeBaseAssigned = BaseService.OnBaseAssigned(function(player)
-		ensureState(player)
-		updateWarehouseVisualsForPlayer(player)
+	unsubscribeBaseAssigned = BaseService.OnBaseAssigned(function(player, slot)
+		local pending = unboundStates[player]
+		unboundStates[player] = nil
+		if not slotStates[slot] then
+			slotStates[slot] = pending or createDefaultState()
+		elseif pending then
+			mergeWarehouseStates(slotStates[slot], pending)
+		end
+		notifyChanged(player)
+	end)
+
+	unsubscribeBaseReleased = BaseService.OnBaseReleased(function(slot, _, remainingCount)
+		if remainingCount == 0 then
+			slotStates[slot] = nil
+			updateWarehouseVisualsForSlot(slot, createDefaultState())
+		end
 	end)
 
 	for _, player in ipairs(Players:GetPlayers()) do
@@ -680,7 +779,7 @@ function WarehouseService.Start(): ()
 		updateWarehouseVisualsForPlayer(player)
 	end
 
-	print("[Food Empire] WarehouseService started (Fish, Meat, Vegetable, Fruit storage & upgrades live)!")
+	print("[Food Empire] WarehouseService started (Shared Co-op Fish, Meat, Vegetable, Fruit storage & upgrades live)!")
 end
 
 function WarehouseService.Stop(): ()
@@ -696,6 +795,10 @@ function WarehouseService.Stop(): ()
 	if unsubscribeBaseAssigned then
 		unsubscribeBaseAssigned()
 		unsubscribeBaseAssigned = nil
+	end
+	if unsubscribeBaseReleased then
+		unsubscribeBaseReleased()
+		unsubscribeBaseReleased = nil
 	end
 	for _, conn in ipairs(promptConnections) do
 		conn:Disconnect()

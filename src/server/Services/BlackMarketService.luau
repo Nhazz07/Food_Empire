@@ -1041,7 +1041,7 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 	local isRivalSamurai = CollectionService:HasTag(hitModel, "RivalSamuraiUnit")
 	local isPenthouseBoss = CollectionService:HasTag(hitModel, "PenthouseBossUnit")
 	local isEnemyTurfGuard = CollectionService:HasTag(hitModel, "TurfGuardUnit")
-		and hitModel:GetAttribute("Faction") ~= ("Player_" .. tostring(player.UserId))
+		and hitModel:GetAttribute("Faction") ~= BaseService.GetPlayerFactionId(player)
 	if isRival or isMafia or isApexMafia or isRivalSamurai or isPenthouseBoss or isEnemyTurfGuard then
 		local hitDir = hitPos - root.Position
 		if hitDir.Magnitude > 0.05 then
@@ -1140,9 +1140,9 @@ local function applyBulletHit(player: Player, root: BasePart, hitModel: Model, h
 		return true
 	end
 
-	-- PvP outside safe plazas (respects Syndicate Family co-op friendly-fire immunity!)
+	-- PvP outside safe plazas (respects Co-op Base Teammate AND Syndicate Family friendly-fire immunity!)
 	local otherPlayer = Players:GetPlayerFromCharacter(hitModel)
-	if otherPlayer and otherPlayer ~= player and not SyndicateFamilyService.AreFamilyAllies(player, otherPlayer) then
+	if otherPlayer and otherPlayer ~= player and not BaseService.AreBaseTeammates(player, otherPlayer) and not SyndicateFamilyService.AreFamilyAllies(player, otherPlayer) then
 		if not isInsideOwnBase(otherPlayer, hitPos) and not isInsideOwnBase(player, root.Position) then
 			local pvpDmg = math.floor(dmg * 0.75)
 			targetHum:TakeDamage(pvpDmg)
@@ -1833,7 +1833,7 @@ function BlackMarketService.ThrowFlashbang(player: Player): (boolean, string)
 	can.CanCollide = false
 	can.Parent = Workspace
 
-	local myFaction = "Player_" .. tostring(player.UserId)
+	local myFaction = BaseService.GetPlayerFactionId(player)
 	emitCombatSFX("MeleeSwing", startPos, nil)
 
 	task.delay(0.32, function()
@@ -2078,7 +2078,7 @@ function BlackMarketService.DeployC4Charge(player: Player): (boolean, string)
 		end)
 
 		-- Heavy Explosive Damage (125 DMG) + Knockback to all hostile units within 26 studs!
-		local myFaction = "Player_" .. tostring(player.UserId)
+		local myFaction = BaseService.GetPlayerFactionId(player)
 		local seen: { [Model]: boolean } = {}
 		local blastedCount = 0
 		for _, tagName in ipairs(HOSTILE_UNIT_TAGS) do

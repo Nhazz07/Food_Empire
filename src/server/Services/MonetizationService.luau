@@ -313,7 +313,7 @@ function MonetizationService.SyncProStaffVisuals(player: Player): ()
 	local spawned: { Model } = {}
 	local baseCF = hq.PrimaryPart.CFrame
 
-	if MonetizationService.HasPass(player, "MasterProChef") then
+	if MonetizationService.HasPass(player, "MasterProChef") and not hq:FindFirstChild("MasterProChef_NPC") then
 		local master = spawnProChefModel(
 			hq,
 			"MasterProChef_NPC",
@@ -334,7 +334,7 @@ function MonetizationService.SyncProStaffVisuals(player: Player): ()
 		table.insert(spawned, master)
 	end
 
-	if MonetizationService.HasPass(player, "VIPEmpireStaff") then
+	if MonetizationService.HasPass(player, "VIPEmpireStaff") and not hq:FindFirstChild("EliteSousChef_1") then
 		local sousL = spawnProChefModel(
 			hq,
 			"EliteSousChef_1",

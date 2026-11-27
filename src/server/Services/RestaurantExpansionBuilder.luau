@@ -353,14 +353,14 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 				elseif n == "OpenNeonBox" and typeof(origP) == "Vector3" and typeof(origR) == "Vector3" then
 					desc.CFrame = hqCF * CFrame.new(-24.0, origP.Y + 4.5, origP.Z) * CFrame.fromOrientation(origR.X, origR.Y, origR.Z)
 				elseif (n == "LeftMidL" or n == "LeftMidR" or n == "RightMidL" or n == "RightMidR" or n == "LeftGlass" or n == "RightGlass") and typeof(origP) == "Vector3" and typeof(origS) == "Vector3" then
-					if (tier >= 2 and (n == "RightGlass")) or (tier >= 3 and (n == "LeftGlass")) then
+					if (tier >= 2 and (n == "RightGlass")) or (tier >= 3 and (n == "LeftGlass")) or (tier <= 2 and n == "LeftGlass") then
 						hideArchPart(desc)
 					else
 						local newH = origS.Y + FLOOR1_LIFT
 						desc.Size = Vector3.new(origS.X, newH, origS.Z)
 						desc.CFrame = hqCF * CFrame.new(origP.X, 6.5 + newH * 0.5, origP.Z)
 					end
-				elseif (tier >= 2 and n == "RightBrick") or (tier >= 3 and n == "LeftBrick") then
+				elseif (tier >= 2 and n == "RightBrick") or n == "LeftBrick" then
 					hideArchPart(desc)
 				elseif string.find(n, "Awning", 1, true) or string.find(n, "StringBulb", 1, true) then
 					if typeof(origP) == "Vector3" and typeof(origR) == "Vector3" then
@@ -374,11 +374,8 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 				elseif tier <= 2 then
 					-- Genuine tall 1-story starter/expanded building (21-stud ceiling!): hide upper-story walls, shutters, rails, roof & marquee
 					local isHighPart = typeof(origP) == "Vector3" and origP.Y > 16.4 and n ~= "BackStucco" and n ~= "CornerPilaster"
-					if isUpperStoryPart(n) or isHighPart then
+					if isUpperStoryPart(n) or isHighPart or n == "BackBrick" or n == "BackStucco" then
 						hideArchPart(desc)
-					elseif n == "BackStucco" then
-						desc.Size = Vector3.new(76.0, 15.2, 1.6)
-						desc.CFrame = hqCF * CFrame.new(0, 13.9, -30.5)
 					elseif n == "CornerPilaster" and typeof(origP) == "Vector3" then
 						desc.Size = Vector3.new(2.8, 21.6, 2.8)
 						desc.CFrame = hqCF * CFrame.new(origP.X, 11.4, origP.Z)
@@ -597,9 +594,30 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 	mPart("FrontWall_TopBeamR", Vector3.new(25.0, 2.0, 1.8), CFrame.new(25.8, 20.2, 18.0), palette.WallPrimary, Enum.Material.SmoothPlastic, true)
 
 	-- =========================================================================
-	-- LEVEL 1 & 2: TALL AIRY SINGLE-STORY PARAPET ROOF & GRAND SIGN (26 STUDS HIGH!)
+	-- LEVEL 1 & 2: TALL AIRY SINGLE-STORY PARAPET ROOF, CO-OP REAR/SIDE SERVICE DOORS & GRAND SIGN
 	-- =========================================================================
 	if tier <= 2 then
+		-- Co-op Back Wall (Z = -30.5) with wide 13-stud Rear Service Archway (X = +22..+35) straight to the 4 Warehouses!
+		mPart("CoopBackWall_LeftLow", Vector3.new(59.6, 6.0, 1.8), CFrame.new(-8.2, 3.5, -30.5), stoneWainscot, Enum.Material.Brick, true)
+		mPart("CoopBackWall_LeftUp", Vector3.new(59.6, 15.2, 1.6), CFrame.new(-8.2, 13.9, -30.5), palette.WallPrimary, Enum.Material.SmoothPlastic, true)
+		mPart("CoopBackWall_RightLow", Vector3.new(3.2, 6.0, 1.8), CFrame.new(36.4, 3.5, -30.5), stoneWainscot, Enum.Material.Brick, true)
+		mPart("CoopBackWall_RightUp", Vector3.new(3.2, 15.2, 1.6), CFrame.new(36.4, 13.9, -30.5), palette.WallPrimary, Enum.Material.SmoothPlastic, true)
+		mPart("CoopBackDoor_Header", Vector3.new(14.8, 6.2, 2.0), CFrame.new(28.5, 18.4, -30.5), palette.WallTrim, Enum.Material.Wood, true)
+		mPart("CoopBackDoor_PillarL", Vector3.new(1.8, 16.0, 2.2), CFrame.new(21.6, 8.6, -30.5), palette.WallTrim, Enum.Material.Wood, true)
+		mPart("CoopBackDoor_PillarR", Vector3.new(1.8, 16.0, 2.2), CFrame.new(35.0, 8.6, -30.5), palette.WallTrim, Enum.Material.Wood, true)
+		mPart("CoopBackDoor_BrassTrim", Vector3.new(13.6, 0.45, 2.4), CFrame.new(28.5, 15.3, -30.5), palette.BrassAccent, Enum.Material.Metal, false)
+		mPart("CoopBackDoor_Threshold", Vector3.new(14.2, 0.22, 6.4), CFrame.new(28.5, 0.65, -31.8), marbleWhite, Enum.Material.Marble, false)
+
+		-- Co-op West Kitchen Side Wall (X = -37.5) with wide 13-stud Kitchen Delivery Doorway (Z = -17..-4) directly beside the stove!
+		mPart("CoopWestWall_RearLow", Vector3.new(1.8, 6.0, 14.0), CFrame.new(-37.5, 3.5, -24.0), stoneWainscot, Enum.Material.Brick, true)
+		mPart("CoopWestWall_FrontLow", Vector3.new(1.8, 6.0, 22.0), CFrame.new(-37.5, 3.5, 7.0), stoneWainscot, Enum.Material.Brick, true)
+		mPart("CoopWestWall_FrontGlass", Vector3.new(0.4, 14.5, 8.0), CFrame.new(-37.5, 13.75, 0.0), glassCol, Enum.Material.Glass, true, 0.52)
+		mPart("CoopWestDoor_Header", Vector3.new(2.0, 6.2, 14.4), CFrame.new(-37.5, 18.4, -10.5), palette.WallTrim, Enum.Material.Wood, true)
+		mPart("CoopWestDoor_PillarN", Vector3.new(2.2, 16.0, 1.6), CFrame.new(-37.5, 8.6, -17.2), palette.WallTrim, Enum.Material.Wood, true)
+		mPart("CoopWestDoor_PillarS", Vector3.new(2.2, 16.0, 1.6), CFrame.new(-37.5, 8.6, -3.8), palette.WallTrim, Enum.Material.Wood, true)
+		mPart("CoopWestDoor_BrassTrim", Vector3.new(2.4, 0.45, 13.4), CFrame.new(-37.5, 15.3, -10.5), palette.BrassAccent, Enum.Material.Metal, false)
+		mPart("CoopWestDoor_Threshold", Vector3.new(6.8, 0.22, 13.6), CFrame.new(-39.2, 0.65, -10.5), marbleWhite, Enum.Material.Marble, false)
+
 		mPart("Lv12_ParapetRoof", Vector3.new(80.0, 1.4, 52.0), CFrame.new(0, 22.1, -6.5), palette.RoofColor, Enum.Material.Slate, true)
 		mPart("Lv12_RoofTrimFront", Vector3.new(80.8, 1.2, 1.4), CFrame.new(0, 22.9, 18.8), palette.WallTrim, Enum.Material.Wood, false)
 		mPart("Lv12_RoofTrimBack", Vector3.new(80.8, 1.2, 1.4), CFrame.new(0, 22.9, -31.6), palette.WallTrim, Enum.Material.Wood, false)
@@ -715,8 +733,17 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 		mPart("Atrium_Floor1", Vector3.new(52.0, 0.4, atriumD), CFrame.new(0, 0.6, atriumCZ), palette.FloorWood, Enum.Material.WoodPlanks, true)
 		mPart("Atrium_WallL", Vector3.new(1.6, atriumTopY, atriumD + 1.0), CFrame.new(-26.0, atriumTopY * 0.5 + 0.5, atriumCZ), palette.WallPrimary, Enum.Material.SmoothPlastic, true)
 		mPart("Atrium_WallR", Vector3.new(1.6, atriumTopY, atriumD + 1.0), CFrame.new(26.0, atriumTopY * 0.5 + 0.5, atriumCZ), palette.WallPrimary, Enum.Material.SmoothPlastic, true)
-		mPart("Atrium_WallB_Low", Vector3.new(52.8, 5.2, 1.6), CFrame.new(0, 3.2, atriumBackZ), stoneWainscot, Enum.Material.Brick, true)
-		mPart("Atrium_WallB_Glass", Vector3.new(44.0, atriumTopY - 7.0, 0.4), CFrame.new(0, 5.8 + (atriumTopY - 7.0) * 0.5, atriumBackZ), glassCol, Enum.Material.Glass, true, 0.52)
+		-- Split Rear Atrium Back Wall with wide 16-stud Co-op Rear Warehouse Archway (X = +4..+20, full 14-stud headroom!)
+		mPart("Atrium_WallB_LowL", Vector3.new(30.4, 5.2, 1.6), CFrame.new(-11.2, 3.2, atriumBackZ), stoneWainscot, Enum.Material.Brick, true)
+		mPart("Atrium_WallB_LowR", Vector3.new(6.4, 5.2, 1.6), CFrame.new(23.2, 3.2, atriumBackZ), stoneWainscot, Enum.Material.Brick, true)
+		mPart("Atrium_WallB_GlassL", Vector3.new(28.0, atriumTopY - 7.0, 0.4), CFrame.new(-11.2, 5.8 + (atriumTopY - 7.0) * 0.5, atriumBackZ), glassCol, Enum.Material.Glass, true, 0.52)
+		mPart("Atrium_WallB_GlassR", Vector3.new(5.2, atriumTopY - 7.0, 0.4), CFrame.new(23.2, 5.8 + (atriumTopY - 7.0) * 0.5, atriumBackZ), glassCol, Enum.Material.Glass, true, 0.52)
+		mPart("Atrium_WallB_GlassTop", Vector3.new(16.0, math.max(8, atriumTopY - 17.5), 0.4), CFrame.new(12.0, 16.8 + math.max(8, atriumTopY - 17.5) * 0.5, atriumBackZ), glassCol, Enum.Material.Glass, true, 0.52)
+		mPart("Atrium_RearDoor_PillarL", Vector3.new(1.8, 16.0, 2.2), CFrame.new(3.8, 8.6, atriumBackZ), palette.WallTrim, Enum.Material.Wood, true)
+		mPart("Atrium_RearDoor_PillarR", Vector3.new(1.8, 16.0, 2.2), CFrame.new(20.2, 8.6, atriumBackZ), palette.WallTrim, Enum.Material.Wood, true)
+		mPart("Atrium_RearDoor_Header", Vector3.new(18.2, 2.2, 2.2), CFrame.new(12.0, 15.8, atriumBackZ), palette.WallTrim, Enum.Material.Wood, true)
+		mPart("Atrium_RearDoor_BrassTrim", Vector3.new(16.6, 0.45, 2.5), CFrame.new(12.0, 14.6, atriumBackZ), palette.BrassAccent, Enum.Material.Metal, false)
+		mPart("Atrium_RearDoor_Threshold", Vector3.new(16.8, 0.22, 6.2), CFrame.new(12.0, 0.65, atriumBackZ - 1.4), marbleWhite, Enum.Material.Marble, false)
 		mPart("Atrium_Roof", Vector3.new(54.6, 1.6, atriumD + 2.6), CFrame.new(0, atriumTopY + 1.2, atriumCZ), palette.RoofColor, Enum.Material.Slate, true)
 		mPart("Atrium_RoofTrim", Vector3.new(55.2, 0.75, atriumD + 3.0), CFrame.new(0, atriumTopY + 2.2, atriumCZ), palette.BrassAccent, Enum.Material.Metal, false)
 

@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local CollectionService = game:GetService("CollectionService")
 
+local BaseService = require("./BaseService")
 local SectorService = require("./SectorService")
 local WarehouseService = require("./WarehouseService")
 local MonetizationService = require("./MonetizationService")
@@ -45,15 +46,8 @@ local function pulseResourceNodes(sectorId: string): ()
 end
 
 local function resolveOwnerPlayer(ownerId: string): Player?
-	local userIdStr = string.match(ownerId, "^Player_(%d+)$")
-	if not userIdStr then
-		return nil
-	end
-	local userId = tonumber(userIdStr)
-	if not userId then
-		return nil
-	end
-	return Players:GetPlayerByUserId(userId)
+	local list = BaseService.GetPlayersForFaction(ownerId)
+	return list[1]
 end
 
 local function produceForSector(sectorId: string, sector: SectorService.SectorData): ()

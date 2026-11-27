@@ -3,6 +3,7 @@
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
+local BaseService = require("./BaseService")
 local SectorService = require("./SectorService")
 local WarehouseService = require("./WarehouseService")
 local PlayerDataService = require("./PlayerDataService")
@@ -64,21 +65,19 @@ local function awardMilestone(player: Player, milestoneId: string): ()
 end
 
 local function checkSectorMilestones(ownerId: string): ()
-	local userIdStr = string.match(ownerId, "^Player_(%d+)$")
-	if not userIdStr then
-		return
-	end
-	local player = Players:GetPlayerByUserId(tonumber(userIdStr) or 0)
-	if not player then
+	local owners = BaseService.GetPlayersForFaction(ownerId)
+	if #owners == 0 then
 		return
 	end
 
 	local ownedCount = #SectorService.GetOwnedSectors(ownerId)
-	if ownedCount >= 1 then
-		awardMilestone(player, "FirstCapture")
-	end
-	if ownedCount >= 2 then
-		awardMilestone(player, "DoubleTerritory")
+	for _, player in ipairs(owners) do
+		if ownedCount >= 1 then
+			awardMilestone(player, "FirstCapture")
+		end
+		if ownedCount >= 2 then
+			awardMilestone(player, "DoubleTerritory")
+		end
 	end
 end
 
@@ -102,7 +101,7 @@ function MilestoneService.Start(): ()
 	end
 
 	unsubSector = SectorService.OnSectorChanged(function(_, sector)
-		if sector.Status == "Controlled" and string.sub(sector.Owner, 1, 7) == "Player_" then
+		if sector.Status == "Controlled" and (string.sub(sector.Owner, 1, 7) == "Player_" or string.sub(sector.Owner, 1, 5) == "Base_") then
 			checkSectorMilestones(sector.Owner)
 		end
 	end)

@@ -1818,7 +1818,12 @@ local function scanTacticalEntities(now: number): ()
 
 	local localPlayer = Players.LocalPlayer
 	local localUserId = localPlayer.UserId
-	local localFaction = "Player_" .. tostring(localUserId)
+	local localSlotAttr = localPlayer:GetAttribute("BaseSlot")
+	local resolvedLocalSlot = if typeof(localBaseSlot) == "string" and localBaseSlot ~= ""
+		then localBaseSlot
+		elseif typeof(localSlotAttr) == "string" and localSlotAttr ~= "" then localSlotAttr
+		else nil
+	local localFaction = if resolvedLocalSlot then ("Base_" .. resolvedLocalSlot) else ("Player_" .. tostring(localUserId))
 	local localFamilyAttr = localPlayer:GetAttribute("SyndicateFamilyName")
 	local localFamily = if typeof(localFamilyAttr) == "string" and localFamilyAttr ~= "" then localFamilyAttr else nil
 	local localChar = localPlayer.Character
@@ -1829,7 +1834,7 @@ local function scanTacticalEntities(now: number): ()
 	local allySpotters: { Vector3 } = {}
 
 	-- =========================================================================
-	-- 1. TEAMMATES & ALLIED SQUAD (Family Players + Personal Guards/Mercs/Runners)
+	-- 1. TEAMMATES & ALLIED SQUAD (Co-op Base Partner + Family Players + Allied Squads)
 	-- =========================================================================
 	local allyIdx = 0
 	local enemyIdx = 0
@@ -1841,15 +1846,17 @@ local function scanTacticalEntities(now: number): ()
 			local hum = if char then char:FindFirstChildOfClass("Humanoid") else nil
 			if char and root and root:IsA("BasePart") and hum and hum.Health > 0 then
 				local oFam = other:GetAttribute("SyndicateFamilyName")
+				local oSlot = other:GetAttribute("BaseSlot")
+				local isCoopBasePartner = resolvedLocalSlot ~= nil and typeof(oSlot) == "string" and oSlot == resolvedLocalSlot
 				local isFamilyTeammate = localFamily ~= nil and typeof(oFam) == "string" and oFam == localFamily
 
-				if isFamilyTeammate then
+				if isCoopBasePartner or isFamilyTeammate then
 					table.insert(allySpotters, root.Position)
 					allyIdx += 1
 					local dot = acquireDot(allyPool, allyIdx, overlayWorld, 8, false)
-					local oSlot = other:GetAttribute("BaseSlot")
-					local teamCol = if typeof(oSlot) == "string" and SectorConfig.FactionColors[oSlot]
-						then SectorConfig.FactionColors[oSlot]:Lerp(C_ALLY_PLAYER, 0.35)
+					local teamCol = if isCoopBasePartner
+						then C_ALLY_PLAYER
+						elseif typeof(oSlot) == "string" and SectorConfig.FactionColors[oSlot] then SectorConfig.FactionColors[oSlot]:Lerp(C_ALLY_PLAYER, 0.35)
 						else C_ALLY_PLAYER
 					dot.BaseSize = 9
 					dot.BaseStroke = 1.5
@@ -1907,20 +1914,27 @@ local function scanTacticalEntities(now: number): ()
 		end
 	end
 
-	-- Allied NPC Squad (Bodyguards, Hired Samurai/Ninja Mercenaries, Supply Couriers)
+	-- Allied NPC Squad (Bodyguards, Hired Samurai/Ninja Mercenaries, Supply Couriers — includes Co-op Base Partner's squad!)
 	for _, tagName in ipairs(ALLY_UNIT_TAGS) do
 		for _, inst in ipairs(CollectionService:GetTagged(tagName)) do
 			if inst:IsA("Model") and inst:IsDescendantOf(Workspace) then
 				local ownerId = inst:GetAttribute("OwnerUserId")
+				local unitSlot = inst:GetAttribute("BaseSlot")
+				local unitFaction = inst:GetAttribute("Faction")
 				local isMine = ownerId == localUserId
+				local isCoopAllyUnit = (resolvedLocalSlot ~= nil and unitSlot == resolvedLocalSlot) or (unitFaction == localFaction)
 				local isFamilyAllyUnit = false
-				if not isMine and localFamily and typeof(ownerId) == "number" then
+				if not isMine and not isCoopAllyUnit and typeof(ownerId) == "number" then
 					local ownerP = Players:GetPlayerByUserId(ownerId)
-					if ownerP and ownerP:GetAttribute("SyndicateFamilyName") == localFamily then
-						isFamilyAllyUnit = true
+					if ownerP then
+						if resolvedLocalSlot ~= nil and ownerP:GetAttribute("BaseSlot") == resolvedLocalSlot then
+							isCoopAllyUnit = true
+						elseif localFamily and ownerP:GetAttribute("SyndicateFamilyName") == localFamily then
+							isFamilyAllyUnit = true
+						end
 					end
 				end
-				if isMine or isFamilyAllyUnit then
+				if isMine or isCoopAllyUnit or isFamilyAllyUnit then
 					local root = inst.PrimaryPart or inst:FindFirstChild("HumanoidRootPart")
 					local hum = inst:FindFirstChildOfClass("Humanoid")
 					if root and root:IsA("BasePart") and (not hum or hum.Health > 0) then
@@ -3631,7 +3645,7 @@ function MinimapController.Update(state: { [string]: any }): ()
 	if typeof(slot) == "string" then
 		localBaseSlot = slot
 	end
-	local localFaction = "Player_" .. tostring(Players.LocalPlayer.UserId)
+	local localFaction = if typeof(slot) == "string" and slot ~= "" then ("Base_" .. slot) else ("Player_" .. tostring(Players.LocalPlayer.UserId))
 
 	-- Highlight local player's claimed Base & active Spawn Point
 	for _, b in ipairs(MinimapMapData.Bases) do

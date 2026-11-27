@@ -196,7 +196,7 @@ local function createGoldenSpatulaTool(owner: Player): Tool
 		end
 
 		-- 1.75. Hit Rival Players' Turf Guards when invading their controlled urban blocks!
-		local myFaction = "Player_" .. tostring(owner.UserId)
+		local myFaction = BaseService.GetPlayerFactionId(owner)
 		for _, unit in ipairs(CollectionService:GetTagged("TurfGuardUnit")) do
 			if unit:IsA("Model") and unit:GetAttribute("Faction") ~= myFaction then
 				local enemyHum = unit:FindFirstChildOfClass("Humanoid")
@@ -215,9 +215,9 @@ local function createGoldenSpatulaTool(owner: Player): Tool
 			end
 		end
 
-		-- 2. Territory PvP against other Players (Safe-Zone protected inside their own Castle Base)
+		-- 2. Territory PvP against other Players (Safe-Zone & Co-op Base Teammate friendly-fire protected!)
 		for _, other in ipairs(Players:GetPlayers()) do
-			if other ~= owner and other.Character then
+			if other ~= owner and not BaseService.AreBaseTeammates(owner, other) and other.Character then
 				local otherHum = other.Character:FindFirstChildOfClass("Humanoid")
 				local otherRoot = other.Character:FindFirstChild("HumanoidRootPart")
 				if otherHum and otherHum.Health > 0 and otherRoot and otherRoot:IsA("BasePart") then

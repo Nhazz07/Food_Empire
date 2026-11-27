@@ -72,6 +72,7 @@ local function ensureRestaurantCollisionGroups(): ()
 		PhysicsService:RegisterCollisionGroup(COLLISION_GROUP_NPCS)
 	end)
 	pcall(function()
+		PhysicsService:CollisionGroupSetCollidable(COLLISION_GROUP_PLAYERS, COLLISION_GROUP_PLAYERS, false)
 		PhysicsService:CollisionGroupSetCollidable(COLLISION_GROUP_PLAYERS, COLLISION_GROUP_NPCS, false)
 		PhysicsService:CollisionGroupSetCollidable(COLLISION_GROUP_NPCS, COLLISION_GROUP_NPCS, false)
 	end)
@@ -147,7 +148,7 @@ local STAR_TITLES: { [number]: string } = {
 	[4] = "4-STAR GRAND BRASSERIE",
 	[5] = "5-STAR IMPERIAL PALACE",
 }
-local specialtyCookCounts: { [Player]: number } = {}
+local specialtyCookCounts: { [any]: number } = {}
 local HOUSE_SPECIALS: { { Name: string, Gold: number, Rep: number, Color: Color3 } } = {
 	{ Name = "Crispy Fish Skewers", Gold = 11, Rep = 3, Color = Color3.fromRGB(78, 192, 234) },
 	{ Name = "Chef's Island Soup", Gold = 10, Rep = 3, Color = Color3.fromRGB(246, 178, 62) },
@@ -155,15 +156,46 @@ local HOUSE_SPECIALS: { { Name: string, Gold: number, Rep: number, Color: Color3
 	{ Name = "Golden Fried Rice", Gold = 10, Rep = 3, Color = Color3.fromRGB(238, 198, 72) },
 }
 
-local kitchens: { [Player]: KitchenState } = {}
-local waitingOrders: { [Player]: WaitingOrder } = {}
-local orderCounters: { [Player]: number } = {}
-local receiptHistory: { [Player]: { ReceiptEntry } } = {}
+local kitchens: { [any]: KitchenState } = {}
+local waitingOrders: { [any]: WaitingOrder } = {}
+local orderCounters: { [any]: number } = {}
+local receiptHistory: { [any]: { ReceiptEntry } } = {}
+
+local function getBaseKey(player: Player): any
+	return BaseService.GetPlayerBaseSlot(player) or player
+end
+
+local function isCoopDualStoveUnlocked(player: Player): boolean
+	local prof = PlayerDataService.GetProfile(player)
+	if prof.HasDualStove == true then
+		return true
+	end
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	return slot ~= nil and BaseService.GetBasePlayerCount(slot) >= 2
+end
+
+local function resolveActiveBaseMember(player: Player, slot: BaseService.BaseSlot?): Player?
+	if player.Parent then
+		return player
+	end
+	if slot then
+		return BaseService.GetBaseLeadPlayer(slot)
+	end
+	return nil
+end
+
+local function isBaseSessionActive(player: Player, slot: BaseService.BaseSlot?): boolean
+	if slot then
+		return BaseService.GetBasePlayerCount(slot) > 0
+	end
+	return player.Parent ~= nil
+end
 
 function RestaurantService.GetRestaurantStarInfo(player: Player): { [string]: any }
 	local prof = PlayerDataService.GetProfile(player)
-	local served = orderCounters[player] or 0
-	local specCount = specialtyCookCounts[player] or 0
+	local bKey = getBaseKey(player)
+	local served = orderCounters[bKey] or 0
+	local specCount = specialtyCookCounts[bKey] or 0
 	local stars = 1
 	if prof.RestaurantLevel >= 2 or served >= 2 then
 		stars += 1
@@ -191,8 +223,8 @@ function RestaurantService.GetRestaurantStarInfo(player: Player): { [string]: an
 		HasDualStove = prof.HasDualStove == true,
 	}
 end
-local customerModels: { [Player]: { Model } } = {}
-local platterModels: { [Player]: { Model } } = {}
+local customerModels: { [any]: { Model } } = {}
+local platterModels: { [any]: { Model } } = {}
 local isRunning = false
 local customerOrderThread: thread? = nil
 local patienceThread: thread? = nil
@@ -200,6 +232,7 @@ local nextOrderId = 0
 local promptConnections: { RBXScriptConnection } = {}
 local playerRemovingConn: RBXScriptConnection? = nil
 local unsubBase: (() -> ())? = nil
+local unsubBaseReleased: (() -> ())? = nil
 local stateEvent: RemoteEvent? = nil
 local actionFunc: RemoteFunction? = nil
 local unsubProfile: (() -> ())? = nil
@@ -318,7 +351,9 @@ local function getMaxCustomersForHQ(player: Player): number
 	local expTier = RestaurantExpansionConfig.GetTierSpec(lv)
 	local baseCap = expTier.MaxCustomers
 	local vipBonus = if hasVip then 2 else 0
-	return math.clamp(baseCap + vipBonus, 4, #ALL_DINING_SPOTS)
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local coopBonus = if slot and BaseService.GetBasePlayerCount(slot) >= 2 then 2 else 0
+	return math.clamp(baseCap + vipBonus + coopBonus, 4, #ALL_DINING_SPOTS)
 end
 
 type WalkingCustomer = {
@@ -361,8 +396,8 @@ type WaiterNPC = {
 	CarriedPlate: Model?,
 }
 
-local activeWalkingCustomers: { [Player]: { WalkingCustomer } } = {}
-local activeWaitStaff: { [Player]: { WaiterNPC } } = {}
+local activeWalkingCustomers: { [any]: { WalkingCustomer } } = {}
+local activeWaitStaff: { [any]: { WaiterNPC } } = {}
 
 local function buildDistinctFoodOnPlate(
 	parent: Instance,
@@ -543,17 +578,17 @@ local function buildDistinctFoodOnPlate(
 	return meal
 end
 
-local function clearCustomers(player: Player): ()
-	local list = customerModels[player]
+local function clearCustomersForKey(bKey: any): ()
+	local list = customerModels[bKey]
 	if list then
 		for _, m in ipairs(list) do
 			if m.Parent then
 				m:Destroy()
 			end
 		end
-		customerModels[player] = nil
+		customerModels[bKey] = nil
 	end
-	local wList = activeWalkingCustomers[player]
+	local wList = activeWalkingCustomers[bKey]
 	if wList then
 		for _, wc in ipairs(wList) do
 			wc.PatienceActive = false
@@ -570,10 +605,10 @@ local function clearCustomers(player: Player): ()
 				wc.Model:Destroy()
 			end
 		end
-		activeWalkingCustomers[player] = nil
+		activeWalkingCustomers[bKey] = nil
 	end
-	waitingOrders[player] = nil
-	local staff = activeWaitStaff[player]
+	waitingOrders[bKey] = nil
+	local staff = activeWaitStaff[bKey]
 	if staff then
 		for _, w in ipairs(staff) do
 			if w.CarriedPlate and w.CarriedPlate.Parent then
@@ -583,8 +618,12 @@ local function clearCustomers(player: Player): ()
 				w.Model:Destroy()
 			end
 		end
-		activeWaitStaff[player] = nil
+		activeWaitStaff[bKey] = nil
 	end
+end
+
+local function clearCustomers(player: Player): ()
+	clearCustomersForKey(getBaseKey(player))
 end
 
 local function buildWalkingCustomerModel(
@@ -832,7 +871,8 @@ local function spawnWaitStaffForPlayer(player: Player): ()
 	if not baseModel or not hq or not hq.PrimaryPart then
 		return
 	end
-	local existing = activeWaitStaff[player]
+	local bKey = getBaseKey(player)
+	local existing = activeWaitStaff[bKey]
 	if existing then
 		for _, w in ipairs(existing) do
 			if w.CarriedPlate and w.CarriedPlate.Parent then w.CarriedPlate:Destroy() end
@@ -843,7 +883,7 @@ local function spawnWaitStaffForPlayer(player: Player): ()
 	-- Players start with 0 waiters and must hire them with Gold!
 	local hiredCount = CrewService.GetWaiterCount(player)
 	if hiredCount <= 0 then
-		activeWaitStaff[player] = {}
+		activeWaitStaff[bKey] = {}
 		return
 	end
 
@@ -873,7 +913,7 @@ local function spawnWaitStaffForPlayer(player: Player): ()
 			CarriedPlate = nil,
 		})
 	end
-	activeWaitStaff[player] = list
+	activeWaitStaff[bKey] = list
 end
 
 local function pickAvailableTableIndex(player: Player): number
@@ -884,7 +924,7 @@ local function pickAvailableTableIndex(player: Player): number
 	local indoorActive = 0
 	local patioActive = 0
 	local expandedActive = 0
-	local list = activeWalkingCustomers[player]
+	local list = activeWalkingCustomers[getBaseKey(player)]
 	if list then
 		for _, wc in ipairs(list) do
 			used[wc.TableIndex] = true
@@ -937,12 +977,17 @@ end
 local spawnSingleCityCustomer: (player: Player, startDistanceZ: number) -> ()
 
 local function sendCustomerToast(player: Player, message: string): ()
-	if not player.Parent then
-		return
-	end
 	local remotes = ReplicatedStorage:FindFirstChild("Remotes")
 	local toastEv = if remotes then remotes:FindFirstChild("MilestoneToast") else nil
-	if toastEv and toastEv:IsA("RemoteEvent") then
+	if not toastEv or not toastEv:IsA("RemoteEvent") then
+		return
+	end
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if slot then
+		for _, member in ipairs(BaseService.GetBasePlayers(slot)) do
+			toastEv:FireClient(member, message)
+		end
+	elseif player.Parent then
 		toastEv:FireClient(player, message)
 	end
 end
@@ -978,7 +1023,7 @@ local function createOrderForGuest(player: Player, custName: string, isVIPPatron
 end
 
 local function findMostUrgentWaitingCustomer(player: Player, allowBeingCooked: boolean?): WalkingCustomer?
-	local list = activeWalkingCustomers[player]
+	local list = activeWalkingCustomers[getBaseKey(player)]
 	if not list then
 		return nil
 	end
@@ -1002,11 +1047,12 @@ local function findMostUrgentWaitingCustomer(player: Player, allowBeingCooked: b
 end
 
 local function syncPrimaryWaitingOrder(player: Player): ()
+	local bKey = getBaseKey(player)
 	local urgent = findMostUrgentWaitingCustomer(player, true)
 	if urgent and urgent.Order and not urgent.Order.Cancelled then
-		waitingOrders[player] = urgent.Order
+		waitingOrders[bKey] = urgent.Order
 	else
-		waitingOrders[player] = nil
+		waitingOrders[bKey] = nil
 	end
 end
 
@@ -1014,6 +1060,17 @@ local function stopCustomerPatience(wc: WalkingCustomer): ()
 	wc.PatienceActive = false
 	if wc.PatienceBarBg.Parent then
 		wc.PatienceBarBg.Visible = false
+	end
+end
+
+local function pushStateToBase(player: Player): ()
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if slot then
+		for _, member in ipairs(BaseService.GetBasePlayers(slot)) do
+			RestaurantService.PushStateToClient(member)
+		end
+	elseif player.Parent then
+		RestaurantService.PushStateToClient(player)
 	end
 end
 
@@ -1051,7 +1108,7 @@ local function startCustomerPatience(player: Player, wc: WalkingCustomer, zoneTa
 	wc.PatienceTimeLabel.Text = string.format("WAIT %ds", dur)
 
 	syncPrimaryWaitingOrder(player)
-	RestaurantService.PushStateToClient(player)
+	pushStateToBase(player)
 end
 
 local function handleCustomerPatienceExpired(player: Player, wc: WalkingCustomer): ()
@@ -1064,6 +1121,9 @@ local function handleCustomerPatienceExpired(player: Player, wc: WalkingCustomer
 	wc.PatienceActive = false
 	wc.IsBeingCooked = false
 	wc.Phase = "Leaving"
+
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local bKey = slot or player
 
 	if wc.Order then
 		wc.Order.Cancelled = true
@@ -1083,17 +1143,25 @@ local function handleCustomerPatienceExpired(player: Player, wc: WalkingCustomer
 	end
 
 	local cfg = RestaurantSecurityConfig.CustomerPatience
-	local lostRep = PlayerDataService.DeductReputation(player, cfg.ExpiryReputationLoss)
+	local lostRep = 0
+	if slot then
+		for _, member in ipairs(BaseService.GetBasePlayers(slot)) do
+			lostRep = math.max(lostRep, PlayerDataService.DeductReputation(member, cfg.ExpiryReputationLoss))
+		end
+	else
+		lostRep = PlayerDataService.DeductReputation(player, cfg.ExpiryReputationLoss)
+	end
 	if lostRep > 0 then
 		sendCustomerToast(player, string.format("%s left unhappy (unserved)! -%d Reputation.", wc.Name, lostRep))
 	else
 		sendCustomerToast(player, string.format("%s left unhappy (unserved) without paying!", wc.Name))
 	end
-	RestaurantService.PushStateToClient(player)
+	pushStateToBase(player)
 
 	task.spawn(function()
 		task.wait(cfg.UnhappyPauseSeconds)
-		local baseModel, bp, hq = getBaseGeometry(player)
+		local activePlr = resolveActiveBaseMember(player, slot)
+		local baseModel, bp, hq = if activePlr then getBaseGeometry(activePlr) else nil, nil, nil
 		if wc.TableMeal and wc.TableMeal.Parent then
 			wc.TableMeal:Destroy()
 			wc.TableMeal = nil
@@ -1144,7 +1212,7 @@ local function handleCustomerPatienceExpired(player: Player, wc: WalkingCustomer
 		if wc.Model.Parent then
 			wc.Model:Destroy()
 		end
-		local curList = activeWalkingCustomers[player]
+		local curList = activeWalkingCustomers[bKey]
 		if curList then
 			local idx = table.find(curList, wc)
 			if idx then
@@ -1152,15 +1220,16 @@ local function handleCustomerPatienceExpired(player: Player, wc: WalkingCustomer
 			end
 		end
 		task.delay(cfg.ReplacementSpawnDelay, function()
-			if isRunning and player.Parent and BaseService.GetPlayerBaseSlot(player) then
-				spawnSingleCityCustomer(player, 195)
+			local nextLead = resolveActiveBaseMember(player, slot)
+			if isRunning and nextLead and BaseService.GetPlayerBaseSlot(nextLead) then
+				spawnSingleCityCustomer(nextLead, 195)
 			end
 		end)
 	end)
 end
 
 local function buildSeatedPatienceSnapshot(player: Player): { { [string]: any } }
-	local list = activeWalkingCustomers[player]
+	local list = activeWalkingCustomers[getBaseKey(player)]
 	if not list then
 		return {}
 	end
@@ -1198,10 +1267,12 @@ spawnSingleCityCustomer = function(player: Player, startDistanceZ: number): ()
 		return
 	end
 
-	local list = activeWalkingCustomers[player]
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local bKey = slot or player
+	local list = activeWalkingCustomers[bKey]
 	if not list then
 		list = {}
-		activeWalkingCustomers[player] = list
+		activeWalkingCustomers[bKey] = list
 	end
 	local hqMax = getMaxCustomersForHQ(player)
 	if #list >= hqMax then
@@ -1276,81 +1347,81 @@ spawnSingleCityCustomer = function(player: Player, startDistanceZ: number): ()
 	task.spawn(function()
 		wc.BubbleText.Text = displayName .. ": Heading from the city to eat!"
 		moveCustomerTo(wc, frontGatePos, 15)
-		if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+		if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 
 		-- Walk up to the Restaurant Front to order food first!
 		wc.BubbleText.Text = displayName .. ": Ordering food at the restaurant!"
 		moveCustomerTo(wc, restaurantOrderPos, 14)
-		if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+		if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 
 		local wp = RestaurantExpansionConfig.STAIR_WAYPOINTS
 		if spot.Zone == "Patio" then
 			wc.BubbleText.Text = displayName .. ": Taking an outdoor pavilion table."
 			moveCustomerTo(wc, seatPos, 12)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 		elseif spot.Zone == "EastWing" then
 			wc.BubbleText.Text = displayName .. ": Heading into the East Wing."
 			moveCustomerTo(wc, doorPos, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.EastWingArchway)).Position, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, seatPos, 9)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 		elseif spot.Zone == "WestWing" then
 			wc.BubbleText.Text = displayName .. ": Heading into the West Wing."
 			moveCustomerTo(wc, doorPos, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.WestWingArchway)).Position, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, seatPos, 9)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 		elseif spot.Floor == 3 or spot.Zone == "ThirdFloor" then
 			wc.BubbleText.Text = displayName .. ": Heading up to the 3rd Floor!"
 			moveCustomerTo(wc, doorPos, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.RearAtriumDoor)).Position, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.BottomLobby)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.MidStairs)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.TopLanding)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.Floor2StairStart)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.Floor2StairMid)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.Floor3TopLanding)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.Floor3Entry)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, seatPos, 8)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 		elseif spot.Floor == 2 or spot.Zone == "SecondFloor" then
 			wc.BubbleText.Text = displayName .. ": Heading up to the 2nd floor!"
 			moveCustomerTo(wc, doorPos, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.RearAtriumDoor)).Position, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.BottomLobby)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.MidStairs)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.TopLanding)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, (hqCF * CFrame.new(wp.Floor2Entry)).Position, 6)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, seatPos, 8)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 		else
 			wc.BubbleText.Text = displayName .. ": Stepping inside for a table."
 			moveCustomerTo(wc, doorPos, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			local aislePos = (hqCF * CFrame.new(if spot.TableOffset.X > 0 then 9.5 else -11.0, 3.6, math.clamp(spot.TableOffset.Z, -18, 12))).Position
 			moveCustomerTo(wc, aislePos, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 			moveCustomerTo(wc, seatPos, 7)
-			if not wc.Model.Parent or not player.Parent or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
+			if not wc.Model.Parent or not isBaseSessionActive(player, slot) or wc.IsServed or wc.IsExpired or wc.Phase == "Eating" or wc.Phase == "Leaving" then return end
 		end
 
 		setCustomerSeated(wc, true, seatPos, tableLookPos)
@@ -1362,7 +1433,10 @@ spawnSingleCityCustomer = function(player: Player, startDistanceZ: number): ()
 			elseif spot.Zone == "SecondFloor" then "2nd Floor"
 			elseif spot.Zone == "ThirdFloor" then "3rd Floor"
 			else "Indoor"
-		startCustomerPatience(player, wc, zoneTag)
+		local activeMember = resolveActiveBaseMember(player, slot)
+		if activeMember then
+			startCustomerPatience(activeMember, wc, zoneTag)
+		end
 	end)
 end
 
@@ -1371,10 +1445,11 @@ local function pickWaiterForPlayer(player: Player): WaiterNPC?
 	if hiredCount <= 0 then
 		return nil
 	end
-	local staff = activeWaitStaff[player]
+	local bKey = getBaseKey(player)
+	local staff = activeWaitStaff[bKey]
 	if not staff or #staff ~= hiredCount then
 		spawnWaitStaffForPlayer(player)
-		staff = activeWaitStaff[player]
+		staff = activeWaitStaff[bKey]
 	end
 	if not staff or #staff == 0 then
 		return nil
@@ -1399,7 +1474,9 @@ local function dispatchCustomerToEatAndLeave(
 	dishDisplayName: string?,
 	specificCustomer: WalkingCustomer?
 ): boolean
-	local list = activeWalkingCustomers[player]
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local bKey = slot or player
+	local list = activeWalkingCustomers[bKey]
 	if not list or #list == 0 then
 		return false
 	end
@@ -1461,12 +1538,16 @@ local function dispatchCustomerToEatAndLeave(
 	local kitchenPickupPos = (hqCF * CFrame.new(-11.0, 3.6, -10.0)).Position
 	local doorWaypointPos = (hqCF * CFrame.new(0, 3.6, 22.0)).Position
 
-	-- VIP patron bonus tip (strictly paid at most once per customer!)
+	-- VIP patron bonus tip (strictly paid at most once per customer, shared with co-op teammate!)
 	local vipBonusGold = 0
 	if servedCust.IsVIPPatron and not servedCust.VipTipPaid then
 		servedCust.VipTipPaid = true
 		vipBonusGold = math.max(12, math.floor(earnedGold * 0.35))
 		PlayerDataService.AddCoins(player, vipBonusGold)
+		for _, mate in ipairs(BaseService.GetTeammates(player)) do
+			local mateTip = math.max(8, math.floor(vipBonusGold * 0.85))
+			PlayerDataService.AddCoins(mate, mateTip)
+		end
 	end
 	local totalDisplayedGold = earnedGold + vipBonusGold
 
@@ -1673,7 +1754,7 @@ local function dispatchCustomerToEatAndLeave(
 		if servedCust.Model.Parent then
 			servedCust.Model:Destroy()
 		end
-		local curList = activeWalkingCustomers[player]
+		local curList = activeWalkingCustomers[bKey]
 		if curList then
 			local idx = table.find(curList, servedCust)
 			if idx then
@@ -1681,29 +1762,39 @@ local function dispatchCustomerToEatAndLeave(
 			end
 		end
 		-- Bring in a fresh walk-in customer from the City Boulevard right away!
-		if isRunning and player.Parent then
-			spawnSingleCityCustomer(player, 195)
+		local nextLead = resolveActiveBaseMember(player, slot)
+		if isRunning and nextLead then
+			spawnSingleCityCustomer(nextLead, 195)
 		end
 	end)
 	return true
 end
 
 local function spawnCustomersForPlayer(player: Player): ()
-	clearCustomers(player)
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local bKey = slot or player
+	-- Do not wipe an already-active co-op base's customers when the 2nd partner joins!
+	local existingCusts = activeWalkingCustomers[bKey]
+	if existingCusts and #existingCusts > 0 then
+		spawnWaitStaffForPlayer(player)
+		return
+	end
+	clearCustomersForKey(bKey)
 	spawnWaitStaffForPlayer(player)
 	-- Stagger initial city guests walking in from the City Boulevard to fill BOTH Indoor & Outdoor Pergola Patio tables!
 	local initialCount = math.min(getMaxCustomersForHQ(player), 4)
 	for i = 1, initialCount do
 		task.delay((i - 1) * 1.6, function()
-			if isRunning and player.Parent then
-				spawnSingleCityCustomer(player, 132 + i * 18)
+			local activePlr = resolveActiveBaseMember(player, slot)
+			if isRunning and activePlr then
+				spawnSingleCityCustomer(activePlr, 132 + i * 18)
 			end
 		end)
 	end
 end
 
 local function updateCustomerSpeech(player: Player, text: string): ()
-	local wList = activeWalkingCustomers[player]
+	local wList = activeWalkingCustomers[getBaseKey(player)]
 	if not wList then
 		return
 	end
@@ -1889,8 +1980,9 @@ local function printRestaurantReceipt(
 	repEarned: number,
 	chefName: string
 ): ReceiptEntry
-	local nextNo = (orderCounters[player] or 0) + 1
-	orderCounters[player] = nextNo
+	local bKey = getBaseKey(player)
+	local nextNo = (orderCounters[bKey] or 0) + 1
+	orderCounters[bKey] = nextNo
 
 	local entry: ReceiptEntry = {
 		OrderNo = nextNo,
@@ -1901,10 +1993,10 @@ local function printRestaurantReceipt(
 		ChefName = chefName,
 	}
 
-	local hist = receiptHistory[player]
+	local hist = receiptHistory[bKey]
 	if not hist then
 		hist = {}
-		receiptHistory[player] = hist
+		receiptHistory[bKey] = hist
 	end
 	table.insert(hist, 1, entry)
 	while #hist > 5 do
@@ -1979,13 +2071,13 @@ local function spawnRandomCustomerOrder(player: Player): WaitingOrder
 		}
 	end
 
-	waitingOrders[player] = order
+	waitingOrders[getBaseKey(player)] = order
 	updateCustomerSpeech(player, string.format("%s: 1x %s please!", order.CustomerName, order.DishName))
 	return order
 end
 
-local function clearPlatters(player: Player): ()
-	local list = platterModels[player]
+local function clearPlattersForKey(bKey: any): ()
+	local list = platterModels[bKey]
 	if not list then
 		return
 	end
@@ -1994,11 +2086,16 @@ local function clearPlatters(player: Player): ()
 			m:Destroy()
 		end
 	end
-	platterModels[player] = nil
+	platterModels[bKey] = nil
+end
+
+local function clearPlatters(player: Player): ()
+	clearPlattersForKey(getBaseKey(player))
 end
 
 local function syncCounterPlatters(player: Player): ()
-	clearPlatters(player)
+	local bKey = getBaseKey(player)
+	clearPlattersForKey(bKey)
 	local slot = BaseService.GetPlayerBaseSlot(player)
 	if not slot then
 		return
@@ -2015,7 +2112,7 @@ local function syncCounterPlatters(player: Player): ()
 		return
 	end
 
-	local kitchen = kitchens[player]
+	local kitchen = kitchens[bKey]
 	if not kitchen then
 		return
 	end
@@ -2038,7 +2135,7 @@ local function syncCounterPlatters(player: Player): ()
 			break
 		end
 	end
-	platterModels[player] = spawned
+	platterModels[bKey] = spawned
 end
 
 local function tryReturnHome(player: Player): (boolean, string)
@@ -2053,17 +2150,16 @@ local function tryReturnHome(player: Player): (boolean, string)
 	if not slot then
 		return false, "No base assigned"
 	end
-	local baseModel = BaseService.GetBaseModel(slot)
-	local spawnPart = if baseModel then baseModel:FindFirstChild("BaseSpawn") else nil
+	local spawnCF = BaseService.GetSpawnCFrameForPlayer(player)
 	local char = player.Character
-	if not spawnPart or not spawnPart:IsA("BasePart") or not char then
+	if not spawnCF or not char then
 		return false, "Base spawn unavailable"
 	end
 	pcall(function()
-		player:RequestStreamAroundAsync(spawnPart.Position)
+		player:RequestStreamAroundAsync(spawnCF.Position)
 	end)
-	char:PivotTo(spawnPart.CFrame + Vector3.new(0, 4.5, 0))
-	return true, "Returned to " .. slot .. " Castle Base!"
+	char:PivotTo(spawnCF)
+	return true, "Returned to " .. slot .. " Co-op Base!"
 end
 
 local function setPlayerSprint(player: Player, enabled: boolean): (boolean, string)
@@ -2196,7 +2292,8 @@ function RestaurantService.CheckHQUpgradeRequirements(player: Player): (boolean,
 end
 
 local function ensureKitchen(player: Player): KitchenState
-	local existing = kitchens[player]
+	local bKey = getBaseKey(player)
+	local existing = kitchens[bKey]
 	if existing then
 		return existing
 	end
@@ -2214,7 +2311,7 @@ local function ensureKitchen(player: Player): KitchenState
 		MasterworkBonusCount = 0,
 		ReadyDishes = {},
 	}
-	kitchens[player] = created
+	kitchens[bKey] = created
 	return created
 end
 
@@ -2260,8 +2357,28 @@ local function buildClientPayload(player: Player): { [string]: any }
 		else nil
 	local canUpgHQ, hqLockReason, reqPlrLv, _, reqFoodSold, curFoodSold = RestaurantService.CheckHQUpgradeRequirements(player)
 
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local bKey = slot or player
+	local baseMembers = if slot then BaseService.GetBasePlayers(slot) else { player }
+	local partnerNames: { string } = {}
+	for _, m in ipairs(baseMembers) do
+		if m ~= player then
+			table.insert(partnerNames, m.DisplayName)
+		end
+	end
+	local coopBonusOrders = if slot and #baseMembers >= 2 then 1 else 0
+	local canUseDual = isCoopDualStoveUnlocked(player)
+
 	return {
-		BaseSlot = BaseService.GetPlayerBaseSlot(player),
+		BaseSlot = slot,
+		CoopTeam = {
+			Slot = slot,
+			FactionId = BaseService.GetPlayerFactionId(player),
+			MemberCount = #baseMembers,
+			MaxMembers = BaseService.MAX_PLAYERS_PER_BASE,
+			PartnerName = partnerNames[1] or "",
+			PartnerNames = partnerNames,
+		},
 		Profile = profile,
 		Expansion = {
 			Tier = expSpec.Tier,
@@ -2276,11 +2393,11 @@ local function buildClientPayload(player: Player): { [string]: any }
 			Floors = expSpec.Floors,
 			MaxCustomers = getMaxCustomersForHQ(player),
 			KitchenReadyCapacity = expSpec.KitchenReadyCapacity,
-			MaxConcurrentOrders = expSpec.MaxConcurrentOrders + (if profile.HasDualStove then 1 else 0),
+			MaxConcurrentOrders = expSpec.MaxConcurrentOrders + (if profile.HasDualStove then 1 else 0) + coopBonusOrders,
 			NextSummary = if nextExpSpec then nextExpSpec.Summary else "",
 			NextFrontPavilionName = if nextExpSpec then nextExpSpec.FrontPavilionName else "",
 			NextFrontPavilionSummary = if nextExpSpec then nextExpSpec.FrontPavilionSummary else "",
-			NextMaxCustomers = if nextExpSpec then (nextExpSpec.MaxCustomers + (if profile.HasVIPBooths then 2 else 0)) else getMaxCustomersForHQ(player),
+			NextMaxCustomers = if nextExpSpec then (nextExpSpec.MaxCustomers + (if profile.HasVIPBooths then 2 else 0) + (if #baseMembers >= 2 then 2 else 0)) else getMaxCustomersForHQ(player),
 			TotalDishesServed = curFoodSold,
 			NextHQReqLevel = reqPlrLv,
 			NextHQReqFood = reqFoodSold,
@@ -2298,6 +2415,7 @@ local function buildClientPayload(player: Player): { [string]: any }
 			TimeRemaining2 = if kitchen.IsCooking2 then math.max(0, kitchen.CookEndsAt2 - os.clock()) else 0,
 			Boosted2 = kitchen.Boosted2,
 			HasDualStove = profile.HasDualStove == true,
+			CanUseDualStove = canUseDual,
 			HasVIPBooths = profile.HasVIPBooths == true,
 			MasterworkBonusCount = kitchen.MasterworkBonusCount,
 			ReadyDishes = kitchen.ReadyDishes,
@@ -2335,12 +2453,12 @@ local function buildClientPayload(player: Player): { [string]: any }
 		MaxRaiders = RaiderChefService.MAX_RAIDERS,
 		NextRaiderCost = RaiderChefService.GetNextCost(player),
 		BaseSlots = BaseService.GetSlotAvailability(),
-		WaitingCustomer = waitingOrders[player],
+		WaitingCustomer = waitingOrders[bKey],
 		SeatedPatience = buildSeatedPatienceSnapshot(player),
 		NightRaid = NightMafiaRaidService.GetSnapshot(player),
 		HiredCompanions = DefenseCompanionService.GetSnapshot(player),
-		Receipts = receiptHistory[player] or {},
-		LatestReceipt = if receiptHistory[player] then receiptHistory[player][1] else nil,
+		Receipts = receiptHistory[bKey] or {},
+		LatestReceipt = if receiptHistory[bKey] then receiptHistory[bKey][1] else nil,
 		Shipments = ShipmentService.GetSnapshot(),
 		ExpressDelivery = ExpressDeliveryService.GetSnapshot(player),
 		BodyguardCount = BodyguardService.GetGuardCount(player),
@@ -2412,11 +2530,13 @@ function RestaurantService.PickBestAvailableRecipe(player: Player): string?
 	return nil
 end
 
-local function finishCookSlot(player: Player, slotNum: number, token: number, recipeId: string): ()
-	if not player.Parent then
+local function finishCookSlot(player: Player, slot: BaseService.BaseSlot?, slotNum: number, token: number, recipeId: string): ()
+	local activePlr = resolveActiveBaseMember(player, slot)
+	if not activePlr then
 		return
 	end
-	local kitchen = ensureKitchen(player)
+	local bKey = slot or activePlr
+	local kitchen = ensureKitchen(activePlr)
 	local wasBoosted = false
 	if slotNum == 1 then
 		if not kitchen.IsCooking or kitchen.Token1 ~= token then
@@ -2443,17 +2563,23 @@ local function finishCookSlot(player: Player, slotNum: number, token: number, re
 		kitchen.MasterworkBonusCount += 1
 	end
 	if not kitchen.IsCooking and not kitchen.IsCooking2 then
-		setGrillCookingVisual(player, false, nil)
+		setGrillCookingVisual(activePlr, false, nil)
 	end
-	syncCounterPlatters(player)
+	syncCounterPlatters(activePlr)
 	if SPECIALTY_RECIPE_IDS[recipeId] then
-		specialtyCookCounts[player] = (specialtyCookCounts[player] or 0) + 1
-		SyndicateContractService.RecordProgress(player, "SpecialtyFeast", 1)
+		specialtyCookCounts[bKey] = (specialtyCookCounts[bKey] or 0) + 1
+		if slot then
+			for _, m in ipairs(BaseService.GetBasePlayers(slot)) do
+				SyndicateContractService.RecordProgress(m, "SpecialtyFeast", 1)
+			end
+		else
+			SyndicateContractService.RecordProgress(activePlr, "SpecialtyFeast", 1)
+		end
 	end
 	local recipe = RecipeConfig.Recipes[recipeId]
-	updateCustomerSpeech(player, "Food Ready! Sell Now!")
-	print(string.format("[RestaurantService] %s finished cooking %s (Stove #%d)!", player.Name, if recipe then recipe.DisplayName else recipeId, slotNum))
-	RestaurantService.PushStateToClient(player)
+	updateCustomerSpeech(activePlr, "Food Ready! Sell Now!")
+	print(string.format("[RestaurantService] %s finished cooking %s (Stove #%d)!", activePlr.Name, if recipe then recipe.DisplayName else recipeId, slotNum))
+	pushStateToBase(activePlr)
 end
 
 function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolean, string)
@@ -2479,17 +2605,18 @@ function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolea
 		return false, string.format("Secret Syndicate Dish requires %d Reputation!", recipe.RequiredRep)
 	end
 
+	local slot = BaseService.GetPlayerBaseSlot(player)
 	local kitchen = ensureKitchen(player)
-	local hasDual = profile.HasDualStove == true
+	local canUseSecond = isCoopDualStoveUnlocked(player)
 	local useSlot = 0
 	if not kitchen.IsCooking then
 		useSlot = 1
-	elseif hasDual and not kitchen.IsCooking2 then
+	elseif canUseSecond and not kitchen.IsCooking2 then
 		useSlot = 2
 	else
-		return false, if hasDual
+		return false, if canUseSecond
 			then "Both Stove Lines are busy! Use SEAR BOOST to speed up cooking!"
-			else "Stove is busy! Unlock Dual-Stove Line (650G) or press SEAR BOOST!"
+			else "Stove is busy! Unlock Dual-Stove Line (or partner in Co-op) or press SEAR BOOST!"
 	end
 
 	if not WarehouseService.ConsumeIngredients(player, recipe.Ingredients) then
@@ -2497,7 +2624,8 @@ function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolea
 	end
 
 	local tier = RecipeConfig.RestaurantTiers[profile.RestaurantLevel] or RecipeConfig.RestaurantTiers[1]
-	local speedMult = tier.CookSpeedMultiplier * CrewService.GetCookSpeedMultiplier(player) * MonetizationService.GetCookSpeedMultiplier(player)
+	local dualRangeBonus = if profile.HasDualStove == true then 1.15 else 1.0
+	local speedMult = tier.CookSpeedMultiplier * CrewService.GetCookSpeedMultiplier(player) * MonetizationService.GetCookSpeedMultiplier(player) * dualRangeBonus
 	local duration = math.max(0.6, recipe.CookTime / speedMult)
 
 	local myToken: number
@@ -2522,12 +2650,12 @@ function RestaurantService.CookRecipe(player: Player, recipeId: string): (boolea
 	local activeChef = if MonetizationService.HasPass(player, "MasterProChef")
 		then "Pro Chef"
 		elseif CrewService.GetCrewCount(player) > 0 then "Crew Chef"
-		else "Kitchen"
+		else player.DisplayName
 	spawnWarehouseFetchChef(player, cat, recipe.DisplayName, activeChef)
-	RestaurantService.PushStateToClient(player)
+	pushStateToBase(player)
 
 	task.delay(duration, function()
-		finishCookSlot(player, useSlot, myToken, recipeId)
+		finishCookSlot(player, slot, useSlot, myToken, recipeId)
 	end)
 
 	return true, string.format("Stove #%d Cooking %s (%.1fs) — Press SEAR BOOST for Masterwork!", useSlot, recipe.DisplayName, duration)
@@ -2535,6 +2663,7 @@ end
 
 -- Interactive Timing Sear Boost: Cuts remaining cook time by 40% and upgrades the dish to CHEF'S MASTERWORK (+50% Gold)!
 function RestaurantService.TrySearBoost(player: Player): (boolean, string)
+	local slot = BaseService.GetPlayerBaseSlot(player)
 	local kitchen = ensureKitchen(player)
 	local now = os.clock()
 	if kitchen.IsCooking and not kitchen.Boosted1 then
@@ -2544,10 +2673,10 @@ function RestaurantService.TrySearBoost(player: Player): (boolean, string)
 		local tok = kitchen.Token1
 		local recId = kitchen.CurrentRecipeId or "GrilledFish"
 		kitchen.CookEndsAt = now + rem
-		RestaurantService.PushStateToClient(player)
+		pushStateToBase(player)
 		if RecipeConfig.Recipes[recId] then
 			task.delay(rem, function()
-				finishCookSlot(player, 1, tok, recId)
+				finishCookSlot(player, slot, 1, tok, recId)
 			end)
 		end
 		return true, string.format("CHEF'S MASTERWORK SEAR! Stove #1 time cut to %.1fs (+50%% Gold Bonus)!", rem)
@@ -2558,10 +2687,10 @@ function RestaurantService.TrySearBoost(player: Player): (boolean, string)
 		local tok = kitchen.Token2
 		local recId = kitchen.CurrentRecipeId2 or "GrilledFish"
 		kitchen.CookEndsAt2 = now + rem
-		RestaurantService.PushStateToClient(player)
+		pushStateToBase(player)
 		if RecipeConfig.Recipes[recId] then
 			task.delay(rem, function()
-				finishCookSlot(player, 2, tok, recId)
+				finishCookSlot(player, slot, 2, tok, recId)
 			end)
 		end
 		return true, string.format("CHEF'S MASTERWORK SEAR! Stove #2 time cut to %.1fs (+50%% Gold Bonus)!", rem)
@@ -2584,8 +2713,8 @@ function RestaurantService.TryBuyDualStove(player: Player, bypassGold: boolean?)
 	end
 	PlayerDataService.SetHasDualStove(player, true)
 	SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1)
-	RestaurantService.PushStateToClient(player)
-	return true, "Installed 2nd Commercial Stove Line! Cook 2 dishes simultaneously!"
+	pushStateToBase(player)
+	return true, "Installed 2nd Commercial Stove Line! Cook 2 dishes simultaneously (+15% Cook Speed)!"
 end
 
 function RestaurantService.TryBuyVIPBooths(player: Player, bypassGold: boolean?): (boolean, string)
@@ -2601,8 +2730,38 @@ function RestaurantService.TryBuyVIPBooths(player: Player, bypassGold: boolean?)
 	end
 	PlayerDataService.SetHasVIPBooths(player, true)
 	SyndicateContractService.RecordProgress(player, "EmpireExpansion", 1)
-	RestaurantService.PushStateToClient(player)
+	pushStateToBase(player)
 	return true, "Installed Luxury VIP Private Dining Booths (+20% Dish Payout & +1 Star Rating)!"
+end
+
+local function awardCoopServeRewards(
+	actor: Player,
+	totalCoins: number,
+	totalExp: number,
+	totalRep: number,
+	totalDishes: number,
+	servedCopy: { [string]: number }?
+): (boolean, string?)
+	PlayerDataService.AddDishesServed(actor, totalDishes)
+	PlayerDataService.AddRewards(actor, totalCoins, totalExp, totalRep)
+	SyndicateContractService.RecordProgress(actor, "CookDishes", totalDishes)
+	local vipCompleted = false
+	local vipMsg: string? = nil
+	if servedCopy then
+		vipCompleted, vipMsg = VIPOrderService.TryFulfillFromServed(actor, servedCopy)
+	end
+
+	-- Reward co-op base partner fairly so both teammates prosper working restaurant & warehouses together!
+	for _, mate in ipairs(BaseService.GetTeammates(actor)) do
+		local mateCoins = math.max(1, math.floor(totalCoins * 0.85))
+		local mateExp = math.max(1, math.floor(totalExp * 0.85))
+		PlayerDataService.AddRewards(mate, mateCoins, mateExp, totalRep)
+		SyndicateContractService.RecordProgress(mate, "CookDishes", totalDishes)
+		if servedCopy then
+			VIPOrderService.TryFulfillFromServed(mate, servedCopy)
+		end
+	end
+	return vipCompleted, vipMsg
 end
 
 function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string)
@@ -2666,14 +2825,13 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 
 	table.clear(kitchen.ReadyDishes)
 	clearPlatters(player)
-	PlayerDataService.AddDishesServed(player, totalDishes)
-	PlayerDataService.AddRewards(player, totalCoins, totalExp, totalRep)
-	SyndicateContractService.RecordProgress(player, "CookDishes", totalDishes)
-	local vipCompleted, vipMsg = VIPOrderService.TryFulfillFromServed(player, servedCopy)
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	local bKey = slot or player
+	local vipCompleted, vipMsg = awardCoopServeRewards(player, totalCoins, totalExp, totalRep, totalDishes, servedCopy)
 	local urgentCust = findMostUrgentWaitingCustomer(player, true)
 	local custName = if urgentCust
 		then urgentCust.Name
-		elseif waitingOrders[player] then waitingOrders[player].CustomerName
+		elseif waitingOrders[bKey] then waitingOrders[bKey].CustomerName
 		else CUSTOMER_NAMES[math.random(1, #CUSTOMER_NAMES)]
 	local chefLabel = if MonetizationService.HasPass(player, "MasterProChef")
 		then "Master Pro Chef"
@@ -2694,14 +2852,15 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 			dispatchCustomerToEatAndLeave(player, perDishGold, dHint, dLabel, urgentCust)
 		else
 			task.delay((dIdx - 1) * 0.45, function()
-				if isRunning and player.Parent then
-					dispatchCustomerToEatAndLeave(player, perDishGold, dHint, dLabel, nil)
+				local activePlr = resolveActiveBaseMember(player, slot)
+				if isRunning and activePlr then
+					dispatchCustomerToEatAndLeave(activePlr, perDishGold, dHint, dLabel, nil)
 				end
 			end)
 		end
 	end
 	syncPrimaryWaitingOrder(player)
-	RestaurantService.PushStateToClient(player)
+	pushStateToBase(player)
 
 	local msg = if vipCompleted and vipMsg
 		then vipMsg
@@ -2711,16 +2870,19 @@ function RestaurantService.ServeAllReadyDishes(player: Player): (boolean, string
 end
 
 function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverride: string?): (boolean, string)
-	if not BaseService.GetPlayerBaseSlot(player) then
+	local slot = BaseService.GetPlayerBaseSlot(player)
+	if not slot then
 		return false, "Claim your Castle Base first!"
 	end
+	local bKey = slot
 
-	-- Respect kitchen capacity (scales with physical HQ expansion Lv.1-5 + Dual Stove bonus) to prevent spam/duplicate cooking!
+	-- Respect kitchen capacity (scales with physical HQ expansion Lv.1-15 + Dual Stove + Co-op 2nd Player!) to prevent spam/duplicate cooking!
 	local profCheck = PlayerDataService.GetProfile(player)
 	local expSpecCheck = RestaurantExpansionConfig.GetTierSpec(profCheck.RestaurantLevel or 1)
-	local maxConcurrent = expSpecCheck.MaxConcurrentOrders + (if profCheck.HasDualStove == true then 1 else 0)
+	local coopBonusOrders = if BaseService.GetBasePlayerCount(slot) >= 2 then 1 else 0
+	local maxConcurrent = expSpecCheck.MaxConcurrentOrders + (if profCheck.HasDualStove == true then 1 else 0) + coopBonusOrders
 	local cookingNow = 0
-	local curList = activeWalkingCustomers[player]
+	local curList = activeWalkingCustomers[bKey]
 	if curList then
 		for _, wc in ipairs(curList) do
 			if wc.Model.Parent and wc.IsBeingCooked and not wc.IsExpired and not wc.IsServed then
@@ -2756,7 +2918,7 @@ function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverrid
 	local orderId = targetCust.OrderId
 	targetCust.IsBeingCooked = true
 	order.IsBeingCooked = true
-	waitingOrders[player] = order
+	waitingOrders[bKey] = order
 
 	local usedRecipeId: string? = nil
 	if order.RecipeId then
@@ -2807,10 +2969,11 @@ function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverrid
 		kitchen.CurrentRecipeId = order.RecipeId or order.DishName
 		kitchen.CookEndsAt = os.clock() + cookTime
 	end
-	RestaurantService.PushStateToClient(player)
+	pushStateToBase(player)
 
 	task.delay(cookTime, function()
-		if not player.Parent then
+		local activePlr = resolveActiveBaseMember(player, slot)
+		if not activePlr then
 			return
 		end
 		if ownsStoveVisual then
@@ -2818,7 +2981,7 @@ function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverrid
 			kitchen.CurrentRecipeId = nil
 			kitchen.CookEndsAt = 0
 		end
-		setGrillCookingVisual(player, false, nil)
+		setGrillCookingVisual(activePlr, false, nil)
 
 		-- Strict anti-duplicate & expiry guard: NEVER pay or serve if customer expired, left, or was already served!
 		if order.Cancelled
@@ -2830,8 +2993,8 @@ function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverrid
 		then
 			targetCust.IsBeingCooked = false
 			order.IsBeingCooked = false
-			syncPrimaryWaitingOrder(player)
-			RestaurantService.PushStateToClient(player)
+			syncPrimaryWaitingOrder(activePlr)
+			pushStateToBase(activePlr)
 			return
 		end
 
@@ -2844,11 +3007,11 @@ function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverrid
 		local eventRepMultAttr = ReplicatedStorage:GetAttribute("ActiveEventRepMult")
 		local eventCoinsMult = (if typeof(eventCoinsMultAttr) == "number" then eventCoinsMultAttr else 1.0) * (if ReplicatedStorage:GetAttribute("IsNight") == true then 1.35 else 1.0)
 		local eventRepMult = if typeof(eventRepMultAttr) == "number" then eventRepMultAttr else 1.0
-		local passCoinsMult = MonetizationService.GetPayoutMultiplier(player)
-		local passRepMult = MonetizationService.GetRepMultiplier(player)
-		local waiterTipMult = CrewService.GetWaiterTipMultiplier(player)
-		local starMult = RestaurantService.GetRestaurantStarInfo(player).Multiplier or 1.0
-		local rankMult = SyndicateContractService.GetRankPayoutMultiplier(player)
+		local passCoinsMult = MonetizationService.GetPayoutMultiplier(activePlr)
+		local passRepMult = MonetizationService.GetRepMultiplier(activePlr)
+		local waiterTipMult = CrewService.GetWaiterTipMultiplier(activePlr)
+		local starMult = RestaurantService.GetRestaurantStarInfo(activePlr).Multiplier or 1.0
+		local rankMult = SyndicateContractService.GetRankPayoutMultiplier(activePlr)
 
 		local bonusSum = (tier.PayoutMultiplier - 1.0)
 			+ (eventCoinsMult - 1.0) * 0.50
@@ -2861,31 +3024,29 @@ function RestaurantService.ServeWaitingCustomerOrder(player: Player, chefOverrid
 		local earnedRep = math.max(3, math.floor(order.BaseRep * math.min(eventRepMult * passRepMult * starMult, 4.0)))
 		local earnedExp = math.max(10, math.floor(order.BaseGold * 0.4))
 
-		local dispatched = dispatchCustomerToEatAndLeave(player, earnedGold, usedRecipeId or order.DishName, order.DishName, targetCust)
+		local dispatched = dispatchCustomerToEatAndLeave(activePlr, earnedGold, usedRecipeId or order.DishName, order.DishName, targetCust)
 		if not dispatched then
-			syncPrimaryWaitingOrder(player)
-			RestaurantService.PushStateToClient(player)
+			syncPrimaryWaitingOrder(activePlr)
+			pushStateToBase(activePlr)
 			return
 		end
 
-		PlayerDataService.AddDishesServed(player, 1)
-		PlayerDataService.AddRewards(player, earnedGold, earnedExp, earnedRep)
-		SyndicateContractService.RecordProgress(player, "CookDishes", 1)
+		local servedMap = if usedRecipeId then { [usedRecipeId] = 1 } else nil
+		awardCoopServeRewards(activePlr, earnedGold, earnedExp, earnedRep, 1, servedMap)
 		if usedRecipeId and SPECIALTY_RECIPE_IDS[usedRecipeId] then
-			specialtyCookCounts[player] = (specialtyCookCounts[player] or 0) + 1
-			SyndicateContractService.RecordProgress(player, "SpecialtyFeast", 1)
-		end
-		if usedRecipeId then
-			VIPOrderService.TryFulfillFromServed(player, { [usedRecipeId] = 1 })
-		end
-
-		local receipt = printRestaurantReceipt(player, order.CustomerName, order.DishName, earnedGold, earnedRep, chefName)
-		if MonetizationService.HasPass(player, "MasterProChef") then
-			MonetizationService.SetProChefStatus(player, string.format("Receipt #%d (+%d Gold)!", receipt.OrderNo, earnedGold), true)
+			specialtyCookCounts[bKey] = (specialtyCookCounts[bKey] or 0) + 1
+			for _, m in ipairs(BaseService.GetBasePlayers(slot)) do
+				SyndicateContractService.RecordProgress(m, "SpecialtyFeast", 1)
+			end
 		end
 
-		syncPrimaryWaitingOrder(player)
-		RestaurantService.PushStateToClient(player)
+		local receipt = printRestaurantReceipt(activePlr, order.CustomerName, order.DishName, earnedGold, earnedRep, chefName)
+		if MonetizationService.HasPass(activePlr, "MasterProChef") then
+			MonetizationService.SetProChefStatus(activePlr, string.format("Receipt #%d (+%d Gold)!", receipt.OrderNo, earnedGold), true)
+		end
+
+		syncPrimaryWaitingOrder(activePlr)
+		pushStateToBase(activePlr)
 	end)
 
 	return true, string.format("%s is cooking %s for %s!", chefName, order.DishName, order.CustomerName)
@@ -2910,7 +3071,7 @@ function RestaurantService.TryUpgradeRestaurant(player: Player, bypassGold: bool
 
 	PlayerDataService.SetRestaurantLevel(player, nextTier.Level)
 	syncRestaurantVisuals(player)
-	RestaurantService.PushStateToClient(player)
+	pushStateToBase(player)
 	local newExp = RestaurantExpansionConfig.GetTierSpec(nextTier.Level)
 	return true, string.format(
 		"Expanded Restaurant HQ & %s to Lv.%d (%dF • %d Max Customers)!",
@@ -2934,7 +3095,7 @@ function RestaurantService.TryUpgradeDefenses(player: Player, bypassGold: boolea
 	end
 
 	PlayerDataService.SetDefenseLevel(player, nextLevel)
-	RestaurantService.PushStateToClient(player)
+	pushStateToBase(player)
 	return true, string.format("Upgraded Castle Defenses to Tier %d!", nextLevel)
 end
 
@@ -2943,13 +3104,14 @@ local function ensurePrompt(parent: BasePart, name: string, actionText: string, 
 	if existing and existing:IsA("ProximityPrompt") then
 		existing.ActionText = actionText
 		existing.ObjectText = objectText
+		existing.MaxActivationDistance = 18
 		return existing
 	end
 	local p = Instance.new("ProximityPrompt")
 	p.Name = name
 	p.KeyboardKeyCode = Enum.KeyCode.E
 	p.HoldDuration = 0.25
-	p.MaxActivationDistance = 14
+	p.MaxActivationDistance = 18
 	p.RequiresLineOfSight = false
 	p.ActionText = actionText
 	p.ObjectText = objectText
@@ -3034,6 +3196,7 @@ local function wireRestaurantPrompts(): ()
 			local slotAttr = base:GetAttribute("BaseSlot")
 			local regPrompt = base:FindFirstChild("TakeCustomerOrderPrompt", true)
 			if regPrompt and regPrompt:IsA("ProximityPrompt") then
+				regPrompt.MaxActivationDistance = 18
 				table.insert(
 					promptConnections,
 					regPrompt.Triggered:Connect(function(player)
@@ -3047,6 +3210,7 @@ local function wireRestaurantPrompts(): ()
 			-- Wire Front Staff Hiring Kiosk Prompt in all 4 Restaurant Plazas!
 			local staffPrompt = base:FindFirstChild("HireStaffKioskPrompt", true)
 			if staffPrompt and staffPrompt:IsA("ProximityPrompt") then
+				staffPrompt.MaxActivationDistance = 18
 				table.insert(
 					promptConnections,
 					staffPrompt.Triggered:Connect(function(player)
@@ -3059,7 +3223,7 @@ local function wireRestaurantPrompts(): ()
 						if toastEv and toastEv:IsA("RemoteEvent") then
 							toastEv:FireClient(player, (if ok then "👨‍🍳 " else "⚠️ ") .. msg)
 						end
-						RestaurantService.PushStateToClient(player)
+						pushStateToBase(player)
 					end)
 				)
 			end
@@ -3444,6 +3608,12 @@ local function setupRemotes(): ()
 				ok, msg = setPlayerSprint(player, arg)
 			end
 
+			if ok then
+				for _, mate in ipairs(BaseService.GetTeammates(player)) do
+					RestaurantService.PushStateToClient(mate)
+				end
+			end
+
 			return {
 				Success = ok,
 				Message = msg,
@@ -3484,9 +3654,9 @@ function RestaurantService.Start(): ()
 	CrewService.SetAutoCookOnlyHandler(function(player)
 		local kitchen = ensureKitchen(player)
 		local prof = PlayerDataService.GetProfile(player)
-		local hasDual = prof.HasDualStove == true
+		local canDual = isCoopDualStoveUnlocked(player)
 		local expTier = RestaurantExpansionConfig.GetTierSpec(prof.RestaurantLevel or 1)
-		local canCookNow = (not kitchen.IsCooking) or (hasDual and not kitchen.IsCooking2)
+		local canCookNow = (not kitchen.IsCooking) or (canDual and not kitchen.IsCooking2)
 		if canCookNow and countReadyDishes(kitchen) < expTier.KitchenReadyCapacity then
 			local best = RestaurantService.PickBestAvailableRecipe(player)
 			if best then
@@ -3505,7 +3675,7 @@ function RestaurantService.Start(): ()
 
 	CrewService.SetWaiterChangedHandler(function(player)
 		spawnWaitStaffForPlayer(player)
-		RestaurantService.PushStateToClient(player)
+		pushStateToBase(player)
 	end)
 
 	CentralParkBranchService.SetChangedCallback(function(player)
@@ -3535,19 +3705,18 @@ function RestaurantService.Start(): ()
 	end)
 
 	NightMafiaRaidService.OnRaidWarning(function(payload)
-		if payload.Owner and payload.Owner.Parent then
-			RestaurantService.PushStateToClient(payload.Owner)
+		for _, m in ipairs(BaseService.GetBasePlayers(payload.BaseSlot)) do
+			RestaurantService.PushStateToClient(m)
 		end
 	end)
 	NightMafiaRaidService.OnRaidStarted(function(payload)
-		if payload.Owner and payload.Owner.Parent then
-			RestaurantService.PushStateToClient(payload.Owner)
+		for _, m in ipairs(BaseService.GetBasePlayers(payload.BaseSlot)) do
+			RestaurantService.PushStateToClient(m)
 		end
 	end)
 	NightMafiaRaidService.OnRaidEnded(function(summary)
-		local owner = Players:GetPlayerByUserId(summary.OwnerUserId)
-		if owner and owner.Parent then
-			RestaurantService.PushStateToClient(owner)
+		for _, m in ipairs(BaseService.GetBasePlayers(summary.BaseSlot)) do
+			RestaurantService.PushStateToClient(m)
 		end
 	end)
 
@@ -3642,11 +3811,33 @@ function RestaurantService.Start(): ()
 		end
 	end)
 
-	for _, p in ipairs(Players:GetPlayers()) do
-		if BaseService.GetPlayerBaseSlot(p) then
-			spawnCustomersForPlayer(p)
-			syncRestaurantVisuals(p)
-			syncPrimaryWaitingOrder(p)
+	unsubBaseReleased = BaseService.OnBaseReleased(function(slot, leavingPlayer, remainingCount)
+		if remainingCount == 0 then
+			kitchens[slot] = nil
+			waitingOrders[slot] = nil
+			orderCounters[slot] = nil
+			receiptHistory[slot] = nil
+			specialtyCookCounts[slot] = nil
+			clearCustomersForKey(slot)
+			clearPlattersForKey(slot)
+		else
+			for _, m in ipairs(BaseService.GetBasePlayers(slot)) do
+				RestaurantService.PushStateToClient(m)
+			end
+		end
+		kitchens[leavingPlayer] = nil
+		waitingOrders[leavingPlayer] = nil
+		orderCounters[leavingPlayer] = nil
+		receiptHistory[leavingPlayer] = nil
+		specialtyCookCounts[leavingPlayer] = nil
+	end)
+
+	for _, slot in ipairs(BaseService.GetSlotOrder()) do
+		local lead = BaseService.GetBaseLeadPlayer(slot)
+		if lead then
+			spawnCustomersForPlayer(lead)
+			syncRestaurantVisuals(lead)
+			syncPrimaryWaitingOrder(lead)
 		end
 	end
 
@@ -3659,9 +3850,13 @@ function RestaurantService.Start(): ()
 				break
 			end
 			local now = os.clock()
-			for player, list in pairs(activeWalkingCustomers) do
-				if not player.Parent then
-					clearCustomers(player)
+			for bKey, list in pairs(activeWalkingCustomers) do
+				local ownerPlr: Player? = if typeof(bKey) == "string"
+					then BaseService.GetBaseLeadPlayer(bKey :: BaseService.BaseSlot)
+					elseif typeof(bKey) == "Instance" and bKey:IsA("Player") and bKey.Parent then bKey
+					else nil
+				if not ownerPlr then
+					clearCustomersForKey(bKey)
 					continue
 				end
 				for i = #list, 1, -1 do
@@ -3675,7 +3870,7 @@ function RestaurantService.Start(): ()
 					elseif wc.Phase == "SeatedWaiting" and wc.PatienceActive and not wc.IsServed and not wc.IsExpired then
 						local rem = wc.PatienceExpiresAt - now
 						if rem <= 0 then
-							handleCustomerPatienceExpired(player, wc)
+							handleCustomerPatienceExpired(ownerPlr, wc)
 						else
 							local frac = math.clamp(rem / math.max(1, wc.PatienceTotal), 0, 1)
 							wc.PatienceBarFill.Size = UDim2.fromScale(frac, 1)
@@ -3698,42 +3893,49 @@ function RestaurantService.Start(): ()
 		end
 	end)
 
-	-- Live Walk-In Customer Loop (scaled dynamically across Restaurant HQ & Front Wood Pavilion Levels 1-15!)
+	-- Live Walk-In Customer Loop (runs ONCE per occupied Co-op Base across HQ & Front Wood Pavilion Levels 1-15!)
 	customerOrderThread = task.spawn(function()
 		while isRunning do
 			task.wait(3.2)
 			if not isRunning then
 				break
 			end
-			for _, p in ipairs(Players:GetPlayers()) do
-				if BaseService.GetPlayerBaseSlot(p) then
-					-- Bigger Restaurant + Front Wood Pavilion attracts more simultaneous city customers!
-					local wList = activeWalkingCustomers[p]
+			for _, slot in ipairs(BaseService.GetSlotOrder()) do
+				local lead = BaseService.GetBaseLeadPlayer(slot)
+				if lead then
+					local wList = activeWalkingCustomers[slot]
 					local curCount = if wList then #wList else 0
-					local maxGuests = getMaxCustomersForHQ(p)
+					local maxGuests = getMaxCustomersForHQ(lead)
 					if curCount < maxGuests then
-						local hqLv = PlayerDataService.GetProfile(p).RestaurantLevel or 1
+						local hqLv = PlayerDataService.GetProfile(lead).RestaurantLevel or 1
 						local waveCount = if hqLv >= 11 then 3 elseif hqLv >= 5 then 2 else 1
 						local toSpawn = math.min(waveCount, maxGuests - curCount)
 						for sIdx = 1, toSpawn do
 							if sIdx == 1 then
-								spawnSingleCityCustomer(p, 190)
+								spawnSingleCityCustomer(lead, 190)
 							else
 								task.delay((sIdx - 1) * 0.75, function()
-									if isRunning and p.Parent and BaseService.GetPlayerBaseSlot(p) then
-										spawnSingleCityCustomer(p, 198 + sIdx * 10)
+									local activePlr = BaseService.GetBaseLeadPlayer(slot)
+									if isRunning and activePlr then
+										spawnSingleCityCustomer(activePlr, 198 + sIdx * 10)
 									end
 								end)
 							end
 						end
 					end
-					local urgent = findMostUrgentWaitingCustomer(p, false)
+					local urgent = findMostUrgentWaitingCustomer(lead, false)
 					if urgent then
-						local hasChef = CrewService.GetCrewCount(p) > 0
-						local hasWaiter = CrewService.GetWaiterCount(p) > 0
-						local hasProChef = MonetizationService.HasPass(p, "MasterProChef")
+						local hasChef = CrewService.GetCrewCount(lead) > 0
+						local hasWaiter = CrewService.GetWaiterCount(lead) > 0
+						local hasProChef = false
+						for _, m in ipairs(BaseService.GetBasePlayers(slot)) do
+							if MonetizationService.HasPass(m, "MasterProChef") then
+								hasProChef = true
+								break
+							end
+						end
 						if (hasChef and hasWaiter) or hasProChef then
-							RestaurantService.ServeWaitingCustomerOrder(p, nil)
+							RestaurantService.ServeWaitingCustomerOrder(lead, nil)
 						end
 					end
 				end
@@ -3742,15 +3944,19 @@ function RestaurantService.Start(): ()
 	end)
 
 	playerRemovingConn = Players.PlayerRemoving:Connect(function(player)
-		kitchens[player] = nil
-		waitingOrders[player] = nil
-		orderCounters[player] = nil
-		receiptHistory[player] = nil
-		clearCustomers(player)
-		clearPlatters(player)
+		-- Base-owned state is cleaned up in BaseService.OnBaseReleased ONLY when the last teammate leaves!
+		if not BaseService.GetPlayerBaseSlot(player) then
+			kitchens[player] = nil
+			waitingOrders[player] = nil
+			orderCounters[player] = nil
+			receiptHistory[player] = nil
+			specialtyCookCounts[player] = nil
+			clearCustomersForKey(player)
+			clearPlattersForKey(player)
+		end
 	end)
 
-	print("[Food Empire] RestaurantService started (Cooking, Serving, Customer Patience 15-20s, HQ Upgrades & Remotes ready)!")
+	print("[Food Empire] RestaurantService started (Co-op Shared Kitchen/Orders, Customer Patience 15-20s, Anti-Blocking & HQ Upgrades ready)!")
 end
 
 function RestaurantService.Stop(): ()
@@ -3772,19 +3978,20 @@ function RestaurantService.Stop(): ()
 		playerRemovingConn = nil
 	end
 	if unsubBase then unsubBase(); unsubBase = nil end
+	if unsubBaseReleased then unsubBaseReleased(); unsubBaseReleased = nil end
 	if unsubProfile then unsubProfile(); unsubProfile = nil end
 	if unsubWarehouse then unsubWarehouse(); unsubWarehouse = nil end
 	if unsubSector then unsubSector(); unsubSector = nil end
 	if unsubShipments then unsubShipments(); unsubShipments = nil end
 	if unsubTurf then unsubTurf(); unsubTurf = nil end
-	for p in pairs(customerModels) do
-		clearCustomers(p)
+	for k in pairs(customerModels) do
+		clearCustomersForKey(k)
 	end
-	for p in pairs(activeWalkingCustomers) do
-		clearCustomers(p)
+	for k in pairs(activeWalkingCustomers) do
+		clearCustomersForKey(k)
 	end
-	for p in pairs(activeWaitStaff) do
-		clearCustomers(p)
+	for k in pairs(activeWaitStaff) do
+		clearCustomersForKey(k)
 	end
 end
 
