@@ -1366,6 +1366,9 @@ local function indexWorldInstances(): ()
 
 	for _, zone in ipairs(CollectionService:GetTagged("TurfCaptureZone")) do
 		if zone:IsA("BasePart") then
+			zone.CanCollide = false
+			zone.CanTouch = false
+			zone.CanQuery = false
 			local bid = zone:GetAttribute("BlockId")
 			if typeof(bid) == "string" then
 				blockZones[bid] = zone

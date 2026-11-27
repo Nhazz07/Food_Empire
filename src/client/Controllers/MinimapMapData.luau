@@ -618,4 +618,55 @@ MinimapMapData.MiniOutposts = {
 	{ Id = "SE_Outpost_SouthComm", Name = "Kurogane Comms Array",     Kind = "Comms",    x =  424, z =  793 },
 }
 
+-- 16 Expanded Urban Bypass Pocket Blocks (72 secondary buildings + alleys & parking lots matching Workspace.BypassPocketBlocks)
+do
+	local quads = { { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }
+	local pocketBuildings = {
+		-- Inner Triangle A (5 buildings)
+		{ u = 523, v = 240, su = 28, sv = 24, major = false },
+		{ u = 521, v = 178, su = 24, sv = 34, major = true },
+		{ u = 521, v = 114, su = 22, sv = 26, major = false },
+		{ u = 609, v = 237, su = 30, sv = 24, major = true },
+		{ u = 656, v = 240, su = 28, sv = 20, major = false },
+		-- Outer Triangle B (4 buildings)
+		{ u = 762, v = 456, su = 26, sv = 22, major = false },
+		{ u = 815, v = 461, su = 34, sv = 18, major = true },
+		{ u = 860, v = 458, su = 26, sv = 20, major = false },
+		{ u = 762, v = 380, su = 24, sv = 32, major = true },
+	}
+	local pocketAlleys = {
+		-- Inner Triangle A alleys & parking pad
+		{ u = 549, v = 147, su = 90, sv = 14 },
+		{ u = 633, v = 234, su = 14, sv = 56 },
+		{ u = 612, v = 192, su = 38, sv = 28 },
+		-- Outer Triangle B alleys, service court & parking pad
+		{ u = 786, v = 460, su = 16, sv = 33 },
+		{ u = 797, v = 386, su = 30, sv = 20 },
+		{ u = 833, v = 425, su = 26, sv = 26 },
+	}
+
+	for _, q in ipairs(quads) do
+		local sx, sz = q[1], q[2]
+		for _, swap in ipairs({ false, true }) do
+			for _, b in ipairs(pocketBuildings) do
+				table.insert(MinimapMapData.Buildings, {
+					x = if swap then sx * b.v else sx * b.u,
+					z = if swap then sz * b.u else sz * b.v,
+					sx = if swap then b.sv else b.su,
+					sz = if swap then b.su else b.sv,
+					major = b.major,
+				})
+			end
+			for _, a in ipairs(pocketAlleys) do
+				table.insert(MinimapMapData.Alleys, {
+					x = if swap then sx * a.v else sx * a.u,
+					z = if swap then sz * a.u else sz * a.v,
+					sx = if swap then a.sv else a.su,
+					sz = if swap then a.su else a.sv,
+				})
+			end
+		end
+	end
+end
+
 return MinimapMapData
