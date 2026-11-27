@@ -133,6 +133,7 @@ local turfProximityConn: RBXScriptConnection? = nil
 local vitalsConn: RBXScriptConnection? = nil
 local scaleConn: RBXScriptConnection? = nil
 local hotbarWidthConn: RBXScriptConnection? = nil
+local minimapAttrConns: { RBXScriptConnection } = {}
 local sectorPills: { [string]: Frame } = {}
 local sectorDots: { [string]: Frame } = {}
 local sectorStatusLabels: { [string]: TextLabel } = {}
@@ -348,6 +349,71 @@ local function syncBottomClusterOffsets(): ()
 	end
 	if actionClusterFrame then
 		actionClusterFrame.Position = UDim2.new(0.5, halfW + 10, 1, -30)
+	end
+end
+
+local function getMinimapClearanceMetrics(): (number, number, number, number, number, number)
+	local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+	local hudScale = if uiScaleInst and uiScaleInst.Scale > 0.1 then uiScaleInst.Scale else computeHudScale()
+	local logicalH = 702
+	if screenGui and screenGui.AbsoluteSize.Y > 1 then
+		logicalH = screenGui.AbsoluteSize.Y / hudScale
+	else
+		local cam = Workspace.CurrentCamera
+		if cam and cam.ViewportSize.Y > 1 then
+			logicalH = math.max(320, (cam.ViewportSize.Y - 58) / hudScale)
+		end
+	end
+
+	local mmW = 200
+	local mmH = 236
+	local mmBot = 14
+	local mmRight = 14
+	if playerGui then
+		local attrW = playerGui:GetAttribute("FoodEmpireMinimapWidth")
+		local attrH = playerGui:GetAttribute("FoodEmpireMinimapHeight")
+		local attrBot = playerGui:GetAttribute("FoodEmpireMinimapBottomOffset")
+		local attrRight = playerGui:GetAttribute("FoodEmpireMinimapRightOffset")
+		if typeof(attrW) == "number" and attrW > 80 then
+			mmW = attrW
+		end
+		if typeof(attrH) == "number" and attrH > 80 then
+			mmH = attrH
+		end
+		if typeof(attrBot) == "number" and attrBot >= 0 then
+			mmBot = attrBot
+		end
+		if typeof(attrRight) == "number" and attrRight >= 0 then
+			mmRight = attrRight
+		end
+	end
+
+	local minimapTopY = logicalH - mmBot - mmH
+	return mmW, mmH, mmBot, mmRight, logicalH, minimapTopY
+end
+
+local function syncReceiptTicketPosition(): ()
+	if not receiptTicket then
+		return
+	end
+	local mmW, mmH, mmBot, mmRight, logicalH, minimapTopY = getMinimapClearanceMetrics()
+	local ticketH = receiptTicket.Size.Y.Offset
+	local railBottom = 146
+	if patienceCard and patienceCard.Visible and patienceCard.Position.X.Offset > -50 then
+		railBottom = math.max(railBottom, patienceCard.Position.Y.Offset + patienceCard.Size.Y.Offset)
+	end
+	if companionCard and companionCard.Visible and companionCard.Position.X.Offset > -50 then
+		railBottom = math.max(railBottom, companionCard.Position.Y.Offset + companionCard.Size.Y.Offset)
+	end
+
+	-- Dock cleanly above minimap when space allows; otherwise slide cleanly to the left of the minimap
+	if (minimapTopY - 10 - ticketH) >= (railBottom + 8) then
+		receiptTicket.AnchorPoint = Vector2.new(1, 1)
+		receiptTicket.Position = UDim2.new(1, -mmRight, 1, -(mmBot + mmH + 10))
+	else
+		local safeY = math.clamp(minimapTopY, 84, math.max(84, logicalH - 134 - ticketH))
+		receiptTicket.AnchorPoint = Vector2.new(1, 0)
+		receiptTicket.Position = UDim2.new(1, -(mmRight + mmW + 10), 0, safeY)
 	end
 end
 
@@ -1381,7 +1447,17 @@ function HUDController.Init(
 			end
 			if activeCount > 0 then
 				patienceCard.Visible = true
-				patienceCard.Size = UDim2.fromOffset(216, 26 + shown * 27)
+				local cardH = 26 + shown * 27
+				patienceCard.Size = UDim2.fromOffset(216, cardH)
+				local mmW, _, _, mmRight, _, minimapTopY = getMinimapClearanceMetrics()
+				if (154 + cardH) > (minimapTopY - 8) then
+					local altX = if (76 + cardH) > (minimapTopY - 8)
+						then math.max(240, mmRight + mmW + 10)
+						else 240
+					patienceCard.Position = UDim2.new(1, -altX, 0, 76)
+				else
+					patienceCard.Position = UDim2.new(1, -14, 0, 154)
+				end
 				patienceHeaderLabel.Text = string.format("WAITING GUESTS (%d)", activeCount)
 				if patienceCardStroke then
 					patienceCardStroke.Color = if minRem <= cfg.CriticalThresholdSeconds
@@ -1426,6 +1502,24 @@ function HUDController.Init(
 	makeCorner(ticket, 6)
 	makeBorderStroke(ticket, C_GOLD_DIM, 1.2)
 	receiptTicket = ticket
+
+	-- Keep ReceiptTicket dynamically aligned with live minimap size & screen aspect ratio
+	for _, conn in ipairs(minimapAttrConns) do
+		conn:Disconnect()
+	end
+	table.clear(minimapAttrConns)
+	local trackedMinimapAttrs = {
+		"FoodEmpireMinimapWidth",
+		"FoodEmpireMinimapHeight",
+		"FoodEmpireMinimapBottomOffset",
+		"FoodEmpireMinimapRightOffset",
+		"FoodEmpireHUDScale",
+	}
+	for _, attrName in ipairs(trackedMinimapAttrs) do
+		table.insert(minimapAttrConns, playerGui:GetAttributeChangedSignal(attrName):Connect(syncReceiptTicketPosition))
+	end
+	table.insert(minimapAttrConns, gui:GetPropertyChangedSignal("AbsoluteSize"):Connect(syncReceiptTicketPosition))
+	syncReceiptTicketPosition()
 
 	local rHead = Instance.new("TextLabel")
 	rHead.Name = "Header"
@@ -1739,7 +1833,7 @@ function HUDController.Init(
 			if shown > 0 then
 				companionCard.Visible = true
 				local yPos = 154
-				if patienceCard and patienceCard.Visible then
+				if patienceCard and patienceCard.Visible and patienceCard.Position.X.Offset > -50 then
 					yPos = 154 + patienceCard.Size.Y.Offset + 8
 				end
 				local weaponGui = playerGui:FindFirstChild("WeaponCombatHUD")
@@ -1747,10 +1841,22 @@ function HUDController.Init(
 				if ammoCardRef and ammoCardRef:IsA("Frame") and ammoCardRef.Visible then
 					yPos = math.max(yPos, 294)
 				end
-				companionCard.Position = UDim2.new(1, -14, 0, yPos)
 				local rowsHolder = companionCard:FindFirstChild("Rows")
 				local isMin = rowsHolder ~= nil and rowsHolder:IsA("Frame") and not rowsHolder.Visible
-				companionCard.Size = UDim2.fromOffset(216, if isMin then 24 else (24 + shown * 20))
+				local compHeight = if isMin then 24 else (24 + shown * 20)
+				companionCard.Size = UDim2.fromOffset(216, compHeight)
+				local mmW, _, _, mmRight, _, minimapTopY = getMinimapClearanceMetrics()
+				if (yPos + compHeight) > (minimapTopY - 8) then
+					local altY = if patienceCard and patienceCard.Visible and patienceCard.Position.X.Offset <= -50
+						then (76 + patienceCard.Size.Y.Offset + 8)
+						else 154
+					local altX = if (altY + compHeight) > (minimapTopY - 8)
+						then math.max(240, mmRight + mmW + 10)
+						else 240
+					companionCard.Position = UDim2.new(1, -altX, 0, altY)
+				else
+					companionCard.Position = UDim2.new(1, -14, 0, yPos)
+				end
 				if companionHeaderLabel then
 					companionHeaderLabel.Text = string.format("HIRED SECURITY (%d)", shown)
 				end
@@ -1956,6 +2062,7 @@ function HUDController.Update(state: { [string]: any }): ()
 				tonumber(latest.GoldEarned) or 0,
 				tonumber(latest.RepEarned) or 0
 			)
+			syncReceiptTicketPosition()
 			receiptTicket.Visible = true
 			receiptHideToken += 1
 			local myReceiptToken = receiptHideToken

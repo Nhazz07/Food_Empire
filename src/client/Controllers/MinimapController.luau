@@ -20,6 +20,18 @@ local MinimapMapData = require("./MinimapMapData")
 local WaypointController = require("./WaypointController")
 local AudioController = require("./AudioController")
 
+export type MinimapSizePreset = "Compact" | "Standard" | "Large"
+
+export type MinimapSizeState = {
+	Preset: MinimapSizePreset,
+	ViewportSize: number,
+	FrameWidth: number,
+	FrameHeight: number,
+	MinViewport: number,
+	MaxViewport: number,
+	IsCustom: boolean,
+}
+
 local MinimapController = {}
 
 -- World coordinate projection (1:1 accurate to FoodEmpireMap [-1020, +1020] inside [-1060, +1060])
@@ -27,10 +39,28 @@ local MAP_HALF_WORLD = MinimapMapData.MAP_HALF_WORLD
 local WORLD_SPAN = MAP_HALF_WORLD * 2
 local ISLAND_LIMIT = MinimapMapData.ISLAND_HALF - 12
 
--- Frame geometry (200x236 bottom-right: aligns with HUD rail & clears ReceiptTicket at -252)
-local MAP_VIEWPORT_SIZE = 186
-local FRAME_WIDTH = MAP_VIEWPORT_SIZE + 14
-local FRAME_HEIGHT = MAP_VIEWPORT_SIZE + 50
+-- Dynamic resizable minimap presets & hard bounds (Standard = exact 200x236 original geometry)
+local BASE_VIEWPORT_SIZE = 186
+local MIN_VIEWPORT_SIZE = 132
+local MAX_VIEWPORT_SIZE = 344
+local PRESET_SNAP_THRESHOLD = 9
+
+local PRESET_ORDER: { MinimapSizePreset } = { "Compact", "Standard", "Large" }
+local PRESET_VIEWPORT_SIZES: { [MinimapSizePreset]: number } = {
+	Compact = 144,
+	Standard = 186,
+	Large = 284,
+}
+local PRESET_BADGES: { [MinimapSizePreset]: string } = {
+	Compact = "S",
+	Standard = "M",
+	Large = "L",
+}
+local PRESET_DISPLAY_NAMES: { [MinimapSizePreset]: string } = {
+	Compact = "COMPACT",
+	Standard = "STANDARD",
+	Large = "LARGE",
+}
 
 -- Smooth zoom bounds
 local MIN_ZOOM = 1.0
@@ -89,8 +119,11 @@ type ThreatPulse = {
 type DynamicDot = {
 	Frame: Frame,
 	Stroke: UIStroke,
+	Corner: UICorner?,
 	U: number,
 	V: number,
+	BaseSize: number,
+	BaseStroke: number,
 	Active: boolean,
 }
 
@@ -102,24 +135,118 @@ type PingRing = {
 	Duration: number,
 }
 
--- Controller runtime state
+type ChromeMetrics = {
+	ViewportPx: number,
+	ScaleRatio: number,
+	MarkerScale: number,
+	Pad: number,
+	HeaderH: number,
+	StatusH: number,
+	GapMid: number,
+	GapBot: number,
+	FrameW: number,
+	FrameH: number,
+	CornerR: number,
+	ViewportCornerR: number,
+	ScaleBarPx: number,
+}
+
+type ResponsiveBounds = {
+	MinViewport: number,
+	MaxViewport: number,
+	RightMargin: number,
+	BottomMargin: number,
+	LogicalW: number,
+	LogicalH: number,
+	ElevatedAboveDock: boolean,
+}
+
+type ScaledMarkerEntry = {
+	Gui: GuiObject,
+	Corner: UICorner?,
+	Stroke: UIStroke?,
+	BaseW: number,
+	BaseH: number,
+	BaseTextSize: number?,
+	BaseCorner: number?,
+	BaseStroke: number,
+	IsRound: boolean?,
+}
+
+type DetailSubLabel = {
+	Label: TextLabel,
+	Stroke: UIStroke?,
+	AnchorParent: GuiObject,
+	Above: boolean,
+	BaseTextSize: number,
+	MinEffectivePx: number,
+	FullEffectivePx: number,
+	TargetTransparency: number,
+}
+
+type PlayerIndicatorRefs = {
+	Holder: Frame,
+	Halo: Frame,
+	HaloCorner: UICorner,
+	Glyph: TextLabel,
+	GlyphStroke: UIStroke,
+	Nose: Frame,
+	NoseCorner: UICorner,
+}
+
+-- Controller runtime UI references
+local hostScreenGui: ScreenGui? = nil
+local islandFrame: Frame? = nil
+local islandFrameCorner: UICorner? = nil
+local islandFrameStroke: UIStroke? = nil
+local headerFrame: Frame? = nil
+local titleLabel: TextLabel? = nil
+local headerControlsRow: Frame? = nil
+local headerControlsLayout: UIListLayout? = nil
+local zoomOutBtn: TextButton? = nil
+local zoomInBtn: TextButton? = nil
+local zoomReadoutBtn: TextButton? = nil
+local followBtn: TextButton? = nil
+local sizeToggleBtn: TextButton? = nil
+local sizeToggleStroke: UIStroke? = nil
+local resizeGripBtn: TextButton? = nil
+local resizeGripBars: { Frame } = {}
+
 local mapViewport: Frame? = nil
+local mapViewportCorner: UICorner? = nil
+local geoClipCorner: UICorner? = nil
 local geoWorld: Frame? = nil
 local overlayWorld: Frame? = nil
 local playerIndicator: Frame? = nil
+local playerRefs: PlayerIndicatorRefs? = nil
 local gpsPinBtn: TextButton? = nil
+local gpsPinCorner: UICorner? = nil
+local gpsPinStroke: UIStroke? = nil
+local gpsPinCore: Frame? = nil
+local gpsPinCoreCorner: UICorner? = nil
 local gpsPinPulse: Frame? = nil
+local gpsPinPulseCorner: UICorner? = nil
 local routeLine: Frame? = nil
 local edgeArrowFrame: Frame? = nil
 local edgeArrowIcon: TextLabel? = nil
+local edgeArrowStroke: UIStroke? = nil
 local edgeDistLabel: TextLabel? = nil
+local statusBarFrame: Frame? = nil
+local statusBarCorner: UICorner? = nil
 local gpsStatusLabel: TextLabel? = nil
 local gpsDistLabel: TextLabel? = nil
+local zoneReadoutLabel: TextLabel? = nil
 local clearPinBtn: TextButton? = nil
-local zoomReadoutBtn: TextButton? = nil
-local followBtn: TextButton? = nil
+local scaleBarFrame: Frame? = nil
+local scaleLineFrame: Frame? = nil
 local scaleBarLabel: TextLabel? = nil
 local hoverTipLabel: TextLabel? = nil
+local hoverTipConstraint: UISizeConstraint? = nil
+local resizeToastLabel: TextLabel? = nil
+local cardinalTicks: { TextLabel } = {}
+local intercardinalTicks: { TextLabel } = {}
+local nwIntercardinalTick: TextLabel? = nil
+local bezelTicks: { Frame } = {}
 
 -- Landmark & dynamic marker references
 local bmMarkerBtn: TextButton? = nil
@@ -128,24 +255,72 @@ local bmWorldX = MinimapMapData.BlackMarketDefault.x
 local bmWorldZ = MinimapMapData.BlackMarketDefault.z
 local baseMarkers: { [string]: TextButton } = {}
 local baseStrokes: { [string]: UIStroke } = {}
+local baseStrokeBases: { [string]: number } = {}
 local baseSpawnMarkers: { [string]: TextButton } = {}
 local baseSpawnStrokes: { [string]: UIStroke } = {}
+local baseSpawnStrokeBases: { [string]: number } = {}
 local turfMarkers: { [string]: TextButton } = {}
 local turfStrokes: { [string]: UIStroke } = {}
+local turfStrokeBases: { [string]: number } = {}
 local shipmentBayMarkers: { [string]: TextButton } = {}
+local shipmentBayEntries: { [string]: ScaledMarkerEntry } = {}
 local expressObjMarker: TextButton? = nil
 local expressObjPos: Vector3? = nil
 local bistroMarker: TextButton? = nil
 local bistroStroke: UIStroke? = nil
+local bistroStrokeBase = 1.3
 local penthouseMarker: TextButton? = nil
 local penthouseStroke: UIStroke? = nil
+local penthouseStrokeBase = 1.3
 local crateWarehouseMarker: TextButton? = nil
 local crateWarehousePos: Vector3? = nil
+
+local scaledMarkers: { ScaledMarkerEntry } = {}
+local detailSubLabels: { DetailSubLabel } = {}
 
 -- Pooled entity indicators (zero Instance churn during gameplay)
 local allyPool: { DynamicDot } = {}
 local enemyPool: { DynamicDot } = {}
 local pingRings: { PingRing } = {}
+
+-- Live resizing & responsive layout state
+local activePreset: MinimapSizePreset = "Standard"
+local isCustomSize = false
+local preferredViewportSize = BASE_VIEWPORT_SIZE
+local currentViewportSize = BASE_VIEWPORT_SIZE
+local targetViewportSize = BASE_VIEWPORT_SIZE
+local currentMarkerScale = 1.0
+local currentScaleBarPx = 28
+local currentRightMargin = 14
+local targetRightMargin = 14
+local currentBottomMargin = 14
+local targetBottomMargin = 14
+local cachedBounds: ResponsiveBounds = {
+	MinViewport = MIN_VIEWPORT_SIZE,
+	MaxViewport = MAX_VIEWPORT_SIZE,
+	RightMargin = 14,
+	BottomMargin = 14,
+	LogicalW = 1360,
+	LogicalH = 702,
+	ElevatedAboveDock = false,
+}
+local lastAppliedViewportSize = -1
+local lastAppliedMarginX = -1
+local lastAppliedMarginY = -1
+local lastPublishedFrameW = -1
+local lastPublishedFrameH = -1
+local lastPublishedBottom = -1
+local lastPublishedRight = -1
+local resizePulse = 0
+local resizeToastExpiresAt = 0
+local isHoveringResizeGrip = false
+
+-- Corner drag-resize tracking
+local isResizing = false
+local didDragResize = false
+local resizeStartScreen = Vector2.zero
+local resizeStartVp = BASE_VIEWPORT_SIZE
+local lastGripTapAt = 0
 
 -- Live navigation, zoom, and detection state
 local currentZoom = 1.0
@@ -158,11 +333,13 @@ local followPlayer = true
 local lastAppliedZoom = -1
 local lastAppliedU = -1
 local lastAppliedV = -1
+local lastDetailEffectivePx = -1
 
 local activeWaypointPos: Vector3? = nil
 local activeWaypointLabel: string? = nil
 local lastRenderedDist = -1
 local lastRenderedBearing = ""
+local lastRenderedZone = ""
 
 local localBaseSlot: string? = nil
 local recentThreats: { ThreatPulse } = {}
@@ -290,10 +467,11 @@ end
 -- UI FACTORY HELPERS
 -- ============================================================================
 
-local function makeCorner(parent: Instance, r: number): ()
+local function makeCorner(parent: Instance, r: number): UICorner
 	local c = Instance.new("UICorner")
 	c.CornerRadius = UDim.new(0, r)
 	c.Parent = parent
+	return c
 end
 
 local function makeStroke(parent: Instance, color: Color3, thickness: number, mode: Enum.ApplyStrokeMode?): UIStroke
@@ -303,6 +481,56 @@ local function makeStroke(parent: Instance, color: Color3, thickness: number, mo
 	s.Thickness = thickness
 	s.Parent = parent
 	return s
+end
+
+local function scaledPx(basePx: number, scale: number?): number
+	local sc = scale or currentMarkerScale
+	return math.max(2, math.floor(basePx * sc + 0.5))
+end
+
+local function scaledStroke(baseThickness: number, scale: number?): number
+	local sc = scale or currentMarkerScale
+	local factor = math.clamp(0.62 + 0.38 * sc, 0.78, 1.38)
+	return math.floor((baseThickness * factor) * 20 + 0.5) / 20
+end
+
+local function registerScaledMarker(
+	gui: GuiObject,
+	corner: UICorner?,
+	stroke: UIStroke?,
+	baseW: number,
+	baseH: number,
+	baseTextSize: number?,
+	baseCorner: number?,
+	baseStroke: number,
+	isRound: boolean?
+): ScaledMarkerEntry
+	local entry: ScaledMarkerEntry = {
+		Gui = gui,
+		Corner = corner,
+		Stroke = stroke,
+		BaseW = baseW,
+		BaseH = baseH,
+		BaseTextSize = baseTextSize,
+		BaseCorner = baseCorner,
+		BaseStroke = baseStroke,
+		IsRound = isRound,
+	}
+	table.insert(scaledMarkers, entry)
+	return entry
+end
+
+local function updateCornerTickOcclusion(): ()
+	if nwIntercardinalTick then
+		local blocked = (hoverTipLabel ~= nil and hoverTipLabel.Visible)
+			or (resizeToastLabel ~= nil and resizeToastLabel.Visible)
+		if blocked then
+			nwIntercardinalTick.Visible = false
+		else
+			local alpha = math.clamp((currentViewportSize - 215) / 50, 0, 1)
+			nwIntercardinalTick.Visible = alpha > 0.04
+		end
+	end
 end
 
 local function showHoverTip(text: string?): ()
@@ -315,6 +543,23 @@ local function showHoverTip(text: string?): ()
 	else
 		hoverTipLabel.Visible = false
 	end
+	updateCornerTickOcclusion()
+end
+
+local function showResizeToast(text: string, duration: number?): ()
+	if not resizeToastLabel then
+		return
+	end
+	resizeToastLabel.Text = " " .. text .. " "
+	resizeToastLabel.TextTransparency = 0
+	resizeToastLabel.BackgroundTransparency = 0.08
+	local st = resizeToastLabel:FindFirstChildOfClass("UIStroke")
+	if st then
+		st.Transparency = 0
+	end
+	resizeToastLabel.Visible = true
+	resizeToastExpiresAt = os.clock() + (duration or 1.15)
+	updateCornerTickOcclusion()
 end
 
 local function addGeoRect(
@@ -482,8 +727,10 @@ local function addLandmarkBadge(
 	textColor: Color3,
 	shortLabel: string,
 	fullName: string,
-	zIndex: number
-): (TextButton, UIStroke)
+	zIndex: number,
+	baseTextSize: number?
+): (TextButton, UIStroke, ScaledMarkerEntry)
+	local txtSize = baseTextSize or 9
 	local btn = Instance.new("TextButton")
 	btn.Name = "Marker_" .. shortLabel
 	btn.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -494,13 +741,14 @@ local function addLandmarkBadge(
 	btn.AutoButtonColor = false
 	btn.Font = Enum.Font.GothamBlack
 	btn.Text = shortLabel
-	btn.TextSize = 9
+	btn.TextSize = txtSize
 	btn.TextColor3 = textColor
 	btn.ZIndex = zIndex
 	btn.Parent = parent
-	makeCorner(btn, 4)
+	local corner = makeCorner(btn, 4)
 
 	local st = makeStroke(btn, Color3.fromRGB(12, 16, 24), 1.3, Enum.ApplyStrokeMode.Border)
+	local entry = registerScaledMarker(btn, corner, st, wPx, hPx, txtSize, 4, 1.3, false)
 
 	btn.MouseEnter:Connect(function()
 		showHoverTip(fullName)
@@ -512,11 +760,59 @@ local function addLandmarkBadge(
 		setMapDestination(x, z, fullName)
 	end)
 
-	return btn, st
+	return btn, st, entry
+end
+
+local function addDetailSubLabel(
+	parentMarker: GuiObject,
+	text: string,
+	above: boolean,
+	baseTextSize: number,
+	minEffectivePx: number,
+	fullEffectivePx: number,
+	textColor: Color3?,
+	targetTransparency: number?
+): DetailSubLabel
+	local lbl = Instance.new("TextLabel")
+	lbl.Name = "DetailSubLabel"
+	lbl.AnchorPoint = Vector2.new(0.5, if above then 1 else 0)
+	lbl.Position = if above then UDim2.new(0.5, 0, 0, -1) else UDim2.new(0.5, 0, 1, 1)
+	lbl.AutomaticSize = Enum.AutomaticSize.X
+	lbl.Size = UDim2.fromOffset(0, baseTextSize + 2)
+	lbl.BackgroundTransparency = 1
+	lbl.Font = Enum.Font.GothamBlack
+	lbl.Text = text
+	lbl.TextSize = baseTextSize
+	lbl.TextColor3 = textColor or Color3.fromRGB(232, 236, 244)
+	lbl.TextTransparency = 1
+	lbl.Active = false
+	lbl.Visible = false
+	lbl.ZIndex = math.max(parentMarker.ZIndex + 1, 6)
+	lbl.Parent = parentMarker
+
+	local stroke = Instance.new("UIStroke")
+	stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual
+	stroke.Color = Color3.fromRGB(10, 13, 20)
+	stroke.Thickness = 1.4
+	stroke.Transparency = 1
+	stroke.Parent = lbl
+
+	local spec: DetailSubLabel = {
+		Label = lbl,
+		Stroke = stroke,
+		AnchorParent = parentMarker,
+		Above = above,
+		BaseTextSize = baseTextSize,
+		MinEffectivePx = minEffectivePx,
+		FullEffectivePx = fullEffectivePx,
+		TargetTransparency = targetTransparency or 0.14,
+	}
+	table.insert(detailSubLabels, spec)
+	return spec
 end
 
 -- Sleek rotating directional player triangle built purely from crisp Roblox UI elements
-local function buildPlayerTriangle(parent: Instance): Frame
+local function buildPlayerTriangle(parent: Instance): (Frame, PlayerIndicatorRefs)
 	local holder = Instance.new("Frame")
 	holder.Name = "PlayerDirectionalTriangle"
 	holder.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -536,7 +832,7 @@ local function buildPlayerTriangle(parent: Instance): Frame
 	halo.BorderSizePixel = 0
 	halo.ZIndex = 12
 	halo.Parent = holder
-	makeCorner(halo, 6)
+	local haloCorner = makeCorner(halo, 6)
 
 	-- Crisp directional triangle (▲ points North / -Z at Rotation = 0)
 	local tri = Instance.new("TextLabel")
@@ -568,9 +864,17 @@ local function buildPlayerTriangle(parent: Instance): Frame
 	nose.BorderSizePixel = 0
 	nose.ZIndex = 14
 	nose.Parent = holder
-	makeCorner(nose, 2)
+	local noseCorner = makeCorner(nose, 2)
 
-	return holder
+	return holder, {
+		Holder = holder,
+		Halo = halo,
+		HaloCorner = haloCorner,
+		Glyph = tri,
+		GlyphStroke = tStroke,
+		Nose = nose,
+		NoseCorner = noseCorner,
+	}
 end
 
 -- ============================================================================
@@ -584,19 +888,29 @@ local function acquireDot(pool: { DynamicDot }, index: number, parent: Instance,
 	end
 	local f = Instance.new("Frame")
 	f.AnchorPoint = Vector2.new(0.5, 0.5)
-	f.Size = UDim2.fromOffset(7, 7)
+	f.Size = UDim2.fromOffset(scaledPx(7), scaledPx(7))
 	f.BorderSizePixel = 0
 	f.Visible = false
 	f.ZIndex = zIndex
+	local corner: UICorner? = nil
 	if isDiamond then
 		f.Rotation = 45
 	else
-		makeCorner(f, 8)
+		corner = makeCorner(f, 8)
 	end
 	f.Parent = parent
 
-	local st = makeStroke(f, Color3.fromRGB(10, 14, 20), 1.2, Enum.ApplyStrokeMode.Border)
-	local dot: DynamicDot = { Frame = f, Stroke = st, U = 0.5, V = 0.5, Active = false }
+	local st = makeStroke(f, Color3.fromRGB(10, 14, 20), scaledStroke(1.2), Enum.ApplyStrokeMode.Border)
+	local dot: DynamicDot = {
+		Frame = f,
+		Stroke = st,
+		Corner = corner,
+		U = 0.5,
+		V = 0.5,
+		BaseSize = 7,
+		BaseStroke = 1.2,
+		Active = false,
+	}
 	pool[index] = dot
 	return dot
 end
@@ -643,16 +957,17 @@ local function spawnRadarPing(worldPos: Vector3, color: Color3): ()
 			oldest.Frame:Destroy()
 		end
 	end
+	local initPx = scaledPx(6)
 	local f = Instance.new("Frame")
 	f.Name = "RadarPing"
 	f.AnchorPoint = Vector2.new(0.5, 0.5)
 	f.Position = worldToScale(worldPos.X, worldPos.Z)
-	f.Size = UDim2.fromOffset(6, 6)
+	f.Size = UDim2.fromOffset(initPx, initPx)
 	f.BackgroundTransparency = 1
 	f.ZIndex = 8
 	f.Parent = overlayWorld
-	makeCorner(f, 24)
-	local st = makeStroke(f, color, 1.5, Enum.ApplyStrokeMode.Border)
+	makeCorner(f, 36)
+	local st = makeStroke(f, color, scaledStroke(1.5), Enum.ApplyStrokeMode.Border)
 
 	table.insert(pingRings, {
 		Frame = f,
@@ -664,6 +979,419 @@ local function spawnRadarPing(worldPos: Vector3, color: Color3): ()
 end
 
 -- ============================================================================
+-- RESPONSIVE GEOMETRY, DYNAMIC RESIZING & ADAPTIVE MAP READABILITY
+-- ============================================================================
+
+local function getHudScale(): number
+	local pg = Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if pg then
+		local attr = pg:GetAttribute("FoodEmpireHUDScale")
+		if typeof(attr) == "number" and attr > 0.1 then
+			return attr
+		end
+	end
+	if hostScreenGui then
+		local uis = hostScreenGui:FindFirstChildOfClass("UIScale")
+		if uis and uis.Scale > 0.1 then
+			return uis.Scale
+		end
+	end
+	return 1.0
+end
+
+local function computeChromeMetrics(vpFloat: number): ChromeMetrics
+	local vpPx = math.max(96, math.floor(vpFloat + 0.5))
+	local s = vpFloat / BASE_VIEWPORT_SIZE
+	local markerScale = math.clamp(0.45 + 0.55 * s, 0.78, 1.50)
+	local pad = math.floor(math.clamp(4 + 3 * s, 5, 10) + 0.5)
+	local headerH = math.floor(math.clamp(18 + 4 * s, 20, 28) + 0.5)
+	local statusH = math.floor(math.clamp(16 + 4 * s, 18, 26) + 0.5)
+	local gapMid = math.floor(math.clamp(2 + 1 * s, 3, 6) + 0.5)
+	local gapBot = math.floor(math.clamp(3 + 1 * s, 3, 6) + 0.5)
+	local frameW = vpPx + pad * 2
+	local frameH = (headerH + 1) + vpPx + gapMid + statusH + gapBot
+	local cornerR = math.floor(math.clamp(6 + 2 * s, 6, 11) + 0.5)
+	local viewportCornerR = math.floor(math.clamp(4 + 1 * s, 4, 7) + 0.5)
+	local scaleBarPx = math.floor(math.clamp(16 + 12 * s, 22, 46) + 0.5)
+
+	return {
+		ViewportPx = vpPx,
+		ScaleRatio = s,
+		MarkerScale = markerScale,
+		Pad = pad,
+		HeaderH = headerH,
+		StatusH = statusH,
+		GapMid = gapMid,
+		GapBot = gapBot,
+		FrameW = frameW,
+		FrameH = frameH,
+		CornerR = cornerR,
+		ViewportCornerR = viewportCornerR,
+		ScaleBarPx = scaleBarPx,
+	}
+end
+
+local function resolveNearestPreset(vpPx: number): MinimapSizePreset
+	if vpPx < 166 then
+		return "Compact"
+	elseif vpPx < 236 then
+		return "Standard"
+	else
+		return "Large"
+	end
+end
+
+local function computeResponsiveBounds(): ResponsiveBounds
+	local hudScale = getHudScale()
+	local logicalW = 1360
+	local logicalH = 702
+
+	if hostScreenGui and hostScreenGui.AbsoluteSize.X > 1 and hostScreenGui.AbsoluteSize.Y > 1 then
+		logicalW = hostScreenGui.AbsoluteSize.X / hudScale
+		logicalH = hostScreenGui.AbsoluteSize.Y / hudScale
+	else
+		local cam = Workspace.CurrentCamera
+		if cam and cam.ViewportSize.X > 1 and cam.ViewportSize.Y > 1 then
+			logicalW = cam.ViewportSize.X / hudScale
+			logicalH = math.max(320, (cam.ViewportSize.Y - 58) / hudScale)
+		end
+	end
+
+	local rightMargin = if logicalW < 760 then 10 else 14
+	local baseBottomMargin = if logicalH < 480 then 10 else 14
+
+	local pg = Players.LocalPlayer:FindFirstChild("PlayerGui")
+	local hotbarHalfW = if pg and typeof(pg:GetAttribute("FoodEmpireHotbarHalfW")) == "number"
+		then (pg:GetAttribute("FoodEmpireHotbarHalfW") :: number)
+		else 207
+
+	-- Right edge of Bottom-Center ActionSquadCluster (SERVE / ATTACK / RECALL)
+	local actionRightEdge = logicalW * 0.5 + hotbarHalfW + 10 + 146
+	if hostScreenGui then
+		local actCluster = hostScreenGui:FindFirstChild("ActionSquadCluster")
+		if actCluster and actCluster:IsA("GuiObject") and actCluster.Visible and actCluster.AbsoluteSize.X > 1 then
+			local liveRight = ((actCluster.AbsolutePosition.X - hostScreenGui.AbsolutePosition.X) + actCluster.AbsoluteSize.X) / hudScale
+			if liveRight > logicalW * 0.5 and liveRight < logicalW then
+				actionRightEdge = math.max(actionRightEdge, liveRight)
+			end
+		end
+	end
+
+	-- Persistent Top-Right rail ceiling (DayNightClock + UrbanTurfCard)
+	local rightRailCeiling = 146
+	if hostScreenGui then
+		local turfCard = hostScreenGui:FindFirstChild("UrbanTurfCard")
+		if turfCard and turfCard:IsA("GuiObject") and turfCard.Visible and turfCard.AbsoluteSize.Y > 1 then
+			local liveBottom = ((turfCard.AbsolutePosition.Y - hostScreenGui.AbsolutePosition.Y) + turfCard.AbsoluteSize.Y) / hudScale
+			if liveBottom > 60 and liveBottom < logicalH * 0.45 then
+				rightRailCeiling = math.max(rightRailCeiling, liveBottom)
+			end
+		end
+	end
+
+	local minChrome = computeChromeMetrics(MIN_VIEWPORT_SIZE)
+	local clearWBottom = logicalW - rightMargin - actionRightEdge - 10
+	local elevated = false
+	local bottomMargin = baseBottomMargin
+	local availFrameW = clearWBottom
+
+	-- On narrow / portrait screens where bottom hotbar spans across the bottom row,
+	-- elevate cleanly above BottomVitalsDock so zero HUD overlap occurs!
+	if clearWBottom < minChrome.FrameW then
+		elevated = true
+		bottomMargin = 154
+		availFrameW = math.min(logicalW - rightMargin * 2, math.max(minChrome.FrameW, logicalW * 0.56))
+	end
+
+	local availFrameH = (logicalH - bottomMargin) - (rightRailCeiling + 10)
+	local propMaxW = logicalW * (if elevated then 0.54 else 0.38)
+	local propMaxH = logicalH * 0.58
+
+	local allowedFrameW = math.max(124, math.min(availFrameW, propMaxW))
+	local allowedFrameH = math.max(166, math.min(availFrameH, propMaxH))
+
+	-- Solve exact max square viewport side that fits inside (allowedFrameW, allowedFrameH)
+	local maxVp = math.min(MAX_VIEWPORT_SIZE, allowedFrameW - 14, allowedFrameH - 50)
+	for _ = 1, 3 do
+		local probe = computeChromeMetrics(math.clamp(maxVp, 104, MAX_VIEWPORT_SIZE))
+		local wOver = probe.FrameW - allowedFrameW
+		local hOver = probe.FrameH - allowedFrameH
+		local worstOver = math.max(wOver, hOver)
+		if worstOver > 0 then
+			maxVp -= worstOver
+		else
+			break
+		end
+	end
+
+	maxVp = math.floor(math.clamp(maxVp, 108, MAX_VIEWPORT_SIZE))
+	local minVp = math.min(MIN_VIEWPORT_SIZE, maxVp)
+
+	return {
+		MinViewport = minVp,
+		MaxViewport = maxVp,
+		RightMargin = rightMargin,
+		BottomMargin = bottomMargin,
+		LogicalW = logicalW,
+		LogicalH = logicalH,
+		ElevatedAboveDock = elevated,
+	}
+end
+
+local function publishMinimapMetricsToHUD(frameW: number, frameH: number, bottomMargin: number, rightMargin: number, force: boolean?): ()
+	if
+		not force
+		and math.abs(frameW - lastPublishedFrameW) < 0.5
+		and math.abs(frameH - lastPublishedFrameH) < 0.5
+		and math.abs(bottomMargin - lastPublishedBottom) < 0.5
+		and math.abs(rightMargin - lastPublishedRight) < 0.5
+	then
+		return
+	end
+	lastPublishedFrameW = frameW
+	lastPublishedFrameH = frameH
+	lastPublishedBottom = bottomMargin
+	lastPublishedRight = rightMargin
+
+	local pg = Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if pg then
+		pg:SetAttribute("FoodEmpireMinimapWidth", frameW)
+		pg:SetAttribute("FoodEmpireMinimapHeight", frameH)
+		pg:SetAttribute("FoodEmpireMinimapBottomOffset", bottomMargin)
+		pg:SetAttribute("FoodEmpireMinimapRightOffset", rightMargin)
+	end
+end
+
+local function resolvePlayerZoneName(worldPos: Vector3?): string
+	if not worldPos then
+		return ""
+	end
+	local x, z = worldPos.X, worldPos.Z
+	if math.abs(x) <= 195 and math.abs(z) <= 195 then
+		return "CENTRAL HUB"
+	end
+	for _, b in ipairs(MinimapMapData.Bases) do
+		if math.abs(x - b.CenterX) <= 125 and math.abs(z - b.CenterZ) <= 125 then
+			return string.upper(b.Slot) .. " BASE"
+		end
+	end
+	local nearestName: string? = nil
+	local nearestDistSq = 120 * 120
+	for _, blockId in ipairs(TurfConfig.BlockOrder) do
+		local spec = TurfConfig.Blocks[blockId]
+		if spec then
+			local dx = x - spec.PlazaPos.X
+			local dz = z - spec.PlazaPos.Z
+			local dSq = dx * dx + dz * dz
+			if dSq < nearestDistSq then
+				nearestDistSq = dSq
+				nearestName = spec.ShortCode .. " • " .. spec.Quadrant
+			end
+		end
+	end
+	if nearestName then
+		return nearestName
+	end
+	local ns = if z < 0 then "N" else "S"
+	local ew = if x < 0 then "W" else "E"
+	return ns .. ew .. " SECTOR"
+end
+
+local function updateDetailLabelsVisibility(force: boolean?): ()
+	local effectivePx = currentViewportSize * math.max(1, currentZoom)
+	if not force and math.abs(effectivePx - lastDetailEffectivePx) < 1.5 then
+		return
+	end
+	lastDetailEffectivePx = effectivePx
+
+	local mScale = currentMarkerScale
+	for _, spec in ipairs(detailSubLabels) do
+		local span = math.max(1, spec.FullEffectivePx - spec.MinEffectivePx)
+		local alpha = math.clamp((effectivePx - spec.MinEffectivePx) / span, 0, 1)
+		if alpha <= 0.02 then
+			spec.Label.Visible = false
+		else
+			spec.Label.Visible = true
+			local txtSz = math.floor(math.clamp(spec.BaseTextSize * (0.72 + 0.28 * mScale), 7, 11) + 0.5)
+			spec.Label.TextSize = txtSz
+			spec.Label.Size = UDim2.fromOffset(0, txtSz + 2)
+			spec.Label.TextTransparency = 1 - alpha * (1 - spec.TargetTransparency)
+			if spec.Stroke then
+				spec.Stroke.Transparency = 1 - alpha * 0.78
+			end
+		end
+	end
+end
+
+local function applyMarkerScaling(mScale: number): ()
+	currentMarkerScale = mScale
+
+	for _, entry in ipairs(scaledMarkers) do
+		local w = scaledPx(entry.BaseW, mScale)
+		local h = scaledPx(entry.BaseH, mScale)
+		entry.Gui.Size = UDim2.fromOffset(w, h)
+		if entry.BaseTextSize and (entry.Gui:IsA("TextButton") or entry.Gui:IsA("TextLabel")) then
+			(entry.Gui :: TextButton).TextSize = math.max(6, math.floor(entry.BaseTextSize * mScale + 0.5))
+		end
+		if entry.Corner then
+			if entry.IsRound then
+				entry.Corner.CornerRadius = UDim.new(0, math.max(2, math.ceil(math.max(w, h) * 0.5)))
+			elseif entry.BaseCorner then
+				entry.Corner.CornerRadius = UDim.new(0, math.max(1, math.floor(entry.BaseCorner * mScale + 0.5)))
+			end
+		end
+		if entry.Stroke then
+			entry.Stroke.Thickness = scaledStroke(entry.BaseStroke, mScale)
+		end
+	end
+
+	-- Re-apply semantic state stroke weights on Bases, Spawns, Turf, Bistro, Penthouse
+	for slot, st in pairs(baseStrokes) do
+		st.Thickness = scaledStroke(baseStrokeBases[slot] or 1.2, mScale)
+	end
+	for slot, st in pairs(baseSpawnStrokes) do
+		st.Thickness = scaledStroke(baseSpawnStrokeBases[slot] or 1.0, mScale)
+	end
+	for blockId, st in pairs(turfStrokes) do
+		st.Thickness = scaledStroke(turfStrokeBases[blockId] or 1.0, mScale)
+	end
+	if bistroStroke then
+		bistroStroke.Thickness = scaledStroke(bistroStrokeBase, mScale)
+	end
+	if penthouseStroke then
+		penthouseStroke.Thickness = scaledStroke(penthouseStrokeBase, mScale)
+	end
+
+	-- Player Directional Triangle
+	if playerRefs then
+		local holderPx = scaledPx(18, mScale)
+		local haloPx = scaledPx(12, mScale)
+		local nosePx = math.max(2, math.floor(3 * mScale + 0.5))
+		playerRefs.Holder.Size = UDim2.fromOffset(holderPx, holderPx)
+		playerRefs.Glyph.Size = UDim2.fromOffset(holderPx, holderPx)
+		playerRefs.Glyph.TextSize = math.max(11, math.floor(15 * mScale + 0.5))
+		playerRefs.GlyphStroke.Thickness = scaledStroke(2.0, mScale)
+		playerRefs.Halo.Size = UDim2.fromOffset(haloPx, haloPx)
+		playerRefs.HaloCorner.CornerRadius = UDim.new(0, math.ceil(haloPx * 0.5))
+		playerRefs.Nose.Size = UDim2.fromOffset(nosePx, nosePx)
+		playerRefs.NoseCorner.CornerRadius = UDim.new(0, math.ceil(nosePx * 0.5))
+	end
+
+	-- GPS Pin
+	if gpsPinBtn then
+		local pinPx = scaledPx(12, mScale)
+		gpsPinBtn.Size = UDim2.fromOffset(pinPx, pinPx)
+		if gpsPinCorner then
+			gpsPinCorner.CornerRadius = UDim.new(0, math.ceil(pinPx * 0.5))
+		end
+		if gpsPinStroke then
+			gpsPinStroke.Thickness = scaledStroke(1.8, mScale)
+		end
+		if gpsPinCore then
+			local corePx = math.max(3, math.floor(4 * mScale + 0.5))
+			gpsPinCore.Size = UDim2.fromOffset(corePx, corePx)
+			if gpsPinCoreCorner then
+				gpsPinCoreCorner.CornerRadius = UDim.new(0, math.ceil(corePx * 0.5))
+			end
+		end
+	end
+
+	-- Off-screen Waypoint Edge Arrow
+	if edgeArrowFrame and edgeArrowIcon and edgeDistLabel then
+		local ew = scaledPx(26, mScale)
+		local eh = scaledPx(22, mScale)
+		edgeArrowFrame.Size = UDim2.fromOffset(ew, eh)
+		local iconPx = scaledPx(14, mScale)
+		edgeArrowIcon.Size = UDim2.fromOffset(iconPx, iconPx)
+		edgeArrowIcon.TextSize = math.max(9, math.floor(12 * mScale + 0.5))
+		if edgeArrowStroke then
+			edgeArrowStroke.Thickness = scaledStroke(1.8, mScale)
+		end
+		local distTxtSz = math.max(7, math.floor(7.2 * mScale + 0.5))
+		edgeDistLabel.TextSize = distTxtSz
+		edgeDistLabel.Size = UDim2.fromOffset(0, distTxtSz + 3)
+	end
+
+	-- Pooled dynamic ally & enemy dots
+	for _, dot in ipairs(allyPool) do
+		local px = scaledPx(dot.BaseSize, mScale)
+		dot.Frame.Size = UDim2.fromOffset(px, px)
+		dot.Stroke.Thickness = scaledStroke(dot.BaseStroke, mScale)
+		if dot.Corner then
+			dot.Corner.CornerRadius = UDim.new(0, math.ceil(px * 0.5) + 1)
+		end
+	end
+	for _, dot in ipairs(enemyPool) do
+		local px = scaledPx(dot.BaseSize, mScale)
+		dot.Frame.Size = UDim2.fromOffset(px, px)
+		dot.Stroke.Thickness = scaledStroke(dot.BaseStroke, mScale)
+	end
+
+	updateDetailLabelsVisibility(true)
+end
+
+local function updateSizeToggleChrome(): ()
+	if not sizeToggleBtn then
+		return
+	end
+	local tier = resolveNearestPreset(targetViewportSize)
+	sizeToggleBtn.Text = PRESET_BADGES[tier]
+	if sizeToggleStroke then
+		sizeToggleStroke.Color = if isResizing
+			then C_CYAN
+			elseif tier == "Large" then C_GOLD
+			elseif tier == "Compact" then Color3.fromRGB(92, 108, 132)
+			else C_GOLD_DIM
+	end
+	sizeToggleBtn.TextColor3 = if tier == "Large" then C_GOLD else Color3.fromRGB(234, 226, 200)
+end
+
+local function updateStatusBarContentLayout(): ()
+	if not gpsStatusLabel or not gpsDistLabel or not clearPinBtn then
+		return
+	end
+	local m = computeChromeMetrics(currentViewportSize)
+	local clrW = math.max(15, m.StatusH - 2)
+	local clrH = math.max(14, m.StatusH - 4)
+	clearPinBtn.Size = UDim2.fromOffset(clrW, clrH)
+	clearPinBtn.TextSize = math.max(8, math.floor(7.5 + 1.5 * m.ScaleRatio + 0.5))
+
+	local distW = math.floor(math.clamp(42 + 12 * m.ScaleRatio, 44, 68) + 0.5)
+	gpsDistLabel.Position = UDim2.new(1, -(clrW + 5), 0, 0)
+	gpsDistLabel.Size = UDim2.new(0, distW, 1, 0)
+	gpsDistLabel.TextSize = math.max(8, math.floor(7.5 + 1.6 * m.ScaleRatio + 0.5))
+
+	local statusTxtSz = math.max(8, math.floor(7.4 + 1.7 * m.ScaleRatio + 0.5))
+	gpsStatusLabel.TextSize = statusTxtSz
+
+	local showZone = (activeWaypointPos == nil) and (m.FrameW >= 252) and (lastRenderedZone ~= "")
+	if zoneReadoutLabel then
+		zoneReadoutLabel.Visible = showZone
+		zoneReadoutLabel.TextSize = math.max(8, statusTxtSz - 1)
+	end
+
+	if activeWaypointPos then
+		gpsStatusLabel.Size = UDim2.new(1, -(clrW + distW + 12), 1, 0)
+		gpsStatusLabel.Text = "WP: " .. (activeWaypointLabel or "Map Pin")
+		gpsStatusLabel.TextColor3 = C_GOLD
+		clearPinBtn.Visible = true
+		gpsDistLabel.Visible = true
+	else
+		if showZone and zoneReadoutLabel then
+			local zoneW = math.floor(math.clamp(78 + 18 * m.ScaleRatio, 82, 118))
+			zoneReadoutLabel.Size = UDim2.new(0, zoneW, 1, 0)
+			gpsStatusLabel.Size = UDim2.new(1, -(zoneW + 14), 1, 0)
+		else
+			gpsStatusLabel.Size = UDim2.new(1, -12, 1, 0)
+		end
+		gpsStatusLabel.Text = if m.FrameW < 184 then "Click to set pin" else "Click map to set waypoint"
+		gpsStatusLabel.TextColor3 = C_TEXT_MUTED
+		clearPinBtn.Visible = false
+		gpsDistLabel.Visible = false
+	end
+end
+
+-- ============================================================================
 -- ZOOM & VIEWPORT TRANSFORM (SINGLE-PARENT SCALE -> ZERO MARKER DRIFT!)
 -- ============================================================================
 
@@ -672,8 +1400,8 @@ local function updateZoomChrome(): ()
 		zoomReadoutBtn.Text = string.format("%.1fx", targetZoom)
 	end
 	if scaleBarLabel then
-		-- 28px scale bar in world studs: 28 / (MAP_VIEWPORT_SIZE * currentZoom) * WORLD_SPAN
-		local meters = math.floor((28 / (MAP_VIEWPORT_SIZE * math.max(1, currentZoom))) * WORLD_SPAN + 0.5)
+		-- Exact world meters spanned by current scale bar pixel width at live viewport & zoom
+		local meters = math.floor((currentScaleBarPx / (math.max(96, currentViewportSize) * math.max(1, currentZoom))) * WORLD_SPAN + 0.5)
 		local rounded = math.max(10, math.floor((meters + 5) / 10) * 10)
 		scaleBarLabel.Text = tostring(rounded) .. "m"
 	end
@@ -681,6 +1409,238 @@ local function updateZoomChrome(): ()
 		local isCentered = followPlayer or targetZoom <= 1.02
 		followBtn.TextColor3 = if isCentered then C_CYAN else C_GOLD
 	end
+end
+
+local function applyMinimapLayout(force: boolean?): ()
+	if not islandFrame or not mapViewport then
+		return
+	end
+	if
+		not force
+		and math.abs(currentViewportSize - lastAppliedViewportSize) < 0.12
+		and math.abs(currentRightMargin - lastAppliedMarginX) < 0.12
+		and math.abs(currentBottomMargin - lastAppliedMarginY) < 0.12
+	then
+		return
+	end
+
+	lastAppliedViewportSize = currentViewportSize
+	lastAppliedMarginX = currentRightMargin
+	lastAppliedMarginY = currentBottomMargin
+
+	local m = computeChromeMetrics(currentViewportSize)
+	currentScaleBarPx = m.ScaleBarPx
+
+	-- 1. Outer frame (strictly anchored bottom-right, zero drift)
+	islandFrame.Position = UDim2.new(1, -math.floor(currentRightMargin + 0.5), 1, -math.floor(currentBottomMargin + 0.5))
+	islandFrame.Size = UDim2.fromOffset(m.FrameW, m.FrameH)
+	if islandFrameCorner then
+		islandFrameCorner.CornerRadius = UDim.new(0, m.CornerR)
+	end
+	if islandFrameStroke then
+		islandFrameStroke.Thickness = math.clamp(1.1 + 0.22 * m.ScaleRatio, 1.1, 1.75)
+	end
+
+	-- 2. Top-left corner drag-resize grip
+	if resizeGripBtn then
+		local gripHit = math.floor(math.clamp(15 + 3 * m.ScaleRatio, 16, 24) + 0.5)
+		resizeGripBtn.Size = UDim2.fromOffset(gripHit, gripHit)
+	end
+
+	-- 3. Responsive Header Bar (zero button/title overlap at any size!)
+	if headerFrame then
+		headerFrame.Size = UDim2.new(1, 0, 0, m.HeaderH)
+	end
+	local btnH = math.floor(math.clamp(13 + 3 * m.ScaleRatio, 14, 21) + 0.5)
+	local btnTxtSz = math.floor(math.clamp(7.5 + 1.8 * m.ScaleRatio, 8, 12) + 0.5)
+	local btnGap = if m.FrameW >= 245 then 3 else 2
+	local showReadout = m.FrameW >= 186
+
+	local wZoom = math.floor(math.clamp(13 + 2.8 * m.ScaleRatio, 14, 20) + 0.5)
+	local wReadout = math.floor(math.clamp(22 + 5.5 * m.ScaleRatio, 24, 38) + 0.5)
+	local wFollow = math.floor(math.clamp(14 + 3.0 * m.ScaleRatio, 15, 22) + 0.5)
+	local wSize = math.floor(math.clamp(15 + 3.5 * m.ScaleRatio, 16, 24) + 0.5)
+
+	local totalControlsW = wZoom + wZoom + wFollow + wSize + btnGap * 3
+	if showReadout then
+		totalControlsW += wReadout + btnGap
+	end
+
+	if headerControlsLayout then
+		headerControlsLayout.Padding = UDim.new(0, btnGap)
+	end
+	if headerControlsRow then
+		headerControlsRow.Position = UDim2.new(1, -m.Pad, 0, 0)
+		headerControlsRow.Size = UDim2.new(0, totalControlsW + 2, 1, 0)
+	end
+	if zoomOutBtn then
+		zoomOutBtn.Size = UDim2.fromOffset(wZoom, btnH)
+		zoomOutBtn.TextSize = btnTxtSz
+	end
+	if zoomReadoutBtn then
+		zoomReadoutBtn.Visible = showReadout
+		zoomReadoutBtn.Size = UDim2.fromOffset(wReadout, btnH)
+		zoomReadoutBtn.TextSize = math.max(8, btnTxtSz - 1)
+	end
+	if zoomInBtn then
+		zoomInBtn.Size = UDim2.fromOffset(wZoom, btnH)
+		zoomInBtn.TextSize = btnTxtSz
+	end
+	if followBtn then
+		followBtn.Size = UDim2.fromOffset(wFollow, btnH)
+		followBtn.TextSize = btnTxtSz
+	end
+	if sizeToggleBtn then
+		sizeToggleBtn.Size = UDim2.fromOffset(wSize, btnH)
+		sizeToggleBtn.TextSize = math.max(8, btnTxtSz)
+	end
+
+	if titleLabel then
+		local titleLeft = math.floor(math.clamp(12 + 2.5 * m.ScaleRatio, 13, 18) + 0.5)
+		local reservedRight = totalControlsW + m.Pad + 4
+		titleLabel.Position = UDim2.new(0, titleLeft, 0, 0)
+		titleLabel.Size = UDim2.new(1, -(titleLeft + reservedRight), 1, 0)
+		titleLabel.TextSize = math.floor(math.clamp(7.4 + 1.8 * m.ScaleRatio, 8, 12) + 0.5)
+		titleLabel.Text = if m.FrameW < 194 then "MAP" else "TACTICAL MAP"
+	end
+
+	-- 4. Strictly 1:1 Square Map Viewport
+	mapViewport.Position = UDim2.fromOffset(m.Pad, m.HeaderH + 1)
+	mapViewport.Size = UDim2.fromOffset(m.ViewportPx, m.ViewportPx)
+	if mapViewportCorner then
+		mapViewportCorner.CornerRadius = UDim.new(0, m.ViewportCornerR)
+	end
+	if geoClipCorner then
+		geoClipCorner.CornerRadius = UDim.new(0, m.ViewportCornerR)
+	end
+
+	-- 5. Viewport Chrome (Compass ticks, intercardinals, reticle bezel ticks, scale bar, tooltips)
+	local cardSz = math.floor(math.clamp(6.4 + 1.7 * m.ScaleRatio, 7, 11) + 0.5)
+	for _, lbl in ipairs(cardinalTicks) do
+		lbl.TextSize = cardSz
+		lbl.Size = UDim2.fromOffset(cardSz + 5, cardSz + 3)
+	end
+
+	local largeChromeAlpha = math.clamp((currentViewportSize - 215) / 50, 0, 1)
+	local interSz = math.floor(math.clamp(5.8 + 1.2 * m.ScaleRatio, 7, 9) + 0.5)
+	for _, lbl in ipairs(intercardinalTicks) do
+		if largeChromeAlpha <= 0.04 then
+			lbl.Visible = false
+		else
+			lbl.TextSize = interSz
+			lbl.TextTransparency = 1 - largeChromeAlpha * 0.58
+			lbl.Visible = true
+		end
+	end
+	updateCornerTickOcclusion()
+
+	for _, tick in ipairs(bezelTicks) do
+		if largeChromeAlpha <= 0.04 then
+			tick.Visible = false
+		else
+			tick.BackgroundTransparency = 1 - largeChromeAlpha * 0.45
+			tick.Visible = true
+		end
+	end
+
+	if scaleBarFrame and scaleLineFrame and scaleBarLabel then
+		local sTxtSz = math.floor(math.clamp(6.2 + 1.1 * m.ScaleRatio, 7, 10) + 0.5)
+		scaleBarFrame.Size = UDim2.fromOffset(m.ScaleBarPx + 4, sTxtSz + 5)
+		scaleLineFrame.Size = UDim2.fromOffset(m.ScaleBarPx, 2)
+		scaleBarLabel.Size = UDim2.new(1, 0, 0, sTxtSz + 2)
+		scaleBarLabel.TextSize = sTxtSz
+	end
+
+	if hoverTipLabel then
+		local tipTxtSz = math.floor(math.clamp(7.0 + 1.4 * m.ScaleRatio, 8, 11) + 0.5)
+		hoverTipLabel.TextSize = tipTxtSz
+		hoverTipLabel.Size = UDim2.fromOffset(0, tipTxtSz + 6)
+		if hoverTipConstraint then
+			hoverTipConstraint.MaxSize = Vector2.new(math.max(90, m.ViewportPx - 10), 28)
+		end
+	end
+	if resizeToastLabel then
+		local rtSz = math.floor(math.clamp(7.2 + 1.4 * m.ScaleRatio, 8, 11) + 0.5)
+		resizeToastLabel.TextSize = rtSz
+		resizeToastLabel.Size = UDim2.fromOffset(0, rtSz + 6)
+	end
+
+	-- 6. Bottom GPS Status Bar
+	if statusBarFrame then
+		statusBarFrame.Position = UDim2.new(0, m.Pad, 1, -(m.GapBot + m.StatusH))
+		statusBarFrame.Size = UDim2.new(1, -(m.Pad * 2), 0, m.StatusH)
+		if statusBarCorner then
+			statusBarCorner.CornerRadius = UDim.new(0, math.max(3, m.ViewportCornerR - 1))
+		end
+	end
+	updateStatusBarContentLayout()
+
+	-- 7. Marker & icon proportional scaling + detail LOD
+	applyMarkerScaling(m.MarkerScale)
+	updateZoomChrome()
+	updateSizeToggleChrome()
+
+	-- 8. Notify sibling HUD panels (ReceiptTicket, HiredSecurityCard, PatienceCard) to stay zero-overlap
+	publishMinimapMetricsToHUD(m.FrameW, m.FrameH, math.floor(currentBottomMargin + 0.5), math.floor(currentRightMargin + 0.5), force)
+end
+
+local function refreshResponsiveLayout(immediate: boolean?): ()
+	local bounds = computeResponsiveBounds()
+	cachedBounds = bounds
+	targetRightMargin = bounds.RightMargin
+	targetBottomMargin = bounds.BottomMargin
+
+	local desired = if isCustomSize
+		then preferredViewportSize
+		else (PRESET_VIEWPORT_SIZES[activePreset] or BASE_VIEWPORT_SIZE)
+	targetViewportSize = math.clamp(desired, bounds.MinViewport, bounds.MaxViewport)
+
+	if immediate then
+		currentRightMargin = targetRightMargin
+		currentBottomMargin = targetBottomMargin
+		currentViewportSize = targetViewportSize
+		applyMinimapLayout(true)
+	else
+		updateSizeToggleChrome()
+	end
+end
+
+local function setMinimapSizePresetInternal(preset: MinimapSizePreset, showFeedback: boolean?): ()
+	activePreset = preset
+	isCustomSize = false
+	preferredViewportSize = PRESET_VIEWPORT_SIZES[preset] or BASE_VIEWPORT_SIZE
+	refreshResponsiveLayout(false)
+	resizePulse = 1.0
+	if showFeedback then
+		local shownPx = math.floor(targetViewportSize + 0.5)
+		showResizeToast(string.format("%s MAP  •  %dpx", PRESET_DISPLAY_NAMES[preset], shownPx), 1.15)
+	end
+end
+
+local function cycleMinimapSizeInternal(step: number?): ()
+	local delta = step or 1
+	local bounds = computeResponsiveBounds()
+	cachedBounds = bounds
+
+	-- Build effective distinct preset list for the current screen size so every click gives a clear change
+	local effectivePresets: { MinimapSizePreset } = {}
+	local lastVp = -999
+	for _, presetName in ipairs(PRESET_ORDER) do
+		local clampedVp = math.clamp(PRESET_VIEWPORT_SIZES[presetName], bounds.MinViewport, bounds.MaxViewport)
+		if math.abs(clampedVp - lastVp) >= 14 then
+			table.insert(effectivePresets, presetName)
+			lastVp = clampedVp
+		end
+	end
+	if #effectivePresets <= 1 then
+		setMinimapSizePresetInternal("Standard", true)
+		return
+	end
+
+	local curTier = resolveNearestPreset(targetViewportSize)
+	local curIdx = table.find(effectivePresets, curTier) or 1
+	local nextIdx = ((curIdx - 1 + delta) % #effectivePresets) + 1
+	setMinimapSizePresetInternal(effectivePresets[nextIdx], true)
 end
 
 local function applyWorldTransform(force: boolean?): ()
@@ -709,6 +1669,7 @@ local function applyWorldTransform(force: boolean?): ()
 	overlayWorld.Size = size
 	overlayWorld.Position = pos
 	refreshRotatedMarkerClipping()
+	updateDetailLabelsVisibility(false)
 	updateZoomChrome()
 end
 
@@ -890,10 +1851,16 @@ local function scanTacticalEntities(now: number): ()
 					local teamCol = if typeof(oSlot) == "string" and SectorConfig.FactionColors[oSlot]
 						then SectorConfig.FactionColors[oSlot]:Lerp(C_ALLY_PLAYER, 0.35)
 						else C_ALLY_PLAYER
-					dot.Frame.Size = UDim2.fromOffset(9, 9)
+					dot.BaseSize = 9
+					dot.BaseStroke = 1.5
+					local allyPx = scaledPx(9)
+					dot.Frame.Size = UDim2.fromOffset(allyPx, allyPx)
+					if dot.Corner then
+						dot.Corner.CornerRadius = UDim.new(0, math.ceil(allyPx * 0.5) + 1)
+					end
 					dot.Frame.BackgroundColor3 = teamCol
 					dot.Stroke.Color = Color3.new(1, 1, 1)
-					dot.Stroke.Thickness = 1.5
+					dot.Stroke.Thickness = scaledStroke(1.5)
 					dot.Frame.Position = worldToScale(root.Position.X, root.Position.Z)
 					dot.Frame.Visible = true
 				else
@@ -925,10 +1892,13 @@ local function scanTacticalEntities(now: number): ()
 						dot.U = u
 						dot.V = v
 						dot.Active = true
-						dot.Frame.Size = if hasBounty then UDim2.fromOffset(9, 9) else UDim2.fromOffset(7, 7)
+						dot.BaseSize = if hasBounty then 9 else 7
+						dot.BaseStroke = if hasBounty then 1.6 else 1.2
+						local ePx = scaledPx(dot.BaseSize)
+						dot.Frame.Size = UDim2.fromOffset(ePx, ePx)
 						dot.Frame.BackgroundColor3 = if hasBounty then C_ENEMY_HIGH else C_ENEMY
 						dot.Stroke.Color = if hasBounty then C_ENEMY else Color3.fromRGB(14, 16, 22)
-						dot.Stroke.Thickness = if hasBounty then 1.6 else 1.2
+						dot.Stroke.Thickness = scaledStroke(dot.BaseStroke)
 						dot.Frame.Position = UDim2.fromScale(u, v)
 						dot.Frame.Visible = inBounds
 					end
@@ -959,12 +1929,18 @@ local function scanTacticalEntities(now: number): ()
 						end
 						allyIdx += 1
 						local dot = acquireDot(allyPool, allyIdx, overlayWorld, 8, false)
-						dot.Frame.Size = UDim2.fromOffset(6, 6)
+						dot.BaseSize = 6
+						dot.BaseStroke = 1.1
+						local sqPx = scaledPx(6)
+						dot.Frame.Size = UDim2.fromOffset(sqPx, sqPx)
+						if dot.Corner then
+							dot.Corner.CornerRadius = UDim.new(0, math.ceil(sqPx * 0.5) + 1)
+						end
 						dot.Frame.BackgroundColor3 = if tagName == "PlayerDeliveryRunner"
 							then Color3.fromRGB(116, 224, 192)
 							else C_ALLY_SQUAD
 						dot.Stroke.Color = Color3.fromRGB(14, 18, 28)
-						dot.Stroke.Thickness = 1.1
+						dot.Stroke.Thickness = scaledStroke(1.1)
 						dot.Frame.Position = worldToScale(root.Position.X, root.Position.Z)
 						dot.Frame.Visible = true
 					end
@@ -1058,10 +2034,13 @@ local function scanTacticalEntities(now: number): ()
 						dot.V = v
 						dot.Active = true
 						local isPriority = isBoss or isHitContract or isPenthouseUnit
-						dot.Frame.Size = if isPriority then UDim2.fromOffset(8, 8) else UDim2.fromOffset(6, 6)
+						dot.BaseSize = if isPriority then 8 else 6
+						dot.BaseStroke = if isPriority then 1.5 else 1.1
+						local ePx = scaledPx(dot.BaseSize)
+						dot.Frame.Size = UDim2.fromOffset(ePx, ePx)
 						dot.Frame.BackgroundColor3 = if isHitContract then C_ENEMY_HIGH else C_ENEMY
 						dot.Stroke.Color = if isPriority then C_GOLD else Color3.fromRGB(14, 16, 22)
-						dot.Stroke.Thickness = if isPriority then 1.5 else 1.1
+						dot.Stroke.Thickness = scaledStroke(dot.BaseStroke)
 						dot.Frame.Position = UDim2.fromScale(u, v)
 						dot.Frame.Visible = inBounds
 					end
@@ -1127,8 +2106,11 @@ local function updateWaypointVisuals(playerPos: Vector3?, now: number): ()
 	end
 	if gpsPinPulse and wpVisibleInView then
 		local pulse = 0.5 + 0.5 * math.sin(now * 5.2)
-		local sz = 13 + math.floor(pulse * 7)
+		local sz = math.max(8, math.floor((13 + pulse * 7) * currentMarkerScale + 0.5))
 		gpsPinPulse.Size = UDim2.fromOffset(sz, sz)
+		if gpsPinPulseCorner then
+			gpsPinPulseCorner.CornerRadius = UDim.new(0, math.ceil(sz * 0.5))
+		end
 		gpsPinPulse.BackgroundTransparency = 0.55 + pulse * 0.35
 	end
 
@@ -1152,12 +2134,14 @@ local function updateWaypointVisuals(playerPos: Vector3?, now: number): ()
 			local pvx, pvy = uvToViewport(pu, pv)
 			local ok, cx0, cy0, cx1, cy1 = clipSegmentToBox(pvx, pvy, wvx, wvy, 0.02, 0.98)
 			if ok then
-				local sx = (cx1 - cx0) * MAP_VIEWPORT_SIZE
-				local sy = (cy1 - cy0) * MAP_VIEWPORT_SIZE
+				local liveVp = math.max(96, currentViewportSize)
+				local sx = (cx1 - cx0) * liveVp
+				local sy = (cy1 - cy0) * liveVp
 				local segLen = math.sqrt(sx * sx + sy * sy)
 				if segLen >= 8 then
+					local lineThick = math.max(2, math.floor(1.6 + 0.55 * currentMarkerScale + 0.5))
 					routeLine.Position = UDim2.fromScale((cx0 + cx1) * 0.5, (cy0 + cy1) * 0.5)
-					routeLine.Size = UDim2.fromOffset(math.floor(segLen), 2)
+					routeLine.Size = UDim2.fromOffset(math.floor(segLen), lineThick)
 					routeLine.Rotation = math.deg(math.atan2(sy, sx))
 					routeLine.Visible = true
 				else
@@ -1208,11 +2192,47 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	table.clear(pingRings)
 	table.clear(baseMarkers)
 	table.clear(baseStrokes)
+	table.clear(baseStrokeBases)
 	table.clear(baseSpawnMarkers)
 	table.clear(baseSpawnStrokes)
+	table.clear(baseSpawnStrokeBases)
 	table.clear(turfMarkers)
 	table.clear(turfStrokes)
+	table.clear(turfStrokeBases)
 	table.clear(shipmentBayMarkers)
+	table.clear(shipmentBayEntries)
+	table.clear(scaledMarkers)
+	table.clear(detailSubLabels)
+	table.clear(cardinalTicks)
+	table.clear(intercardinalTicks)
+	table.clear(bezelTicks)
+	table.clear(resizeGripBars)
+
+	hostScreenGui = parentGui
+	activePreset = "Standard"
+	isCustomSize = false
+	preferredViewportSize = BASE_VIEWPORT_SIZE
+	currentViewportSize = BASE_VIEWPORT_SIZE
+	targetViewportSize = BASE_VIEWPORT_SIZE
+	currentMarkerScale = 1.0
+	currentScaleBarPx = 28
+	currentRightMargin = 14
+	targetRightMargin = 14
+	currentBottomMargin = 14
+	targetBottomMargin = 14
+	lastAppliedViewportSize = -1
+	lastAppliedMarginX = -1
+	lastAppliedMarginY = -1
+	lastPublishedFrameW = -1
+	lastPublishedFrameH = -1
+	lastPublishedBottom = -1
+	lastPublishedRight = -1
+	resizePulse = 0
+	resizeToastExpiresAt = 0
+	isHoveringResizeGrip = false
+	isResizing = false
+	didDragResize = false
+	lastGripTapAt = 0
 
 	currentZoom = 1.0
 	targetZoom = 1.0
@@ -1224,50 +2244,157 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	lastAppliedZoom = -1
 	lastAppliedU = -1
 	lastAppliedV = -1
+	lastDetailEffectivePx = -1
+	lastRenderedZone = ""
 	isPointerDown = false
 	didDragPan = false
 	expressObjPos = nil
 	crateWarehousePos = nil
+	bistroStrokeBase = 1.3
+	penthouseStrokeBase = 1.3
+	nwIntercardinalTick = nil
 
 	local existing = parentGui:FindFirstChild("IslandMinimap")
 	if existing then
 		existing:Destroy()
 	end
 
-	-- Outer dark military tactical container (retains identity & noir brass border)
+	local initMetrics = computeChromeMetrics(BASE_VIEWPORT_SIZE)
+
+	-- Outer dark military tactical container (retains identity & noir brass border, anchored bottom-right)
 	local frame = Instance.new("Frame")
 	frame.Name = "IslandMinimap"
 	frame.AnchorPoint = Vector2.new(1, 1)
 	frame.Position = UDim2.new(1, -14, 1, -14)
-	frame.Size = UDim2.fromOffset(FRAME_WIDTH, FRAME_HEIGHT)
+	frame.Size = UDim2.fromOffset(initMetrics.FrameW, initMetrics.FrameH)
 	frame.BackgroundColor3 = C_FRAME_BG
 	frame.BackgroundTransparency = 0.04
 	frame.Parent = parentGui
-	makeCorner(frame, 8)
-	makeStroke(frame, C_GOLD_DIM, 1.3, Enum.ApplyStrokeMode.Border)
+	islandFrame = frame
+	islandFrameCorner = makeCorner(frame, initMetrics.CornerR)
+	islandFrameStroke = makeStroke(frame, C_GOLD_DIM, 1.3, Enum.ApplyStrokeMode.Border)
 
-	-- Header Bar: "TACTICAL MAP • N" + Compact Zoom & Follow Controls
+	-- Subtle Top-Left Corner Drag-Resize Grip (drags upward/leftward from fixed bottom-right anchor!)
+	local grip = Instance.new("TextButton")
+	grip.Name = "ResizeGrip"
+	grip.Position = UDim2.fromOffset(0, 0)
+	grip.Size = UDim2.fromOffset(18, 18)
+	grip.BackgroundTransparency = 1
+	grip.BorderSizePixel = 0
+	grip.AutoButtonColor = false
+	grip.Text = ""
+	grip.ZIndex = 22
+	grip.Parent = frame
+	resizeGripBtn = grip
+
+	-- Geometric L-corner brass bracket + diagonal micro-pip (pure UI frames -> zero missing glyph boxes!)
+	local function addGripBar(x: number, y: number, w: number, h: number): Frame
+		local bar = Instance.new("Frame")
+		bar.Position = UDim2.fromOffset(x, y)
+		bar.Size = UDim2.fromOffset(w, h)
+		bar.BackgroundColor3 = C_GOLD_DIM
+		bar.BackgroundTransparency = 0.25
+		bar.BorderSizePixel = 0
+		bar.Active = false
+		bar.ZIndex = 23
+		bar.Parent = grip
+		table.insert(resizeGripBars, bar)
+		return bar
+	end
+	addGripBar(3, 3, 7, 2) -- Top horizontal arm
+	addGripBar(3, 3, 2, 7) -- Left vertical arm
+	addGripBar(6, 6, 2, 2) -- Subtle inner diagonal grip dot
+
+	local function refreshGripVisual(): ()
+		local col = if isResizing then C_CYAN elseif isHoveringResizeGrip then C_GOLD else C_GOLD_DIM
+		local transp = if isResizing or isHoveringResizeGrip then 0.0 else 0.25
+		for _, bar in ipairs(resizeGripBars) do
+			bar.BackgroundColor3 = col
+			bar.BackgroundTransparency = transp
+		end
+	end
+
+	grip.MouseEnter:Connect(function()
+		isHoveringResizeGrip = true
+		refreshGripVisual()
+		showHoverTip("Drag corner to resize  •  Double-click to reset")
+	end)
+	grip.MouseLeave:Connect(function()
+		isHoveringResizeGrip = false
+		refreshGripVisual()
+		if not isResizing then
+			showHoverTip(nil)
+		end
+	end)
+	table.insert(
+		connections,
+		grip.InputBegan:Connect(function(input: InputObject)
+			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+				isResizing = true
+				didDragResize = false
+				isPointerDown = false
+				didDragPan = false
+				resizeStartScreen = Vector2.new(input.Position.X, input.Position.Y)
+				resizeStartVp = currentViewportSize
+				cachedBounds = computeResponsiveBounds()
+				resizePulse = 1.0
+				refreshGripVisual()
+				updateSizeToggleChrome()
+			end
+		end)
+	)
+
+	-- Header Bar: "TACTICAL MAP" + Responsive UIListLayout Zoom, Follow & Size Controls
 	local header = Instance.new("Frame")
 	header.Name = "Header"
-	header.Size = UDim2.new(1, 0, 0, 22)
+	header.Size = UDim2.new(1, 0, 0, initMetrics.HeaderH)
 	header.BackgroundTransparency = 1
 	header.Parent = frame
+	headerFrame = header
 
 	local title = Instance.new("TextLabel")
-	title.Position = UDim2.new(0, 8, 0, 0)
-	title.Size = UDim2.new(0, 102, 1, 0)
+	title.Name = "Title"
+	title.Position = UDim2.new(0, 14, 0, 0)
+	title.Size = UDim2.new(1, -118, 1, 0)
 	title.BackgroundTransparency = 1
 	title.Font = Enum.Font.GothamBlack
 	title.Text = "TACTICAL MAP"
 	title.TextSize = 9
 	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.TextTruncate = Enum.TextTruncate.AtEnd
 	title.TextColor3 = C_GOLD
 	title.Parent = header
+	titleLabel = title
 
-	local function makeHeaderBtn(xFromRight: number, width: number, text: string, tip: string, onClick: () -> ()): TextButton
+	local controlsRow = Instance.new("Frame")
+	controlsRow.Name = "ControlsRow"
+	controlsRow.AnchorPoint = Vector2.new(1, 0)
+	controlsRow.Position = UDim2.new(1, -initMetrics.Pad, 0, 0)
+	controlsRow.Size = UDim2.new(0, 102, 1, 0)
+	controlsRow.BackgroundTransparency = 1
+	controlsRow.Parent = header
+	headerControlsRow = controlsRow
+
+	local ctrlLayout = Instance.new("UIListLayout")
+	ctrlLayout.FillDirection = Enum.FillDirection.Horizontal
+	ctrlLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+	ctrlLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+	ctrlLayout.SortOrder = Enum.SortOrder.LayoutOrder
+	ctrlLayout.Padding = UDim.new(0, 2)
+	ctrlLayout.Parent = controlsRow
+	headerControlsLayout = ctrlLayout
+
+	local function makeHeaderBtn(
+		layoutOrder: number,
+		width: number,
+		text: string,
+		tip: string,
+		onClick: () -> (),
+		strokeCol: Color3?,
+		onRightClick: (() -> ())?
+	): (TextButton, UIStroke)
 		local b = Instance.new("TextButton")
-		b.AnchorPoint = Vector2.new(1, 0.5)
-		b.Position = UDim2.new(1, -xFromRight, 0.5, 0)
+		b.LayoutOrder = layoutOrder
 		b.Size = UDim2.fromOffset(width, 15)
 		b.BackgroundColor3 = Color3.fromRGB(24, 29, 39)
 		b.AutoButtonColor = false
@@ -1275,9 +2402,9 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		b.Text = text
 		b.TextSize = 9
 		b.TextColor3 = Color3.fromRGB(224, 226, 232)
-		b.Parent = header
+		b.Parent = controlsRow
 		makeCorner(b, 3)
-		makeStroke(b, Color3.fromRGB(56, 64, 80), 0.9, Enum.ApplyStrokeMode.Border)
+		local st = makeStroke(b, strokeCol or Color3.fromRGB(56, 64, 80), 0.9, Enum.ApplyStrokeMode.Border)
 		b.MouseEnter:Connect(function()
 			b.BackgroundColor3 = Color3.fromRGB(36, 44, 58)
 			showHoverTip(tip)
@@ -1290,11 +2417,26 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 			AudioController.PlayClick()
 			onClick()
 		end)
-		return b
+		if onRightClick then
+			b.MouseButton2Click:Connect(function()
+				AudioController.PlayClick()
+				onRightClick()
+			end)
+		end
+		return b, st
 	end
 
-	-- Header controls right-to-left: [◎] [+] [1.0x] [-]
-	followBtn = makeHeaderBtn(7, 17, "◎", "Center on Player", function()
+	-- Header controls left-to-right: [−] [1.0x] [+] [◎] [M]
+	zoomOutBtn = makeHeaderBtn(1, 15, "−", "Zoom Out (Scroll Down)", function()
+		setTargetZoom(targetZoom - ZOOM_STEP)
+	end)
+	zoomReadoutBtn = makeHeaderBtn(2, 26, "1.0x", "Reset Zoom (1.0x)", function()
+		setTargetZoom(1.0)
+	end)
+	zoomInBtn = makeHeaderBtn(3, 15, "+", "Zoom In (Scroll Up)", function()
+		setTargetZoom(targetZoom + ZOOM_STEP)
+	end)
+	followBtn = makeHeaderBtn(4, 16, "◎", "Center on Player", function()
 		followPlayer = true
 		if lastPlayerWorldPos and targetZoom > 1.02 then
 			local pu, pv = worldToUV(lastPlayerWorldPos.X, lastPlayerWorldPos.Z)
@@ -1304,29 +2446,37 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		end
 		updateZoomChrome()
 	end)
-	makeHeaderBtn(26, 15, "+", "Zoom In (Scroll Up)", function()
-		setTargetZoom(targetZoom + ZOOM_STEP)
-	end)
-	zoomReadoutBtn = makeHeaderBtn(43, 28, "1.0x", "Reset Zoom (1.0x)", function()
-		setTargetZoom(1.0)
-	end)
-	makeHeaderBtn(73, 15, "−", "Zoom Out (Scroll Down)", function()
-		setTargetZoom(targetZoom - ZOOM_STEP)
-	end)
+	local sBtn, sSt = makeHeaderBtn(
+		5,
+		17,
+		"M",
+		"Resize Map S/M/L  ([ / ] or drag corner)",
+		function()
+			cycleMinimapSizeInternal(1)
+		end,
+		C_GOLD_DIM,
+		function()
+			cycleMinimapSizeInternal(-1)
+		end
+	)
+	sBtn.Name = "SizeToggleBtn"
+	sBtn.TextColor3 = Color3.fromRGB(234, 226, 200)
+	sizeToggleBtn = sBtn
+	sizeToggleStroke = sSt
 
 	-- =========================================================================
-	-- MAP VIEWPORT (1:1 SQUARE, ACTIVE TO CAPTURE WHEEL ZOOM CLEANLY)
+	-- MAP VIEWPORT (STRICTLY 1:1 SQUARE, ACTIVE TO CAPTURE WHEEL ZOOM CLEANLY)
 	-- =========================================================================
 	local viewport = Instance.new("Frame")
 	viewport.Name = "MapViewport"
-	viewport.Position = UDim2.new(0, 7, 0, 23)
-	viewport.Size = UDim2.fromOffset(MAP_VIEWPORT_SIZE, MAP_VIEWPORT_SIZE)
+	viewport.Position = UDim2.fromOffset(initMetrics.Pad, initMetrics.HeaderH + 1)
+	viewport.Size = UDim2.fromOffset(initMetrics.ViewportPx, initMetrics.ViewportPx)
 	viewport.BackgroundColor3 = C_OCEAN
 	viewport.BorderSizePixel = 0
 	viewport.ClipsDescendants = true
 	viewport.Active = true
 	viewport.Parent = frame
-	makeCorner(viewport, 5)
+	mapViewportCorner = makeCorner(viewport, initMetrics.ViewportCornerR)
 	makeStroke(viewport, Color3.fromRGB(46, 56, 70), 1.0, Enum.ApplyStrokeMode.Border)
 	mapViewport = viewport
 
@@ -1338,7 +2488,11 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	geoClip.BorderSizePixel = 0
 	geoClip.ZIndex = 1
 	geoClip.Parent = viewport
-	makeCorner(geoClip, 5)
+	geoClipCorner = makeCorner(geoClip, initMetrics.ViewportCornerR)
+	local geoAspect = Instance.new("UIAspectRatioConstraint")
+	geoAspect.AspectRatio = 1
+	geoAspect.DominantAxis = Enum.DominantAxis.Width
+	geoAspect.Parent = geoClip
 
 	local gWorld = Instance.new("Frame")
 	gWorld.Name = "GeoWorld"
@@ -1360,6 +2514,10 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	overlayClip.ClipsDescendants = true
 	overlayClip.ZIndex = 3
 	overlayClip.Parent = viewport
+	local ovAspect = Instance.new("UIAspectRatioConstraint")
+	ovAspect.AspectRatio = 1
+	ovAspect.DominantAxis = Enum.DominantAxis.Width
+	ovAspect.Parent = overlayClip
 
 	-- Background click/drag target inside overlayClip (below interactive buttons)
 	local clickCanvas = Instance.new("TextButton")
@@ -1406,6 +2564,8 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 			local initCol = TurfConfig.ResolveFactionColor(spec.InitialOwner)
 			local isMini = spec.IsMiniOutpost == true
 			local sz = if spec.IsHQ then 9 elseif isMini then 5 else 7
+			local baseStroke = if isMini then 0.9 else 1.0
+			local baseCorner = if isMini then 1 else 2
 			local tile = Instance.new("TextButton")
 			tile.Name = "TurfTile_" .. blockId
 			tile.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1421,9 +2581,26 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 			tile.TextColor3 = Color3.new(1, 1, 1)
 			tile.ZIndex = if isMini then 4 else 3
 			tile.Parent = oWorld
-			makeCorner(tile, if isMini then 1 else 2)
+			local tileCorner = makeCorner(tile, baseCorner)
 
-			local st = makeStroke(tile, Color3.fromRGB(14, 18, 26), if isMini then 0.9 else 1.0, Enum.ApplyStrokeMode.Border)
+			local st = makeStroke(tile, Color3.fromRGB(14, 18, 26), baseStroke, Enum.ApplyStrokeMode.Border)
+			registerScaledMarker(
+				tile,
+				tileCorner,
+				st,
+				sz,
+				sz,
+				if spec.IsHQ then 7 else nil,
+				baseCorner,
+				baseStroke,
+				false
+			)
+
+			-- Adaptive HQ ShortCode micro-label (smoothly fades in on Large view or when zoomed!)
+			if spec.IsHQ and typeof(spec.ShortCode) == "string" and spec.ShortCode ~= "" then
+				local placeAbove = spec.PlazaPos.Z < 0
+				addDetailSubLabel(tile, spec.ShortCode, placeAbove, 7, 240, 300, Color3.fromRGB(242, 232, 200), 0.14)
+			end
 
 			tile.MouseEnter:Connect(function()
 				local suffix = if spec.IsHQ then " [HQ]" elseif isMini then " [OUTPOST]" else ""
@@ -1438,6 +2615,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 
 			turfMarkers[blockId] = tile
 			turfStrokes[blockId] = st
+			turfStrokeBases[blockId] = baseStroke
 		end
 	end
 
@@ -1457,9 +2635,10 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		sp.TextColor3 = Color3.fromRGB(236, 240, 248)
 		sp.ZIndex = 6
 		sp.Parent = oWorld
-		makeCorner(sp, 3)
+		local spCorner = makeCorner(sp, 3)
 
 		local spSt = makeStroke(sp, SectorConfig.FactionColors[b.Slot] or C_GOLD, 1.0, Enum.ApplyStrokeMode.Border)
+		registerScaledMarker(sp, spCorner, spSt, 6, 6, 7, 3, 1.0, true)
 		sp.MouseEnter:Connect(function()
 			showHoverTip(b.Slot .. " Base Spawn")
 		end)
@@ -1472,6 +2651,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 
 		baseSpawnMarkers[b.Slot] = sp
 		baseSpawnStrokes[b.Slot] = spSt
+		baseSpawnStrokeBases[b.Slot] = 1.0
 	end
 
 	-- 4 Central Shipment Bay Objective Indicators (active when Arrived / EnRoute)
@@ -1494,8 +2674,10 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		bayBtn.AutoButtonColor = false
 		bayBtn.ZIndex = 4
 		bayBtn.Parent = oWorld
-		makeCorner(bayBtn, 2)
-		makeStroke(bayBtn, Color3.fromRGB(14, 18, 26), 1.0, Enum.ApplyStrokeMode.Border)
+		local bayCorner = makeCorner(bayBtn, 2)
+		local bayStroke = makeStroke(bayBtn, Color3.fromRGB(14, 18, 26), 1.0, Enum.ApplyStrokeMode.Border)
+		local bayEntry = registerScaledMarker(bayBtn, bayCorner, bayStroke, 6, 6, nil, 2, 1.0, false)
+		shipmentBayEntries[cat] = bayEntry
 		local spec = WarehouseConfig.Specs[cat :: WarehouseConfig.WarehouseCategory]
 		local bayTitle = if spec then (spec.ShipmentName .. " (Central Park)") else (cat .. " Shipment Bay")
 		bayBtn.MouseEnter:Connect(function()
@@ -1522,9 +2704,9 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		Color3.fromRGB(246, 232, 176),
 		"B",
 		"Central Park Bistro",
-		4
+		4,
+		7
 	)
-	bBtn.TextSize = 7
 	bistroMarker = bBtn
 	bistroStroke = bSt
 
@@ -1539,14 +2721,14 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		C_GOLD,
 		"H",
 		"Crimson Don Penthouse",
-		4
+		4,
+		7
 	)
-	pBtn.TextSize = 7
 	penthouseMarker = pBtn
 	penthouseStroke = pSt
 
 	-- Primary Landmarks: Central HUB, Black Market, and 4 Player Bases (N/S/E/W)
-	addLandmarkBadge(
+	local hubBtn = addLandmarkBadge(
 		oWorld,
 		0,
 		0,
@@ -1556,8 +2738,10 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		Color3.fromRGB(16, 20, 28),
 		"HUB",
 		"Central Market HUB",
-		5
+		5,
+		9
 	)
+	addDetailSubLabel(hubBtn, "MARKET", true, 7, 300, 380, C_GOLD, 0.16)
 
 	local bmBtn = Instance.new("TextButton")
 	bmBtn.Name = "Marker_BM"
@@ -1573,8 +2757,9 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	bmBtn.TextColor3 = Color3.new(1, 1, 1)
 	bmBtn.ZIndex = 5
 	bmBtn.Parent = oWorld
-	makeCorner(bmBtn, 4)
-	makeStroke(bmBtn, Color3.fromRGB(12, 16, 24), 1.3, Enum.ApplyStrokeMode.Border)
+	local bmCorner = makeCorner(bmBtn, 4)
+	local bmSt = makeStroke(bmBtn, Color3.fromRGB(12, 16, 24), 1.3, Enum.ApplyStrokeMode.Border)
+	registerScaledMarker(bmBtn, bmCorner, bmSt, 19, 13, 9, 4, 1.3, false)
 	bmBtn.MouseEnter:Connect(function()
 		showHoverTip("Black Market Outpost")
 	end)
@@ -1598,10 +2783,12 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 			Color3.new(1, 1, 1),
 			b.Short,
 			b.FullName,
-			5
+			5,
+			9
 		)
 		baseMarkers[b.Slot] = btn
 		baseStrokes[b.Slot] = st
+		baseStrokeBases[b.Slot] = 1.2
 	end
 
 	-- Dedicated Active Objective Markers (Express Delivery & Carrying Crate Warehouse)
@@ -1617,7 +2804,8 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	expObj.Visible = false
 	expObj.ZIndex = 7
 	expObj.Parent = oWorld
-	makeStroke(expObj, Color3.fromRGB(16, 18, 26), 1.5, Enum.ApplyStrokeMode.Border)
+	local expSt = makeStroke(expObj, Color3.fromRGB(16, 18, 26), 1.5, Enum.ApplyStrokeMode.Border)
+	registerScaledMarker(expObj, nil, expSt, 10, 10, nil, nil, 1.5, false)
 	expObj.MouseEnter:Connect(function()
 		showHoverTip("Express Delivery Drop-Off")
 	end)
@@ -1643,7 +2831,8 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	whObj.Visible = false
 	whObj.ZIndex = 7
 	whObj.Parent = oWorld
-	makeStroke(whObj, Color3.new(1, 1, 1), 1.3, Enum.ApplyStrokeMode.Border)
+	local whSt = makeStroke(whObj, Color3.new(1, 1, 1), 1.3, Enum.ApplyStrokeMode.Border)
+	registerScaledMarker(whObj, nil, whSt, 9, 9, nil, nil, 1.3, false)
 	whObj.MouseEnter:Connect(function()
 		showHoverTip("Crate Warehouse Drop-Off")
 	end)
@@ -1669,8 +2858,8 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	pinBtn.Visible = false
 	pinBtn.ZIndex = 10
 	pinBtn.Parent = oWorld
-	makeCorner(pinBtn, 6)
-	makeStroke(pinBtn, Color3.new(1, 1, 1), 1.8, Enum.ApplyStrokeMode.Border)
+	gpsPinCorner = makeCorner(pinBtn, 6)
+	gpsPinStroke = makeStroke(pinBtn, Color3.new(1, 1, 1), 1.8, Enum.ApplyStrokeMode.Border)
 
 	local pinCore = Instance.new("Frame")
 	pinCore.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -1680,7 +2869,8 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	pinCore.BorderSizePixel = 0
 	pinCore.ZIndex = 11
 	pinCore.Parent = pinBtn
-	makeCorner(pinCore, 2)
+	gpsPinCore = pinCore
+	gpsPinCoreCorner = makeCorner(pinCore, 2)
 
 	local pinPulse = Instance.new("Frame")
 	pinPulse.Name = "PulseRing"
@@ -1692,7 +2882,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	pinPulse.BorderSizePixel = 0
 	pinPulse.ZIndex = 9
 	pinPulse.Parent = pinBtn
-	makeCorner(pinPulse, 12)
+	gpsPinPulseCorner = makeCorner(pinPulse, 12)
 	gpsPinPulse = pinPulse
 
 	pinBtn.MouseEnter:Connect(function()
@@ -1708,7 +2898,9 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	gpsPinBtn = pinBtn
 
 	-- Local Player Rotating Directional Triangle
-	playerIndicator = buildPlayerTriangle(oWorld)
+	local pInd, pRefs = buildPlayerTriangle(oWorld)
+	playerIndicator = pInd
+	playerRefs = pRefs
 
 	-- =========================================================================
 	-- LAYER 3: FIXED VIEWPORT TACTICAL CHROME (COMPASS TICKS, EDGE ARROW, SCALE)
@@ -1721,7 +2913,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	chrome.Parent = viewport
 
 	-- Subtle perimeter compass ticks (N/S/E/W)
-	local function addCompassTick(anchor: Vector2, pos: UDim2, letter: string, col: Color3): ()
+	local function addCompassTick(anchor: Vector2, pos: UDim2, letter: string, col: Color3): TextLabel
 		local lbl = Instance.new("TextLabel")
 		lbl.AnchorPoint = anchor
 		lbl.Position = pos
@@ -1734,21 +2926,72 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		lbl.TextTransparency = 0.25
 		lbl.ZIndex = 15
 		lbl.Parent = chrome
+		table.insert(cardinalTicks, lbl)
+		return lbl
 	end
 	addCompassTick(Vector2.new(0.5, 0), UDim2.new(0.5, 0, 0, 1), "N", C_GOLD)
 	addCompassTick(Vector2.new(0.5, 1), UDim2.new(0.5, 0, 1, -1), "S", C_TEXT_MUTED)
 	addCompassTick(Vector2.new(1, 0.5), UDim2.new(1, -1, 0.5, 0), "E", C_TEXT_MUTED)
 	addCompassTick(Vector2.new(0, 0.5), UDim2.new(0, 1, 0.5, 0), "W", C_TEXT_MUTED)
 
+	-- Adaptive intercardinal compass ticks (fade in smoothly when enlarged!)
+	local function addIntercardinalTick(anchor: Vector2, pos: UDim2, letter: string): TextLabel
+		local lbl = Instance.new("TextLabel")
+		lbl.AnchorPoint = anchor
+		lbl.Position = pos
+		lbl.Size = UDim2.fromOffset(18, 10)
+		lbl.BackgroundTransparency = 1
+		lbl.Font = Enum.Font.GothamBold
+		lbl.Text = letter
+		lbl.TextSize = 7
+		lbl.TextColor3 = C_TEXT_MUTED
+		lbl.TextTransparency = 1
+		lbl.Visible = false
+		lbl.ZIndex = 15
+		lbl.Parent = chrome
+		table.insert(intercardinalTicks, lbl)
+		return lbl
+	end
+	nwIntercardinalTick = addIntercardinalTick(Vector2.new(0, 0), UDim2.new(0, 4, 0, 2), "NW")
+	addIntercardinalTick(Vector2.new(1, 0), UDim2.new(1, -4, 0, 2), "NE")
+	addIntercardinalTick(Vector2.new(0, 1), UDim2.new(0, 4, 1, -2), "SW")
+	addIntercardinalTick(Vector2.new(1, 1), UDim2.new(1, -4, 1, -18), "SE")
+
+	-- Subtle perimeter radar reticle ticks (fade in cleanly on Large minimap!)
+	local bezelDefs = {
+		{ Pos = UDim2.new(0.25, 0, 0, 0), Size = UDim2.fromOffset(1, 4), Anchor = Vector2.new(0.5, 0) },
+		{ Pos = UDim2.new(0.75, 0, 0, 0), Size = UDim2.fromOffset(1, 4), Anchor = Vector2.new(0.5, 0) },
+		{ Pos = UDim2.new(0.25, 0, 1, 0), Size = UDim2.fromOffset(1, 4), Anchor = Vector2.new(0.5, 1) },
+		{ Pos = UDim2.new(0.75, 0, 1, 0), Size = UDim2.fromOffset(1, 4), Anchor = Vector2.new(0.5, 1) },
+		{ Pos = UDim2.new(0, 0, 0.25, 0), Size = UDim2.fromOffset(4, 1), Anchor = Vector2.new(0, 0.5) },
+		{ Pos = UDim2.new(0, 0, 0.75, 0), Size = UDim2.fromOffset(4, 1), Anchor = Vector2.new(0, 0.5) },
+		{ Pos = UDim2.new(1, 0, 0.25, 0), Size = UDim2.fromOffset(4, 1), Anchor = Vector2.new(1, 0.5) },
+		{ Pos = UDim2.new(1, 0, 0.75, 0), Size = UDim2.fromOffset(4, 1), Anchor = Vector2.new(1, 0.5) },
+	}
+	for _, td in ipairs(bezelDefs) do
+		local t = Instance.new("Frame")
+		t.AnchorPoint = td.Anchor
+		t.Position = td.Pos
+		t.Size = td.Size
+		t.BackgroundColor3 = C_GOLD_DIM
+		t.BackgroundTransparency = 1
+		t.BorderSizePixel = 0
+		t.Visible = false
+		t.ZIndex = 15
+		t.Parent = chrome
+		table.insert(bezelTicks, t)
+	end
+
 	-- Subtle military scale bar in bottom-right corner of viewport
 	local scaleBar = Instance.new("Frame")
 	scaleBar.Name = "ScaleBar"
 	scaleBar.AnchorPoint = Vector2.new(1, 1)
 	scaleBar.Position = UDim2.new(1, -5, 1, -4)
-	scaleBar.Size = UDim2.fromOffset(30, 11)
+	scaleBar.Size = UDim2.fromOffset(32, 11)
 	scaleBar.BackgroundTransparency = 1
 	scaleBar.ZIndex = 15
 	scaleBar.Parent = chrome
+	scaleBarFrame = scaleBar
 
 	local scaleLine = Instance.new("Frame")
 	scaleLine.AnchorPoint = Vector2.new(0.5, 1)
@@ -1758,6 +3001,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	scaleLine.BackgroundTransparency = 0.35
 	scaleLine.BorderSizePixel = 0
 	scaleLine.Parent = scaleBar
+	scaleLineFrame = scaleLine
 
 	local sLbl = Instance.new("TextLabel")
 	sLbl.Size = UDim2.new(1, 0, 0, 9)
@@ -1770,7 +3014,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	sLbl.Parent = scaleBar
 	scaleBarLabel = sLbl
 
-	-- Compact hover tooltip chip (top-left of viewport)
+	-- Compact hover tooltip chip (top-left of viewport, width-constrained so it never overflows!)
 	local tip = Instance.new("TextLabel")
 	tip.Name = "HoverTip"
 	tip.Position = UDim2.fromOffset(4, 4)
@@ -1781,13 +3025,37 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	tip.Font = Enum.Font.GothamBold
 	tip.Text = ""
 	tip.TextSize = 8
+	tip.TextTruncate = Enum.TextTruncate.AtEnd
 	tip.TextColor3 = Color3.fromRGB(236, 234, 226)
 	tip.Visible = false
 	tip.ZIndex = 18
 	tip.Parent = chrome
 	makeCorner(tip, 3)
 	makeStroke(tip, C_GOLD_DIM, 0.9, Enum.ApplyStrokeMode.Border)
+	local tipConstraint = Instance.new("UISizeConstraint")
+	tipConstraint.MaxSize = Vector2.new(176, 24)
+	tipConstraint.Parent = tip
 	hoverTipLabel = tip
+	hoverTipConstraint = tipConstraint
+
+	-- Subtle transient size-change feedback badge (shown briefly when switching sizes or dragging)
+	local rToast = Instance.new("TextLabel")
+	rToast.Name = "ResizeToast"
+	rToast.Position = UDim2.fromOffset(4, 4)
+	rToast.AutomaticSize = Enum.AutomaticSize.X
+	rToast.Size = UDim2.fromOffset(0, 15)
+	rToast.BackgroundColor3 = Color3.fromRGB(14, 19, 28)
+	rToast.BackgroundTransparency = 0.08
+	rToast.Font = Enum.Font.GothamBlack
+	rToast.Text = ""
+	rToast.TextSize = 8
+	rToast.TextColor3 = C_GOLD
+	rToast.Visible = false
+	rToast.ZIndex = 19
+	rToast.Parent = chrome
+	makeCorner(rToast, 3)
+	makeStroke(rToast, C_GOLD, 1.0, Enum.ApplyStrokeMode.Border)
+	resizeToastLabel = rToast
 
 	-- Off-Screen Edge-Clamped Directional Waypoint Indicator
 	local edgeWrap = Instance.new("Frame")
@@ -1815,6 +3083,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	eStroke.Color = Color3.fromRGB(10, 14, 20)
 	eStroke.Thickness = 1.8
 	eStroke.Parent = eIcon
+	edgeArrowStroke = eStroke
 
 	local eDist = Instance.new("TextLabel")
 	eDist.AnchorPoint = Vector2.new(0.5, 1)
@@ -1836,11 +3105,54 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	edgeDistLabel = eDist
 
 	-- =========================================================================
-	-- INTERACTION: CLICK TO SET/REPLACE WAYPOINT, DRAG PAN, SCROLL ZOOM, RMB CLEAR
+	-- INTERACTION: RESIZE DRAG/KEYS, WAYPOINT CLICK, DRAG PAN, SCROLL ZOOM, RMB CLEAR
 	-- =========================================================================
 	table.insert(
 		connections,
+		UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
+			if gameProcessed then
+				return
+			end
+			if input.KeyCode == Enum.KeyCode.RightBracket then
+				AudioController.PlayClick()
+				local curTier = resolveNearestPreset(targetViewportSize)
+				if curTier == "Compact" then
+					setMinimapSizePresetInternal("Standard", true)
+				elseif curTier == "Standard" then
+					setMinimapSizePresetInternal("Large", true)
+				else
+					-- Already Large: gently step up toward max safe viewport if room remains
+					local bounds = computeResponsiveBounds()
+					cachedBounds = bounds
+					if targetViewportSize < bounds.MaxViewport - 6 then
+						isCustomSize = true
+						preferredViewportSize = math.min(bounds.MaxViewport, targetViewportSize + 36)
+						targetViewportSize = preferredViewportSize
+						resizePulse = 1.0
+						showResizeToast(string.format("EXPANDED  •  %dpx", math.floor(targetViewportSize + 0.5)), 1.15)
+						updateSizeToggleChrome()
+					end
+				end
+			elseif input.KeyCode == Enum.KeyCode.LeftBracket then
+				AudioController.PlayClick()
+				local curTier = resolveNearestPreset(targetViewportSize)
+				if targetViewportSize > PRESET_VIEWPORT_SIZES.Large + 12 then
+					setMinimapSizePresetInternal("Large", true)
+				elseif curTier == "Large" then
+					setMinimapSizePresetInternal("Standard", true)
+				else
+					setMinimapSizePresetInternal("Compact", true)
+				end
+			end
+		end)
+	)
+
+	table.insert(
+		connections,
 		clickCanvas.InputBegan:Connect(function(input: InputObject)
+			if isResizing then
+				return
+			end
 			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 				isPointerDown = true
 				didDragPan = false
@@ -1878,10 +3190,34 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	table.insert(
 		connections,
 		UserInputService.InputChanged:Connect(function(input: InputObject)
-			if not isPointerDown then
+			if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
 				return
 			end
-			if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then
+
+			-- Priority 1: Live diagonal corner drag-resizing (1:1 aspect ratio locked!)
+			if isResizing then
+				local curPos = Vector2.new(input.Position.X, input.Position.Y)
+				local delta = curPos - resizeStartScreen
+				if not didDragResize and delta.Magnitude > 3 then
+					didDragResize = true
+				end
+				if didDragResize then
+					local hudScale = getHudScale()
+					-- Bottom-right is anchored: dragging left (-X) or up (-Y) grows the square map
+					local diagDelta = ((-delta.X) + (-delta.Y)) * 0.5 / hudScale
+					local newVp = math.clamp(resizeStartVp + diagDelta, cachedBounds.MinViewport, cachedBounds.MaxViewport)
+					preferredViewportSize = newVp
+					targetViewportSize = newVp
+					isCustomSize = true
+					activePreset = resolveNearestPreset(newVp)
+					showResizeToast(string.format("RESIZE  •  %dpx", math.floor(newVp + 0.5)), 0.85)
+					updateSizeToggleChrome()
+				end
+				return
+			end
+
+			-- Priority 2: Map pan when zoomed in
+			if not isPointerDown then
 				return
 			end
 			if targetZoom <= 1.03 or not mapViewport then
@@ -1908,10 +3244,53 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	table.insert(
 		connections,
 		UserInputService.InputEnded:Connect(function(input: InputObject)
-			if not isPointerDown then
+			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
 				return
 			end
-			if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then
+
+			if isResizing then
+				local wasDrag = didDragResize
+				isResizing = false
+				didDragResize = false
+				refreshGripVisual()
+
+				if not wasDrag then
+					local now = os.clock()
+					if (now - lastGripTapAt) <= 0.35 then
+						lastGripTapAt = 0
+						AudioController.PlayClick()
+						setMinimapSizePresetInternal("Standard", true)
+					else
+						lastGripTapAt = now
+						showResizeToast("DRAG CORNER TO RESIZE", 0.95)
+					end
+				else
+					-- Gentle magnetic snap when released very close to a named preset
+					local snappedPreset: MinimapSizePreset? = nil
+					for _, presetName in ipairs(PRESET_ORDER) do
+						local presetVp = math.clamp(
+							PRESET_VIEWPORT_SIZES[presetName],
+							cachedBounds.MinViewport,
+							cachedBounds.MaxViewport
+						)
+						if math.abs(targetViewportSize - presetVp) <= PRESET_SNAP_THRESHOLD then
+							snappedPreset = presetName
+							break
+						end
+					end
+					if snappedPreset then
+						setMinimapSizePresetInternal(snappedPreset, true)
+					else
+						activePreset = resolveNearestPreset(targetViewportSize)
+						resizePulse = 0.75
+						showResizeToast(string.format("CUSTOM  •  %dpx", math.floor(targetViewportSize + 0.5)), 1.0)
+						updateSizeToggleChrome()
+					end
+				end
+				return
+			end
+
+			if not isPointerDown then
 				return
 			end
 			local wasDrag = didDragPan
@@ -1938,15 +3317,16 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	)
 
 	-- =========================================================================
-	-- BOTTOM GPS WAYPOINT STATUS, LIVE DISTANCE & CLEAR STRIP
+	-- BOTTOM GPS WAYPOINT STATUS, LIVE DISTANCE, ZONE READOUT & CLEAR STRIP
 	-- =========================================================================
 	local statusBar = Instance.new("Frame")
 	statusBar.Name = "GPSStatusBar"
-	statusBar.Position = UDim2.new(0, 7, 1, -24)
-	statusBar.Size = UDim2.new(1, -14, 0, 20)
+	statusBar.Position = UDim2.new(0, initMetrics.Pad, 1, -(initMetrics.GapBot + initMetrics.StatusH))
+	statusBar.Size = UDim2.new(1, -(initMetrics.Pad * 2), 0, initMetrics.StatusH)
 	statusBar.BackgroundColor3 = C_STATUS_BG
 	statusBar.Parent = frame
-	makeCorner(statusBar, 4)
+	statusBarFrame = statusBar
+	statusBarCorner = makeCorner(statusBar, 4)
 	makeStroke(statusBar, Color3.fromRGB(38, 44, 56), 0.9, Enum.ApplyStrokeMode.Border)
 
 	local stLbl = Instance.new("TextLabel")
@@ -1961,6 +3341,22 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	stLbl.TextTruncate = Enum.TextTruncate.AtEnd
 	stLbl.Parent = statusBar
 	gpsStatusLabel = stLbl
+
+	local zLbl = Instance.new("TextLabel")
+	zLbl.Name = "ZoneReadout"
+	zLbl.AnchorPoint = Vector2.new(1, 0)
+	zLbl.Position = UDim2.new(1, -6, 0, 0)
+	zLbl.Size = UDim2.new(0, 96, 1, 0)
+	zLbl.BackgroundTransparency = 1
+	zLbl.Font = Enum.Font.GothamBlack
+	zLbl.Text = ""
+	zLbl.TextSize = 8
+	zLbl.TextXAlignment = Enum.TextXAlignment.Right
+	zLbl.TextColor3 = C_GOLD
+	zLbl.TextTruncate = Enum.TextTruncate.AtEnd
+	zLbl.Visible = false
+	zLbl.Parent = statusBar
+	zoneReadoutLabel = zLbl
 
 	local dLbl = Instance.new("TextLabel")
 	dLbl.AnchorPoint = Vector2.new(1, 0)
@@ -2000,18 +3396,8 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 		activeWaypointLabel = label
 		lastRenderedDist = -1
 		lastRenderedBearing = ""
-		if pos and gpsStatusLabel and clearPinBtn and gpsDistLabel then
-			gpsStatusLabel.Size = UDim2.new(1, -80, 1, 0)
-			gpsStatusLabel.Text = "WP: " .. (label or "Map Pin")
-			gpsStatusLabel.TextColor3 = C_GOLD
-			clearPinBtn.Visible = true
-			gpsDistLabel.Visible = true
-		elseif gpsStatusLabel and clearPinBtn and gpsDistLabel then
-			gpsStatusLabel.Size = UDim2.new(1, -12, 1, 0)
-			gpsStatusLabel.Text = "Click map to set waypoint"
-			gpsStatusLabel.TextColor3 = C_TEXT_MUTED
-			clearPinBtn.Visible = false
-			gpsDistLabel.Visible = false
+		updateStatusBarContentLayout()
+		if not pos then
 			if gpsPinBtn then gpsPinBtn.Visible = false end
 			if routeLine then routeLine.Visible = false end
 			if edgeArrowFrame then edgeArrowFrame.Visible = false end
@@ -2021,6 +3407,29 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	WaypointController.OnCustomWaypointChanged(applyWaypointState)
 	local initWpPos, initWpLbl = WaypointController.GetCustomWaypoint()
 	applyWaypointState(initWpPos, initWpLbl)
+
+	-- Responsive listeners: adapt automatically to resolution, aspect ratio, HUD scale & hotbar width changes!
+	table.insert(
+		connections,
+		parentGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+			refreshResponsiveLayout(false)
+		end)
+	)
+	local playerGui = Players.LocalPlayer:FindFirstChild("PlayerGui")
+	if playerGui then
+		table.insert(
+			connections,
+			playerGui:GetAttributeChangedSignal("FoodEmpireHUDScale"):Connect(function()
+				refreshResponsiveLayout(false)
+			end)
+		)
+		table.insert(
+			connections,
+			playerGui:GetAttributeChangedSignal("FoodEmpireHotbarHalfW"):Connect(function()
+				refreshResponsiveLayout(false)
+			end)
+		)
+	end
 
 	-- Subscribe once to existing Combat Threat Bus (gunshots / explosions reveal enemies!)
 	if not threatBusBound then
@@ -2052,15 +3461,82 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 	end
 
 	syncLiveStreamedLandmarks()
+	refreshResponsiveLayout(true)
 	applyWorldTransform(true)
+	task.defer(function()
+		if islandFrame and islandFrame.Parent then
+			refreshResponsiveLayout(true)
+		end
+	end)
 
 	-- =========================================================================
-	-- MAIN HEARTBEAT LOOP (SMOOTH ZOOM/PAN + PLAYER ROTATION + THROTTLED RADAR)
+	-- MAIN HEARTBEAT LOOP (SMOOTH RESIZE + ZOOM/PAN + PLAYER ROTATION + RADAR)
 	-- =========================================================================
 	table.insert(
 		connections,
 		RunService.Heartbeat:Connect(function(dt: number)
 			local now = os.clock()
+			local clampedDt = math.min(dt, 0.1)
+
+			-- Smooth animated resizing & responsive anchor transitions
+			local resizeSpeed = if isResizing then 30 else 13
+			local rAlpha = 1 - math.exp(-clampedDt * resizeSpeed)
+			if math.abs(targetViewportSize - currentViewportSize) > 0.12 then
+				currentViewportSize += (targetViewportSize - currentViewportSize) * rAlpha
+				if math.abs(targetViewportSize - currentViewportSize) <= 0.15 then
+					currentViewportSize = targetViewportSize
+				end
+			else
+				currentViewportSize = targetViewportSize
+			end
+			if math.abs(targetRightMargin - currentRightMargin) > 0.12 then
+				currentRightMargin += (targetRightMargin - currentRightMargin) * rAlpha
+				if math.abs(targetRightMargin - currentRightMargin) <= 0.15 then
+					currentRightMargin = targetRightMargin
+				end
+			else
+				currentRightMargin = targetRightMargin
+			end
+			if math.abs(targetBottomMargin - currentBottomMargin) > 0.12 then
+				currentBottomMargin += (targetBottomMargin - currentBottomMargin) * rAlpha
+				if math.abs(targetBottomMargin - currentBottomMargin) <= 0.15 then
+					currentBottomMargin = targetBottomMargin
+				end
+			else
+				currentBottomMargin = targetBottomMargin
+			end
+			applyMinimapLayout(false)
+
+			-- Subtle border brass highlight pulse during resize transitions
+			if islandFrameStroke then
+				if isResizing then
+					islandFrameStroke.Color = C_GOLD:Lerp(C_CYAN, 0.45)
+					resizePulse = 0.85
+				elseif resizePulse > 0.005 then
+					resizePulse = math.max(0, resizePulse - clampedDt * 2.4)
+					islandFrameStroke.Color = C_GOLD_DIM:Lerp(C_GOLD, resizePulse)
+				else
+					islandFrameStroke.Color = C_GOLD_DIM
+				end
+			end
+
+			-- Smooth fade-out for transient resize badge toast
+			if resizeToastLabel and resizeToastLabel.Visible and not isResizing then
+				local rem = resizeToastExpiresAt - now
+				if rem <= 0 then
+					resizeToastLabel.Visible = false
+					updateCornerTickOcclusion()
+				elseif rem < 0.28 then
+					local fadeFrac = math.clamp(1 - (rem / 0.28), 0, 1)
+					resizeToastLabel.TextTransparency = fadeFrac
+					resizeToastLabel.BackgroundTransparency = 0.08 + fadeFrac * 0.92
+					local st = resizeToastLabel:FindFirstChildOfClass("UIStroke")
+					if st then
+						st.Transparency = fadeFrac
+					end
+				end
+			end
+
 			local char = Players.LocalPlayer.Character
 			local root = if char then char:FindFirstChild("HumanoidRootPart") else nil
 			local playerPos: Vector3? = nil
@@ -2077,7 +3553,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 			end
 
 			-- Smooth zoom & pan interpolation (exponential smoothing)
-			local alpha = 1 - math.exp(-math.min(dt, 0.1) * 12)
+			local alpha = 1 - math.exp(-clampedDt * 12)
 			currentZoom += (targetZoom - currentZoom) * alpha
 			if math.abs(targetZoom - currentZoom) < 0.002 then
 				currentZoom = targetZoom
@@ -2103,7 +3579,7 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 			-- Update waypoint bearing line, live distance & off-screen edge chevron
 			updateWaypointVisuals(playerPos, now)
 
-			-- Animate expanding combat radar ping rings
+			-- Animate expanding combat radar ping rings (proportionally scaled!)
 			for i = #pingRings, 1, -1 do
 				local ring = pingRings[i]
 				local age = now - ring.StartedAt
@@ -2114,16 +3590,27 @@ function MinimapController.Init(parentGui: ScreenGui): ()
 					table.remove(pingRings, i)
 				else
 					local frac = age / ring.Duration
-					local px = 6 + math.floor(frac * 22)
+					local px = math.max(4, math.floor((6 + frac * 22) * currentMarkerScale + 0.5))
 					ring.Frame.Size = UDim2.fromOffset(px, px)
+					ring.Stroke.Thickness = scaledStroke(1.5)
 					ring.Stroke.Transparency = math.clamp(0.15 + frac * 0.85, 0, 1)
 				end
 			end
 
-			-- Throttled teammate & detected-enemy radar scan (5 Hz -> zero frame spikes!)
+			-- Throttled teammate & detected-enemy radar scan + live zone readout (5 Hz -> zero frame spikes!)
 			if now - lastRadarScanAt >= 0.20 then
 				lastRadarScanAt = now
 				scanTacticalEntities(now)
+				if playerPos then
+					local nextZone = resolvePlayerZoneName(playerPos)
+					if nextZone ~= lastRenderedZone then
+						lastRenderedZone = nextZone
+						if zoneReadoutLabel then
+							zoneReadoutLabel.Text = nextZone
+						end
+						updateStatusBarContentLayout()
+					end
+				end
 			end
 
 			-- Low-frequency streamed landmark position verification (every 2.5s)
@@ -2152,16 +3639,20 @@ function MinimapController.Update(state: { [string]: any }): ()
 		local spSt = baseSpawnStrokes[b.Slot]
 		local isMine = (typeof(slot) == "string" and b.Slot == slot)
 		if st then
+			local baseThick = if isMine then 1.8 else 1.2
+			baseStrokeBases[b.Slot] = baseThick
 			st.Color = if isMine then C_GOLD else Color3.fromRGB(12, 16, 24)
-			st.Thickness = if isMine then 1.8 else 1.2
+			st.Thickness = scaledStroke(baseThick)
 		end
 		if spSt then
+			local spThick = if isMine then 1.4 else 1.0
+			baseSpawnStrokeBases[b.Slot] = spThick
 			spSt.Color = if isMine then Color3.new(1, 1, 1) else (SectorConfig.FactionColors[b.Slot] or C_GOLD_DIM)
-			spSt.Thickness = if isMine then 1.4 else 1.0
+			spSt.Thickness = scaledStroke(spThick)
 		end
 	end
 
-	-- Sync all 28 Urban Territory Blocks to controlling faction Base Color & raid status
+	-- Sync all 52 Urban Territory Blocks to controlling faction Base Color & raid status
 	table.clear(underAttackBlocks)
 	local turf = state.Turf
 	if typeof(turf) == "table" and typeof(turf.Blocks) == "table" then
@@ -2169,6 +3660,8 @@ function MinimapController.Update(state: { [string]: any }): ()
 			local b = turf.Blocks[blockId]
 			if typeof(b) == "table" then
 				local st = turfStrokes[blockId]
+				local spec = TurfConfig.Blocks[blockId]
+				local defaultThick = if spec and spec.IsMiniOutpost == true then 0.9 else 1.0
 				local isRaidOnMine = (b.Owner == localFaction) and (b.UnderAttack == true or b.Status == "Contested")
 				if isRaidOnMine then
 					underAttackBlocks[blockId] = true
@@ -2176,8 +3669,9 @@ function MinimapController.Update(state: { [string]: any }): ()
 				if b.Status == "Contested" then
 					tile.BackgroundColor3 = TurfConfig.ContestedColor
 					if st then
+						turfStrokeBases[blockId] = 1.6
 						st.Color = Color3.new(1, 1, 1)
-						st.Thickness = 1.6
+						st.Thickness = scaledStroke(1.6)
 					end
 				else
 					local r = tonumber(b.ColorR) or 160
@@ -2186,11 +3680,13 @@ function MinimapController.Update(state: { [string]: any }): ()
 					tile.BackgroundColor3 = Color3.fromRGB(r, g, bl)
 					if st then
 						if b.UnderAttack == true then
+							turfStrokeBases[blockId] = 1.8
 							st.Color = Color3.fromRGB(255, 82, 86)
-							st.Thickness = 1.8
+							st.Thickness = scaledStroke(1.8)
 						else
+							turfStrokeBases[blockId] = defaultThick
 							st.Color = Color3.fromRGB(14, 18, 26)
-							st.Thickness = 1.0
+							st.Thickness = scaledStroke(defaultThick)
 						end
 					end
 				end
@@ -2204,20 +3700,28 @@ function MinimapController.Update(state: { [string]: any }): ()
 		for _, sh in pairs(shipments) do
 			if typeof(sh) == "table" and typeof(sh.Category) == "string" then
 				local bay = shipmentBayMarkers[sh.Category]
+				local entry = shipmentBayEntries[sh.Category]
 				if bay then
+					local baseSz: number
 					if sh.Phase == "Arrived" then
 						bay.BackgroundColor3 = C_CYAN
 						bay.BackgroundTransparency = 0
-						bay.Size = UDim2.fromOffset(8, 8)
+						baseSz = 8
 					elseif sh.Phase == "EnRoute" then
 						bay.BackgroundColor3 = C_OBJECTIVE
 						bay.BackgroundTransparency = 0.05
-						bay.Size = UDim2.fromOffset(7, 7)
+						baseSz = 7
 					else
 						bay.BackgroundColor3 = Color3.fromRGB(82, 94, 112)
 						bay.BackgroundTransparency = 0.4
-						bay.Size = UDim2.fromOffset(5, 5)
+						baseSz = 5
 					end
+					if entry then
+						entry.BaseW = baseSz
+						entry.BaseH = baseSz
+					end
+					local px = scaledPx(baseSz)
+					bay.Size = UDim2.fromOffset(px, px)
 				end
 			end
 		end
@@ -2249,16 +3753,17 @@ function MinimapController.Update(state: { [string]: any }): ()
 		if bistro.ShakedownActive == true then
 			bistroMarker.BackgroundColor3 = C_ENEMY
 			bistroStroke.Color = C_GOLD
-			bistroStroke.Thickness = 1.6
+			bistroStrokeBase = 1.6
 		elseif bistro.Owned == true then
 			bistroMarker.BackgroundColor3 = Color3.fromRGB(46, 168, 98)
 			bistroStroke.Color = C_GOLD
-			bistroStroke.Thickness = 1.3
+			bistroStrokeBase = 1.3
 		else
 			bistroMarker.BackgroundColor3 = Color3.fromRGB(36, 102, 68)
 			bistroStroke.Color = Color3.fromRGB(14, 18, 26)
-			bistroStroke.Thickness = 1.0
+			bistroStrokeBase = 1.0
 		end
+		bistroStroke.Thickness = scaledStroke(bistroStrokeBase)
 	end
 
 	local heist = state.PenthouseHeist
@@ -2266,8 +3771,47 @@ function MinimapController.Update(state: { [string]: any }): ()
 		local active = (tonumber(heist.Stage) or 0) > 0
 		penthouseMarker.BackgroundColor3 = if active then C_ENEMY else Color3.fromRGB(82, 24, 34)
 		penthouseStroke.Color = if active then C_GOLD else Color3.fromRGB(14, 18, 26)
-		penthouseStroke.Thickness = if active then 1.6 else 1.0
+		penthouseStrokeBase = if active then 1.6 else 1.0
+		penthouseStroke.Thickness = scaledStroke(penthouseStrokeBase)
 	end
+end
+
+-- ============================================================================
+-- PUBLIC RESIZING API
+-- ============================================================================
+
+function MinimapController.SetSizePreset(preset: MinimapSizePreset): ()
+	if PRESET_VIEWPORT_SIZES[preset] then
+		setMinimapSizePresetInternal(preset, true)
+	end
+end
+
+function MinimapController.CycleSize(step: number?): ()
+	cycleMinimapSizeInternal(step)
+end
+
+function MinimapController.SetCustomViewportSize(viewportPx: number): ()
+	local bounds = computeResponsiveBounds()
+	cachedBounds = bounds
+	isCustomSize = true
+	preferredViewportSize = math.clamp(viewportPx, bounds.MinViewport, bounds.MaxViewport)
+	targetViewportSize = preferredViewportSize
+	activePreset = resolveNearestPreset(targetViewportSize)
+	resizePulse = 1.0
+	updateSizeToggleChrome()
+end
+
+function MinimapController.GetSizeState(): MinimapSizeState
+	local m = computeChromeMetrics(currentViewportSize)
+	return {
+		Preset = resolveNearestPreset(targetViewportSize),
+		ViewportSize = m.ViewportPx,
+		FrameWidth = m.FrameW,
+		FrameHeight = m.FrameH,
+		MinViewport = cachedBounds.MinViewport,
+		MaxViewport = cachedBounds.MaxViewport,
+		IsCustom = isCustomSize,
+	}
 end
 
 return MinimapController
