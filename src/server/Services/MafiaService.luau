@@ -286,7 +286,7 @@ local function tryMafiaAmbush(agent: MafiaAgent): boolean
 		end
 	end
 
-	for _, tagName in ipairs({ "PlayerBodyguardUnit", "PlayerRaiderUnit" }) do
+	for _, tagName in ipairs({ "PlayerBodyguardUnit", "PlayerRaiderUnit", "HiredDefenseCompanion" }) do
 		for _, raider in ipairs(CollectionService:GetTagged(tagName)) do
 			if raider:IsA("Model") then
 				local allowAggro = true

@@ -801,7 +801,8 @@ local function buildGunTool(weaponId: string): Tool
 			end
 		end
 		handle.Size = Vector3.new(0.24, 0.88, 0.28)
-		tool.Grip = CFrame.new(0, -0.18, 0) * CFrame.Angles(math.rad(-82), 0, 0)
+		-- Natural fist grip: blade (+Y) rises cleanly upward/forward out of the thumb side of the hand
+		tool.Grip = CFrame.new(0, 0.04, 0) * CFrame.Angles(math.rad(-14), 0, 0)
 		gPart("BrassBolster", Vector3.new(0.32, 0.14, 0.34), CFrame.new(0, 0.48, 0), goldTrim, Enum.Material.Metal, nil)
 		gPart("PommelCap", Vector3.new(0.26, 0.12, 0.30), CFrame.new(0, -0.48, 0), darkSteel, Enum.Material.Metal, nil)
 		gPart("CarbonBlade", Vector3.new(0.08, 1.65, 0.22), CFrame.new(0, 1.36, 0), chromeSilver, Enum.Material.Metal, nil)
@@ -815,7 +816,8 @@ local function buildGunTool(weaponId: string): Tool
 			end
 		end
 		handle.Size = Vector3.new(0.24, 1.35, 0.28)
-		tool.Grip = CFrame.new(0, -0.25, 0) * CFrame.Angles(math.rad(-84), 0, 0)
+		-- Authentic two-handed kenjutsu upper-tsuka grip right below the Tsuba guard (blade extends cleanly forward-upward!)
+		tool.Grip = CFrame.new(0, 0.24, 0) * CFrame.Angles(math.rad(-10), 0, 0)
 		gPart("SilkWrapBand", Vector3.new(0.26, 0.22, 0.30), CFrame.new(0, 0.15, 0), Color3.fromRGB(142, 26, 34), Enum.Material.Fabric, nil)
 		gPart("PommelKashira", Vector3.new(0.28, 0.14, 0.32), CFrame.new(0, -0.72, 0), goldTrim, Enum.Material.Metal, nil)
 		gPart("TsubaGuard", Vector3.new(0.56, 0.10, 0.56), CFrame.new(0, 0.72, 0), goldTrim, Enum.Material.Metal, nil)

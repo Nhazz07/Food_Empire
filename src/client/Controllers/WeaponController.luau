@@ -75,50 +75,53 @@ local CATEGORY_HANDLING: { [WeaponConfig.WeaponCategory]: {
 	RecoverSpeed: number,
 	CrosshairBloom: number,
 } } = {
+	-- Note: Firearm Handle is at the bottom pistol grip while the Receiver/Barrel/Optic sit
+	-- +0.52 to +0.98 studs ABOVE Handle! Keeping StancePos.Y at ribcage/chest height (+0.08..+0.26)
+	-- seats stocks cleanly into the right shoulder pocket and keeps arms relaxed below ear/head level!
 	Pistol = {
-		BladedYawDeg = 12,
-		StancePos = Vector3.new(0.18, 0.78, -1.40),
-		LeftGripLocal = Vector3.new(-0.14, -0.04, -0.14),
+		BladedYawDeg = 14,
+		StancePos = Vector3.new(0.18, 0.16, -1.22),
+		LeftGripLocal = Vector3.new(-0.14, -0.06, -0.04),
 		ReloadPortLocal = Vector3.new(0, -0.45, 0.02),
 		RecoverSpeed = 12.5,
 		CrosshairBloom = 5,
 	},
 	Shotgun = {
-		BladedYawDeg = 25,
-		StancePos = Vector3.new(0.41, 0.68, -0.82),
-		LeftGripLocal = Vector3.new(-0.12, 0.34, -1.48),
+		BladedYawDeg = 32,
+		StancePos = Vector3.new(0.46, 0.08, -0.74),
+		LeftGripLocal = Vector3.new(-0.04, 0.32, -1.38),
 		ReloadPortLocal = Vector3.new(-0.04, 0.24, -0.48),
 		RecoverSpeed = 8.0,
 		CrosshairBloom = 11,
 	},
 	SMG = {
-		BladedYawDeg = 23,
-		StancePos = Vector3.new(0.39, 0.70, -0.86),
-		LeftGripLocal = Vector3.new(-0.10, 0.12, -1.36),
+		BladedYawDeg = 28,
+		StancePos = Vector3.new(0.44, 0.09, -0.78),
+		LeftGripLocal = Vector3.new(-0.04, 0.14, -1.32),
 		ReloadPortLocal = Vector3.new(0, -0.35, -0.82),
 		RecoverSpeed = 13.5,
 		CrosshairBloom = 4,
 	},
 	AssaultRifle = {
-		BladedYawDeg = 25,
-		StancePos = Vector3.new(0.40, 0.69, -0.84),
-		LeftGripLocal = Vector3.new(-0.10, 0.24, -1.62),
+		BladedYawDeg = 32,
+		StancePos = Vector3.new(0.46, 0.09, -0.76),
+		LeftGripLocal = Vector3.new(-0.04, 0.26, -1.36),
 		ReloadPortLocal = Vector3.new(0, -0.32, -0.86),
 		RecoverSpeed = 11.8,
 		CrosshairBloom = 5.5,
 	},
 	Sniper = {
-		BladedYawDeg = 27,
-		StancePos = Vector3.new(0.42, 0.70, -0.80),
-		LeftGripLocal = Vector3.new(-0.10, 0.34, -1.72),
+		BladedYawDeg = 34,
+		StancePos = Vector3.new(0.48, 0.10, -0.72),
+		LeftGripLocal = Vector3.new(-0.04, 0.34, -1.38),
 		ReloadPortLocal = Vector3.new(0, 0.02, -0.78),
 		RecoverSpeed = 7.5,
 		CrosshairBloom = 10,
 	},
 	Melee = {
-		BladedYawDeg = 18,
-		StancePos = Vector3.new(0.56, 0.56, -1.02),
-		LeftGripLocal = Vector3.new(-0.14, -0.18, 0.10),
+		BladedYawDeg = 24,
+		StancePos = Vector3.new(-0.02, 0.12, -0.96),
+		LeftGripLocal = Vector3.new(0.0, -0.52, 0.0),
 		ReloadPortLocal = Vector3.new(0, 0, 0),
 		RecoverSpeed = 14.0,
 		CrosshairBloom = 4,
@@ -259,10 +262,22 @@ local isAimingADS = false
 local isCrouching = false
 local adsBlend = 0
 local sprintBlend = 0
+local runCarryBlend = 0
 local crouchBlend = 0
 local lowReadyBlend = 0
 local lastMeleeSlashAt = -10
 local meleeSlashSide = 1
+local meleeComboStep = 0
+local slashTorsoYawDeg = 0
+local slashTorsoPitchDeg = 0
+local slashTorsoRollDeg = 0
+local shootTorsoPitchDeg = 0
+local shootTorsoRollDeg = 0
+local aimInertiaYaw = 0
+local aimInertiaPitch = 0
+local prevAimBasisYaw: number? = nil
+local prevAimPitchY: number? = nil
+local activeMeleeTrail: Trail? = nil
 local hitmarkerFrame: Frame? = nil
 local hitmarkerHideAt = 0
 local killFeedHolder: Frame? = nil
@@ -282,6 +297,7 @@ local recoilBack = 0
 local recoilUp = 0
 local recoilPitch = 0
 local recoilYaw = 0
+local recoilRoll = 0
 local recoilSpreadPx = 0
 local recoilYawSign = 1
 
@@ -615,13 +631,15 @@ local function ensureCharacterGunIK(char: Model): boolean
 
 	local rIK = Instance.new("IKControl")
 	rIK.Name = "GunIK_RightArm"
-	rIK.Type = Enum.IKControlType.Transform
+	-- Position IK guarantees RightHand always reaches the exact trigger/hilt cleanly without
+	-- fighting R15 wrist rotation limits; RightGrip.C0 then locks exact weapon orientation!
+	rIK.Type = Enum.IKControlType.Position
 	rIK.ChainRoot = rUpper
 	rIK.EndEffector = rHand
 	rIK.Target = rightHandTargetAtt
 	rIK.Pole = rightElbowPoleAtt
 	rIK.Weight = 1.0
-	rIK.SmoothTime = 0.075
+	rIK.SmoothTime = 0.045
 	rIK.Priority = 25
 	rIK.Enabled = false
 	rIK.Parent = hum
@@ -635,7 +653,7 @@ local function ensureCharacterGunIK(char: Model): boolean
 	lIK.Target = leftHandTargetAtt
 	lIK.Pole = leftElbowPoleAtt
 	lIK.Weight = 1.0
-	lIK.SmoothTime = 0.075
+	lIK.SmoothTime = 0.045
 	lIK.Priority = 25
 	lIK.Enabled = false
 	lIK.Parent = hum
@@ -656,17 +674,98 @@ local function restoreAutoRotate(): ()
 	end
 end
 
+local savedRightGripC0: { [JointInstance]: CFrame } = {}
+
+local function restoreSavedRightGrips(): ()
+	for joint, origC0 in pairs(savedRightGripC0) do
+		if joint.Parent then
+			joint.C0 = origC0
+		end
+	end
+	table.clear(savedRightGripC0)
+end
+
+local function setMeleeBladeTrail(tool: Tool, wid: string, enabled: boolean): ()
+	local existing = tool:FindFirstChild("SlashRibbonTrail", true)
+	if existing and existing:IsA("Trail") then
+		existing.Enabled = enabled
+		activeMeleeTrail = if enabled then existing else nil
+		return
+	end
+	if not enabled then
+		return
+	end
+	local handle = tool:FindFirstChild("Handle")
+	local tip = tool:FindFirstChild("MuzzleTip")
+	local basePart = tool:FindFirstChild("HabakiCollar") or tool:FindFirstChild("BrassBolster") or handle
+	if not basePart or not basePart:IsA("BasePart") or not tip or not tip:IsA("BasePart") then
+		return
+	end
+
+	local att0 = Instance.new("Attachment")
+	att0.Name = "SlashTrailBase"
+	att0.Parent = basePart
+
+	local att1 = Instance.new("Attachment")
+	att1.Name = "SlashTrailTip"
+	att1.Position = Vector3.new(0, 0.15, 0)
+	att1.Parent = tip
+
+	local tr = Instance.new("Trail")
+	tr.Name = "SlashRibbonTrail"
+	tr.Attachment0 = att0
+	tr.Attachment1 = att1
+	tr.Lifetime = if wid == "SamuraiKatana" then 0.20 else 0.14
+	tr.MinLength = 0.08
+	tr.LightEmission = 0.55
+	tr.FaceCamera = true
+	tr.Color = if wid == "SamuraiKatana"
+		then ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 245, 232)),
+			ColorSequenceKeypoint.new(0.45, Color3.fromRGB(238, 72, 82)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(142, 24, 34)),
+		})
+		else ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(242, 246, 255)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(146, 158, 178)),
+		})
+	tr.Transparency = NumberSequence.new({
+		NumberSequenceKeypoint.new(0, 0.15),
+		NumberSequenceKeypoint.new(0.65, 0.55),
+		NumberSequenceKeypoint.new(1, 1),
+	})
+	tr.Enabled = true
+	tr.Parent = tip
+	activeMeleeTrail = tr
+end
+
 disableGunIK = function(): ()
 	if headLookIK then headLookIK.Enabled = false end
 	if rightArmIK then rightArmIK.Enabled = false end
 	if leftArmIK then leftArmIK.Enabled = false end
+	if activeMeleeTrail and activeMeleeTrail.Parent then
+		activeMeleeTrail.Enabled = false
+	end
+	activeMeleeTrail = nil
+	restoreSavedRightGrips()
 	restoreAutoRotate()
 	gunMovementActive = false
 	smoothedAimDir = nil
+	runCarryBlend = 0
+	slashTorsoYawDeg = 0
+	slashTorsoPitchDeg = 0
+	slashTorsoRollDeg = 0
+	shootTorsoPitchDeg = 0
+	shootTorsoRollDeg = 0
+	aimInertiaYaw = 0
+	aimInertiaPitch = 0
+	prevAimBasisYaw = nil
+	prevAimPitchY = nil
 	recoilBack = 0
 	recoilUp = 0
 	recoilPitch = 0
 	recoilYaw = 0
+	recoilRoll = 0
 	recoilSpreadPx = 0
 	if gunWalkSpeedManaged then
 		gunWalkSpeedManaged = false
@@ -825,17 +924,23 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 	local now = os.clock()
 	local clampedDt = math.min(dt, 0.05)
 
-	-- 1. Smoothly recover 2-axis weapon recoil + crosshair bloom (frame-rate independent!)
+	-- 1. Smoothly recover multi-axis weapon recoil, shoulder kickback & crosshair bloom
 	local recDecay = math.exp(-profile.RecoverSpeed * clampedDt)
 	recoilBack *= recDecay
 	recoilUp *= recDecay
 	recoilPitch *= recDecay
 	recoilYaw *= recDecay
+	recoilRoll *= math.exp(-12.5 * clampedDt)
+	shootTorsoPitchDeg *= math.exp(-11.0 * clampedDt)
+	shootTorsoRollDeg *= math.exp(-11.0 * clampedDt)
 	recoilSpreadPx *= math.exp(-14 * clampedDt)
 	if recoilBack < 0.001 then recoilBack = 0 end
 	if recoilUp < 0.001 then recoilUp = 0 end
 	if math.abs(recoilPitch) < 0.01 then recoilPitch = 0 end
 	if math.abs(recoilYaw) < 0.01 then recoilYaw = 0 end
+	if math.abs(recoilRoll) < 0.01 then recoilRoll = 0 end
+	if math.abs(shootTorsoPitchDeg) < 0.01 then shootTorsoPitchDeg = 0 end
+	if math.abs(shootTorsoRollDeg) < 0.01 then shootTorsoRollDeg = 0 end
 	if recoilSpreadPx < 0.05 then recoilSpreadPx = 0 end
 
 	-- 2. Smoothly low-pass filter aim direction to completely eliminate cursor depth-jump jitter
@@ -852,13 +957,17 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 	end
 	local aimDir = smoothedAimDir :: Vector3
 
-	-- 3. Evaluate Real Third-Person Shooter Stances: Tactical Sprint, Over-the-Shoulder ADS & Combat Crouch
+	-- 3. Evaluate Flexible Action-Shooter Stances: Free Run Carry, Tactical Sprint, ADS, Slash & Crouch
 	local moveDir = hum.MoveDirection
 	local moveSpeed = moveDir.Magnitude
-	local activelyShooting = isMouseDown or (now < aimFaceHoldUntil)
+	local slashDurNow = if wid == "SamuraiKatana" then 0.42 else 0.28
+	local isMidSlash = profile.IsMelee and (now - lastMeleeSlashAt) >= 0 and (now - lastMeleeSlashAt) <= slashDurNow
+	local activelyShooting = isMouseDown or isMidSlash or (now < aimFaceHoldUntil)
 	local isReloadingNow = (reloadState ~= nil)
 	local wantADS = isAimingADS and (not isScopeRifle(wid)) and (not profile.IsMelee) and not isScoped and not isReloadingNow and not hum.Sit
-	local wantSprint = isShiftHeld and (moveSpeed > 0.18) and not activelyShooting and not isReloadingNow and not wantADS and not isScoped and not hum.Sit
+	local wantSprint = isShiftHeld and (moveSpeed > 0.16) and not activelyShooting and not isReloadingNow and not wantADS and not isScoped and not hum.Sit
+	-- Free-flow running carry activates smoothly whenever walking/running with W/A/S/D (even without Shift!)
+	local wantFreeRun = (moveSpeed > 0.16) and not activelyShooting and not isReloadingNow and not wantADS and not isScoped and not hum.Sit and not isCrouching
 	local wantLowReady = (not profile.IsMelee) and (not activelyShooting) and (not wantADS) and (not isReloadingNow) and (not wantSprint) and (not isScoped)
 
 	if wantSprint or hum.Sit or hum:GetState() == Enum.HumanoidStateType.Jumping then
@@ -867,32 +976,39 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 	local wantCrouch = isCrouching and not wantSprint and not hum.Sit
 
 	adsBlend += ((if wantADS then 1 else 0) - adsBlend) * (1 - math.exp(-15 * clampedDt))
-	sprintBlend += ((if wantSprint then 1 else 0) - sprintBlend) * (1 - math.exp(-(if wantSprint then 10 else 18) * clampedDt))
+	sprintBlend += ((if wantSprint then 1 else 0) - sprintBlend) * (1 - math.exp(-(if wantSprint then 9.5 else 18) * clampedDt))
+	runCarryBlend += ((if wantFreeRun then 1 else 0) - runCarryBlend) * (1 - math.exp(-(if wantFreeRun then 8.5 else 18) * clampedDt))
 	crouchBlend += ((if wantCrouch then 1 else 0) - crouchBlend) * (1 - math.exp(-13 * clampedDt))
 	lowReadyBlend += ((if wantLowReady then 1 else 0) - lowReadyBlend) * (1 - math.exp(-(if wantLowReady then 5.5 else 20) * clampedDt))
 	if adsBlend < 0.004 then adsBlend = 0 end
 	if sprintBlend < 0.004 then sprintBlend = 0 end
+	if runCarryBlend < 0.004 then runCarryBlend = 0 end
 	if crouchBlend < 0.004 then crouchBlend = 0 end
 	if lowReadyBlend < 0.004 then lowReadyBlend = 0 end
 
-	-- 4. Subtle, smoothly blended idle breathing, walking & tactical sprint rhythm
+	-- Adapt IK smoothness: fluid & organic while running/carrying, crisp & responsive while attacking/firing!
+	local targetIkSmooth = if activelyShooting or wantADS or isMidSlash then 0.032 else 0.058
+	if rightArmIK then rightArmIK.SmoothTime = targetIkSmooth end
+	if leftArmIK then leftArmIK.SmoothTime = targetIkSmooth end
+
+	-- 4. Expressive idle breathing, walking cadence & athletic running rhythm
 	smoothedMoveBlend += (math.clamp(moveSpeed, 0, 1) - smoothedMoveBlend) * (1 - math.exp(-10 * clampedDt))
 	local horizVel = Vector3.new(root.AssemblyLinearVelocity.X, 0, root.AssemblyLinearVelocity.Z)
 	local actualSpeed = horizVel.Magnitude
 	if actualSpeed > 0.4 and not hum.Sit then
 		locomotionDist += actualSpeed * clampedDt
 	end
-	swayPhase += clampedDt * (1.7 + smoothedMoveBlend * (4.8 + sprintBlend * 3.4))
+	swayPhase += clampedDt * (1.85 + smoothedMoveBlend * (5.2 + sprintBlend * 3.4))
 
-	local firingSteadiness = (if activelyShooting then 0.45 else 1.0) * (1 - 0.42 * adsBlend) * (1 - 0.35 * crouchBlend)
-	local swayAmpY = (0.006 + smoothedMoveBlend * 0.014) * firingSteadiness
-	local swayAmpX = (0.0035 + smoothedMoveBlend * 0.009) * firingSteadiness
+	local firingSteadiness = (if activelyShooting then 0.40 else 1.0) * (1 - 0.48 * adsBlend) * (1 - 0.35 * crouchBlend)
+	local swayAmpY = (0.012 + smoothedMoveBlend * 0.032) * firingSteadiness
+	local swayAmpX = (0.007 + smoothedMoveBlend * 0.022) * firingSteadiness
 	local swayY = math.sin(swayPhase) * swayAmpY
 	local swayX = math.cos(swayPhase * 0.5) * swayAmpX
 
-	-- 5. AAA Third-Person Shooter Facing (NO AutoRotate flip-flop spin!)
-	--    * Combat Ready / Strafe / ADS / Firing: Always smoothly faces downrange/aim so W/A/S/D strafing feels locked-in!
-	--    * Tactical Sprint (Shift): Smoothly faces travel direction for agile repositioning, snapping right back on fire!
+	-- 5. Flexible Action-Adventure & Shooter Facing (Natural free-run turning + instant combat lock-on!)
+	--    * Moving freely (W/A/S/D without firing/ADS): Character smoothly turns into movement direction — zero stiff moonwalking!
+	--    * Shooting / Aiming (RMB) / Slashing / Scoped: Instantly locks cleanly toward target for tight strafing & strikes!
 	local camera = Workspace.CurrentCamera
 	local camFlatLook = if camera
 		then Vector3.new(camera.CFrame.LookVector.X, 0, camera.CFrame.LookVector.Z)
@@ -907,7 +1023,6 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 	local combatFacingDir: Vector3
 	if flatAim.Magnitude > 0.05 then
 		local aimUnit = flatAim.Unit
-		-- If walking/strafing without actively shooting and cursor drifts behind camera, stay facing downrange (camera look)
 		if (not activelyShooting) and (not wantADS) and (moveSpeed > 0.12) and (aimUnit:Dot(camFlatLook) < -0.15) then
 			combatFacingDir = camFlatLook
 		else
@@ -924,11 +1039,12 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 		end
 
 		local desiredDir: Vector3
-		if sprintBlend > 0.55 and moveSpeed > 0.15 then
-			local flatMove = Vector3.new(moveDir.X, 0, moveDir.Z)
-			desiredDir = if flatMove.Magnitude > 0.05 then flatMove.Unit else combatFacingDir
+		local flatMove = Vector3.new(moveDir.X, 0, moveDir.Z)
+		if (wantFreeRun or sprintBlend > 0.35) and flatMove.Magnitude > 0.05 then
+			-- Natural agile facing along running direction (feels fluid like GTA / Ghost of Tsushima!)
+			desiredDir = flatMove.Unit
 		else
-			-- Subtle bladed tactical stance (tightens cleanly during ADS/firing, relaxes slightly during strafing)
+			-- Bladed combat stance when standing ready, aiming, shooting, or slashing
 			local bladeDeg = profile.BladedYawDeg * (0.72 + 0.28 * math.max(adsBlend, if activelyShooting then 1 else 0))
 			desiredDir = (CFrame.Angles(0, -math.rad(bladeDeg), 0):VectorToWorldSpace(combatFacingDir)).Unit
 		end
@@ -937,7 +1053,7 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 		local _, curYaw, _ = root.CFrame:ToOrientation()
 		local targetYaw = math.atan2(-desiredDir.X, -desiredDir.Z)
 		local deltaYaw = math.atan2(math.sin(targetYaw - curYaw), math.cos(targetYaw - curYaw))
-		local turnSpeed = if activelyShooting or wantADS then 20 elseif sprintBlend > 0.55 then 12 else 15
+		local turnSpeed = if activelyShooting or wantADS or isMidSlash then 22 elseif sprintBlend > 0.45 then 13.5 else 14.5
 		local turnAlpha = 1 - math.exp(-turnSpeed * clampedDt)
 		local nextYaw = curYaw + deltaYaw * turnAlpha
 		root.CFrame = CFrame.new(root.Position) * CFrame.Angles(0, nextYaw, 0)
@@ -971,12 +1087,30 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 		gunWalkSpeedManaged = true
 	end
 
-	-- Adapt elbow poles for natural ADS tuck & low-ready sprint carry
+	-- Adapt elbow poles for natural downward-tucked elbows (eliminates raised/chicken-wing arms!)
 	if rightElbowPoleAtt then
-		rightElbowPoleAtt.Position = Vector3.new((2.15 - 0.30 * adsBlend) * charScale, (-0.75 - 0.15 * crouchBlend) * charScale, (0.90 + 0.15 * sprintBlend) * charScale)
+		if profile.IsMelee then
+			rightElbowPoleAtt.Position = Vector3.new(1.25 * charScale, -1.45 * charScale, 0.55 * charScale)
+		else
+			rightElbowPoleAtt.Position = Vector3.new((1.28 - 0.18 * adsBlend) * charScale, (-1.45 - 0.10 * crouchBlend) * charScale, (0.68 + 0.12 * sprintBlend) * charScale)
+		end
 	end
 	if leftElbowPoleAtt then
-		leftElbowPoleAtt.Position = Vector3.new((-2.15 + 0.35 * adsBlend) * charScale, (-0.75 - 0.15 * crouchBlend) * charScale, (0.90 + 0.25 * sprintBlend) * charScale)
+		if profile.IsMelee then
+			leftElbowPoleAtt.Position = Vector3.new(-0.92 * charScale, -1.25 * charScale, -0.18 * charScale)
+		else
+			leftElbowPoleAtt.Position = Vector3.new((-1.15 + 0.20 * adsBlend) * charScale, (-1.50 - 0.10 * crouchBlend) * charScale, (0.25 + 0.20 * sprintBlend) * charScale)
+		end
+	end
+
+	-- Suppress Roblox's default rigid ToolNoneAnim while holding a weapon so IK stays natural
+	local animator = hum:FindFirstChildOfClass("Animator")
+	if animator then
+		for _, tr in ipairs(animator:GetPlayingAnimationTracks()) do
+			if tr.Name == "ToolNoneAnim" then
+				tr:Stop(0.08)
+			end
+		end
 	end
 
 	-- 8. Compute natural clamped forward aim direction relative to character body
@@ -986,7 +1120,10 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 	if horizLen > 0.01 then
 		local yaw = math.atan2(localAimDir.X, -localAimDir.Z)
 		local clampedYaw = math.clamp(yaw, math.rad(-58), math.rad(68))
-		local clampedPitchY = math.clamp(localAimDir.Y, -0.60, 0.68)
+		-- Keep barrel/blade level & confident during casual movement instead of drooping toward the floor
+		local minPitch = if (wantLowReady or (profile.IsMelee and not activelyShooting)) then -0.14 else -0.58
+		local maxPitch = if (wantLowReady or (profile.IsMelee and not activelyShooting)) then 0.24 else 0.65
+		local clampedPitchY = math.clamp(localAimDir.Y, minPitch, maxPitch)
 		local cosP = math.sqrt(math.max(0.05, 1 - clampedPitchY * clampedPitchY))
 		clampedLocalDir = Vector3.new(math.sin(clampedYaw) * cosP, clampedPitchY, -math.cos(clampedYaw) * cosP).Unit
 	else
@@ -1000,78 +1137,297 @@ local function updateFullBodyGunAiming(dt: number, tool: Tool, wid: string, rawA
 		then CFrame.lookAt(root.Position, root.Position + flatClamped.Unit)
 		else root.CFrame
 
-	-- 9. Position Handle cleanly in aim frame (with Realistic Cheek-Weld ADS, Tactical Low-Ready Carry, Crouch drop & Recoil kick!)
-	local adsShift = Vector3.new(-0.10 * adsBlend, 0.14 * adsBlend, 0.18 * adsBlend) * charScale
-	local lowReadyShift = Vector3.new(-0.08 * lowReadyBlend, -0.18 * lowReadyBlend, 0.08 * lowReadyBlend) * charScale
+	-- Subtle organic turn-inertia sway when swinging aim left/right/up/down (eliminates stiff robot aim!)
+	local _, basisYaw, _ = aimBasisCF:ToOrientation()
+	if prevAimBasisYaw ~= nil then
+		local dYaw = math.atan2(math.sin(basisYaw - prevAimBasisYaw), math.cos(basisYaw - prevAimBasisYaw))
+		local targetInertiaY = math.clamp(-math.deg(dYaw) * 1.45, -7.5, 7.5) * (1 - 0.55 * adsBlend)
+		aimInertiaYaw += (targetInertiaY - aimInertiaYaw) * (1 - math.exp(-12 * clampedDt))
+	end
+	prevAimBasisYaw = basisYaw
+	local curPitchY = clampedLocalDir.Y
+	if prevAimPitchY ~= nil then
+		local dPitch = curPitchY - prevAimPitchY
+		local targetInertiaP = math.clamp(-dPitch * 28, -5.0, 5.0) * (1 - 0.55 * adsBlend)
+		aimInertiaPitch += (targetInertiaP - aimInertiaPitch) * (1 - math.exp(-12 * clampedDt))
+	end
+	prevAimPitchY = curPitchY
+
+	-- 9. Position Handle cleanly in aim frame (Shoulder-pocket firearms, Cheek-weld ADS, Low-ready carry, & Kenjutsu Samurai guard!)
+	local adsShift = Vector3.new(-0.08 * adsBlend, 0.16 * adsBlend, 0.10 * adsBlend) * charScale
+	local lowReadyShift = Vector3.new(-0.04 * lowReadyBlend, -0.05 * lowReadyBlend, 0.05 * lowReadyBlend) * charScale
 	local crouchShift = Vector3.new(0, -crouchDropY, -0.06 * crouchBlend * charScale)
 	local strafeSway = Vector3.new(-smoothedLocalRight * 0.05 * charScale, -math.abs(smoothedLocalRight) * 0.02 * charScale, 0)
-	local stanceWithRecoil = (profile.StancePos * charScale) + adsShift + lowReadyShift + crouchShift + strafeSway + Vector3.new(swayX, swayY + recoilUp, recoilBack)
+	local baseStancePos = profile.StancePos
+	if wid == "MafiaKnife" then
+		baseStancePos = Vector3.new(0.48, 0.10, -1.04)
+	end
+	local stanceWithRecoil = (baseStancePos * charScale) + adsShift + lowReadyShift + crouchShift + strafeSway + Vector3.new(swayX, swayY + recoilUp, recoilBack)
 	local handleWorldPos = (aimBasisCF * CFrame.new(stanceWithRecoil)).Position
 	local lookPoint = handleWorldPos + worldClampedDir * 40
-	local strafeRollDeg = -smoothedLocalRight * (3.2 * (1 - 0.5 * adsBlend))
-	local lowReadyPitchDeg = -14.5 * lowReadyBlend
-	local lowReadyYawDeg = 18.0 * lowReadyBlend
-	local lowReadyRollDeg = 8.0 * lowReadyBlend
-	local baseHandleCF = CFrame.lookAt(handleWorldPos, lookPoint)
-		* CFrame.Angles(math.rad(recoilPitch + lowReadyPitchDeg), math.rad(recoilYaw + lowReadyYawDeg), math.rad(strafeRollDeg + lowReadyRollDeg))
+	local strafeRollDeg = -smoothedLocalRight * (3.5 * (1 - 0.5 * adsBlend)) + aimInertiaYaw * 0.55
 
-	-- Procedural Melee Slash & Katana Cleave Arc Animation!
+	-- Reset slash torso targets smoothly toward 0 when not mid-slash
+	local targetSlashTorsoYaw = 0
+	local targetSlashTorsoPitch = 0
+	local targetSlashTorsoRoll = 0
+
+	local baseHandleCF: CFrame
 	if profile.IsMelee then
-		local slashDt = now - lastMeleeSlashAt
-		local slashDur = if wid == "SamuraiKatana" then 0.34 else 0.24
-		if slashDt >= 0 and slashDt <= slashDur then
-			local u = slashDt / slashDur
-			local swing = math.sin(u * math.pi)
-			local arcYaw = meleeSlashSide * (-58 + u * 135)
-			local arcPitch = -24 + swing * 42
-			local lungeFwd = -0.58 * swing * charScale
-			baseHandleCF = baseHandleCF
-				* CFrame.new(meleeSlashSide * (0.28 - u * 0.65) * charScale, 0.12 * swing * charScale, lungeFwd)
-				* CFrame.Angles(math.rad(arcPitch), math.rad(arcYaw), math.rad(meleeSlashSide * 38 * swing))
+		-- Melee blades extend along Handle +Y (cutting edge faces -Z):
+		-- Angle blade cleanly forward & upward in front of the chest (Chudan-no-kamae samurai guard!) — ZERO head clipping!
+		if wid == "SamuraiKatana" then
+			baseHandleCF = CFrame.lookAt(handleWorldPos, lookPoint)
+				* CFrame.Angles(math.rad(-42 + aimInertiaPitch * 0.7), math.rad(14 + aimInertiaYaw * 0.8), math.rad(-14 + strafeRollDeg * 0.6))
+		else
+			-- Stiletto Mafia Knife forward combat guard
+			baseHandleCF = CFrame.lookAt(handleWorldPos, lookPoint)
+				* CFrame.Angles(math.rad(-52 + aimInertiaPitch * 0.6), math.rad(-10 + aimInertiaYaw * 0.8), math.rad(14 + strafeRollDeg * 0.6))
 		end
+
+		-- Fluid 3-Hit Kenjutsu Samurai Katana & Street Knife Combo Animation with Whole-Body Torso Follow-Through!
+		local slashDt = now - lastMeleeSlashAt
+		local slashDur = slashDurNow
+		local trailActive = false
+		if slashDt >= 0 and slashDt <= slashDur then
+			local u = math.clamp(slashDt / slashDur, 0, 1)
+			-- 3-phase athletic strike curve: quick wind-up (0..0.18) -> explosive snap (0.18..0.58) -> fluid recovery (0.58..1.0)
+			local strikePhase: number
+			if u < 0.18 then
+				strikePhase = -0.22 * smoothstep(u / 0.18)
+			elseif u < 0.58 then
+				local s = (u - 0.18) / 0.40
+				local easeOutCubic = 1 - (1 - s) * (1 - s) * (1 - s)
+				strikePhase = -0.22 + 1.22 * easeOutCubic
+			else
+				strikePhase = 1.0
+			end
+			local recBlend = if u > 0.62 then smoothstep((u - 0.62) / 0.38) else 0
+			local env = math.sin(u * math.pi)
+			trailActive = (u >= 0.14 and u <= 0.64)
+
+			local combo = ((meleeComboStep - 1) % 3) + 1
+			local slashCF: CFrame
+			if wid == "SamuraiKatana" then
+				if combo == 1 then
+					-- HIT 1: Kesa-Giri (Diagonal Upper-Right -> Lower-Left Cleave!)
+					local posOff = Vector3.new(
+						(0.56 - strikePhase * 1.18) * charScale,
+						(0.42 - strikePhase * 0.66) * charScale,
+						(-0.18 - env * 0.52) * charScale
+					)
+					local pitch = -28 - strikePhase * 42
+					local yaw = -58 + strikePhase * 128
+					local roll = -42 + strikePhase * 96
+					slashCF = CFrame.lookAt(handleWorldPos, lookPoint)
+						* CFrame.new(posOff)
+						* CFrame.Angles(math.rad(pitch), math.rad(yaw), math.rad(roll))
+					targetSlashTorsoYaw = 22 - strikePhase * 54
+					targetSlashTorsoPitch = 10 * env
+					targetSlashTorsoRoll = -8 + strikePhase * 16
+				elseif combo == 2 then
+					-- HIT 2: Gyaku-Kesa (Rising Lower-Left -> Upper-Right Reverse Cleave!)
+					local posOff = Vector3.new(
+						(-0.56 + strikePhase * 1.16) * charScale,
+						(-0.26 + strikePhase * 0.72) * charScale,
+						(-0.16 - env * 0.54) * charScale
+					)
+					local pitch = -64 + strikePhase * 44
+					local yaw = 62 - strikePhase * 130
+					local roll = 48 - strikePhase * 96
+					slashCF = CFrame.lookAt(handleWorldPos, lookPoint)
+						* CFrame.new(posOff)
+						* CFrame.Angles(math.rad(pitch), math.rad(yaw), math.rad(roll))
+					targetSlashTorsoYaw = -24 + strikePhase * 56
+					targetSlashTorsoPitch = 8 * env
+					targetSlashTorsoRoll = 8 - strikePhase * 16
+				else
+					-- HIT 3: Kabuto-Wari (Heavy Overhead Cleave Finisher!)
+					local posOff = Vector3.new(
+						(0.10 - strikePhase * 0.22) * charScale,
+						(0.68 - strikePhase * 0.98) * charScale,
+						(0.10 - strikePhase * 0.68) * charScale
+					)
+					local pitch = 24 - strikePhase * 116
+					local yaw = -14 + strikePhase * 28
+					local roll = -10 + strikePhase * 18
+					slashCF = CFrame.lookAt(handleWorldPos, lookPoint)
+						* CFrame.new(posOff)
+						* CFrame.Angles(math.rad(pitch), math.rad(yaw), math.rad(roll))
+					targetSlashTorsoYaw = 10 - strikePhase * 22
+					targetSlashTorsoPitch = -10 + strikePhase * 26
+					targetSlashTorsoRoll = -4 + strikePhase * 8
+				end
+			else
+				-- Agile 3-hit Street Stiletto Knife Combo (Slash R -> Reverse L -> Quick Thrust!)
+				if combo == 3 then
+					local thrust = math.sin(u * math.pi)
+					slashCF = CFrame.lookAt(handleWorldPos, lookPoint)
+						* CFrame.new(0.06 * charScale, 0.04 * thrust * charScale, -0.74 * thrust * charScale)
+						* CFrame.Angles(math.rad(-82), math.rad(-4), math.rad(6))
+					targetSlashTorsoYaw = -22 * thrust
+					targetSlashTorsoPitch = 12 * thrust
+				else
+					local side = if combo == 1 then 1 else -1
+					local posOff = Vector3.new(side * (0.34 - strikePhase * 0.72) * charScale, 0.12 * env * charScale, -0.52 * env * charScale)
+					slashCF = CFrame.lookAt(handleWorldPos, lookPoint)
+						* CFrame.new(posOff)
+						* CFrame.Angles(math.rad(-48 - 28 * env), math.rad(side * (-46 + strikePhase * 104)), math.rad(side * 34 * env))
+					targetSlashTorsoYaw = side * (16 - strikePhase * 36)
+					targetSlashTorsoPitch = 8 * env
+				end
+			end
+
+			baseHandleCF = slashCF:Lerp(baseHandleCF, recBlend)
+			targetSlashTorsoYaw *= (1 - recBlend)
+			targetSlashTorsoPitch *= (1 - recBlend)
+			targetSlashTorsoRoll *= (1 - recBlend)
+		end
+		setMeleeBladeTrail(tool, wid, trailActive)
+	else
+		-- Firearms: muzzle points cleanly downrange (-Z) with organic aim inertia & multi-axis recoil!
+		local lowReadyPitchDeg = -6.0 * lowReadyBlend
+		local lowReadyYawDeg = 12.0 * lowReadyBlend
+		local lowReadyRollDeg = 4.0 * lowReadyBlend
+		baseHandleCF = CFrame.lookAt(handleWorldPos, lookPoint)
+			* CFrame.Angles(
+				math.rad(recoilPitch + lowReadyPitchDeg + aimInertiaPitch),
+				math.rad(recoilYaw + lowReadyYawDeg + aimInertiaYaw),
+				math.rad(strafeRollDeg + lowReadyRollDeg + recoilRoll)
+			)
 	end
 
-	-- 10. Blend seamlessly into Tactical Low-Ready Cross-Chest Sprint Carry Pose when holding [Shift]!
-	if sprintBlend > 0.005 then
-		local bobX = math.sin(locomotionDist * 0.62) * 0.11 * charScale
-		local bobY = math.abs(math.cos(locomotionDist * 0.62)) * 0.09 * charScale
-		local sprintPos = (root.CFrame * CFrame.new(
-			(0.24 * charScale) + bobX,
-			(0.28 * charScale) - crouchDropY + bobY,
-			(-1.12 * charScale)
-		)).Position
-		local sprintCarryCF = CFrame.new(sprintPos)
-			* (root.CFrame - root.CFrame.Position)
-			* CFrame.Angles(math.rad(-20 + math.sin(locomotionDist * 0.62) * 4), math.rad(46), math.rad(16))
-		baseHandleCF = baseHandleCF:Lerp(sprintCarryCF, smoothstep(sprintBlend))
+	-- Smoothly blend whole-body torso swing angles (driven into Waist Motor6D in applyProceduralShooterLocomotion!)
+	local torsoFollowAlpha = 1 - math.exp(-22 * clampedDt)
+	slashTorsoYawDeg += (targetSlashTorsoYaw - slashTorsoYawDeg) * torsoFollowAlpha
+	slashTorsoPitchDeg += (targetSlashTorsoPitch - slashTorsoPitchDeg) * torsoFollowAlpha
+	slashTorsoRollDeg += (targetSlashTorsoRoll - slashTorsoRollDeg) * torsoFollowAlpha
+
+	-- 10. Fluid Running & Tactical Sprint Carry Poses (Active on BOTH normal W/A/S/D running AND [Shift] Sprint!)
+	local activeRunBlend = math.max(runCarryBlend * 0.85, sprintBlend)
+	local isPistolClass = (wid == "StreetPistol" or wid == "SilencedDeagle" or wid == "GoldenEmperorPistol")
+	if activeRunBlend > 0.005 then
+		local strideRate = 0.66
+		local strideSin = math.sin(locomotionDist * strideRate)
+		local strideCos = math.cos(locomotionDist * strideRate)
+		local intensity = 0.68 + 0.32 * sprintBlend
+		local bobX = strideSin * 0.11 * intensity * charScale
+		local bobY = math.abs(strideCos) * 0.085 * intensity * charScale
+		local runCarryCF: CFrame
+
+		if wid == "SamuraiKatana" then
+			-- Natural athletic Samurai Run Carry: sword relaxed by right hip, blade sweeping sleekly back & pumping with stride!
+			local hipX = (0.74 + 0.06 * sprintBlend) * charScale + bobX * 0.45
+			local hipY = (-0.22 - 0.06 * sprintBlend) * charScale - crouchDropY + bobY
+			local hipZ = (-0.22 + strideSin * 0.24 * intensity) * charScale
+			local sPos = (root.CFrame * CFrame.new(hipX, hipY, hipZ)).Position
+			runCarryCF = CFrame.new(sPos)
+				* (root.CFrame - root.CFrame.Position)
+				* CFrame.Angles(
+					math.rad(56 + 10 * sprintBlend + strideSin * 9 * intensity),
+					math.rad(-14 + strideCos * 4 * intensity),
+					math.rad(-20 - 5 * sprintBlend)
+				)
+		elseif wid == "MafiaKnife" then
+			-- Agile Street Runner Knife Carry: tucked low at right side pumping with every stride!
+			local sPos = (root.CFrame * CFrame.new(
+				(0.76 * charScale) + bobX * 0.4,
+				(-0.18 * charScale) - crouchDropY + bobY,
+				(-0.42 + strideSin * 0.28 * intensity) * charScale
+			)).Position
+			runCarryCF = CFrame.new(sPos)
+				* (root.CFrame - root.CFrame.Position)
+				* CFrame.Angles(math.rad(-34 + strideSin * 12 * intensity), math.rad(-8), math.rad(-14))
+		elseif isPistolClass then
+			-- Fluid One-Handed Tactical Pistol Jog/Run Carry (snaps right back to 2-hand grip on aim/fire!)
+			local sPos = (root.CFrame * CFrame.new(
+				(0.62 * charScale) + bobX * 0.5,
+				(0.02 * charScale) - crouchDropY + bobY,
+				(-0.82 + strideSin * 0.18 * intensity) * charScale
+			)).Position
+			runCarryCF = CFrame.new(sPos)
+				* (root.CFrame - root.CFrame.Position)
+				* CFrame.Angles(
+					math.rad(-22 + strideSin * 8 * intensity),
+					math.rad(16 + strideCos * 5 * intensity),
+					math.rad(8 + strideSin * 5 * intensity)
+				)
+		else
+			-- Fluid Two-Handed Long-Gun Jog/Sprint Carry (Figure-8 stride bob across lower chest!)
+			local carryYaw = 26 + 18 * sprintBlend
+			local carryPitch = -13 - 5 * sprintBlend
+			local carryPos = (root.CFrame * CFrame.new(
+				(0.36 * charScale) + bobX,
+				(0.02 - 0.06 * sprintBlend) * charScale - crouchDropY + bobY,
+				(-0.84 - 0.04 * sprintBlend) * charScale
+			)).Position
+			runCarryCF = CFrame.new(carryPos)
+				* (root.CFrame - root.CFrame.Position)
+				* CFrame.Angles(
+					math.rad(carryPitch + strideCos * 3.5 * intensity),
+					math.rad(carryYaw + strideSin * 4.5 * intensity),
+					math.rad(8 + 6 * sprintBlend + strideSin * 4.0 * intensity)
+				)
+		end
+		baseHandleCF = baseHandleCF:Lerp(runCarryCF, smoothstep(activeRunBlend))
 	end
 
 	-- 11. Apply Reload animation OR post-shot Shotgun pump-action cycle
 	local finalHandleCF, finalLeftHandPos = computeReloadOffsets(now, profile, charScale, root.CFrame, baseHandleCF)
-
+	local pumpPullZ = 0
 	if not reloadState and profile.ReloadStyle == "ShellByShell" then
 		local pumpElapsed = now - lastShotgunPumpStart
 		if pumpElapsed >= 0.22 and pumpElapsed <= 0.62 then
 			local u = (pumpElapsed - 0.22) / 0.40
 			local pull = math.sin(u * math.pi)
+			pumpPullZ = 0.46 * pull
 			finalHandleCF = finalHandleCF * CFrame.Angles(math.rad(pull * 2.5), 0, math.rad(pull * 4.0))
-			finalLeftHandPos = (finalHandleCF * CFrame.new(profile.LeftGripLocal + Vector3.new(0, 0, 0.46 * pull))).Position
 		end
 	end
 
-	-- 12. Convert desired Handle CFrame to EXACT RightHand CFrame using the live RightGrip weld
+	-- 12. Lock RightHand cleanly onto the grip with Position IK + orient RightGrip.C0 for ZERO wrist-limit droop!
 	local rightGrip = rHand:FindFirstChild("RightGrip")
-	local handleToHandCF: CFrame
-	if rightGrip and rightGrip:IsA("JointInstance") then
-		handleToHandCF = rightGrip.C1 * rightGrip.C0:Inverse()
+	local desiredRightHandPos: Vector3
+	local liveHandleCF = finalHandleCF
+	if rightGrip and rightGrip:IsA("JointInstance") and rHand:IsA("BasePart") then
+		local origC0 = savedRightGripC0[rightGrip]
+		if not origC0 then
+			origC0 = rightGrip.C0
+			savedRightGripC0[rightGrip] = origC0
+		end
+		local palmOffset = origC0.Position
+		desiredRightHandPos = (finalHandleCF * rightGrip.C1 * CFrame.new(-palmOffset)).Position
+		local targetC0Rot = rHand.CFrame.Rotation:Inverse() * finalHandleCF.Rotation * rightGrip.C1.Rotation
+		rightGrip.C0 = CFrame.new(palmOffset) * targetC0Rot
+		liveHandleCF = rHand.CFrame * rightGrip.C0 * rightGrip.C1:Inverse()
 	else
-		handleToHandCF = CFrame.new(0, -0.25, 0.15) * CFrame.Angles(math.rad(90), 0, 0)
+		desiredRightHandPos = (finalHandleCF * CFrame.new(0, -0.25, 0.15)).Position
 	end
-	local desiredRightHandWorldCF = finalHandleCF * handleToHandCF
+
+	-- Magnetically lock LeftHand onto live 3D foregrip / lower Katana hilt, OR swing naturally counter-phase while running!
+	if not reloadState then
+		local strideSwing = math.sin(locomotionDist * 0.66)
+		local runnerLeftArmPos = (root.CFrame * CFrame.new(
+			-0.96 * charScale,
+			(-0.18 + math.abs(strideSwing) * 0.14) * charScale - crouchDropY,
+			(-0.34 - strideSwing * 0.56) * charScale
+		)).Position
+
+		if wid == "MafiaKnife" then
+			local guardOffHand = (aimBasisCF * CFrame.new(-0.56 * charScale, 0.14 * charScale - crouchDropY, -0.78 * charScale)).Position
+			finalLeftHandPos = guardOffHand:Lerp(runnerLeftArmPos, smoothstep(activeRunBlend))
+		elseif wid == "SamuraiKatana" or isPistolClass then
+			-- Two-handed locked grip when standing/attacking/aiming; releases smoothly into natural swinging runner arm while running!
+			local gripPos = (liveHandleCF * CFrame.new(profile.LeftGripLocal)).Position
+			finalLeftHandPos = gripPos:Lerp(runnerLeftArmPos, smoothstep(math.clamp((activeRunBlend - 0.18) / 0.62, 0, 1)))
+		else
+			finalLeftHandPos = (liveHandleCF * CFrame.new(profile.LeftGripLocal + Vector3.new(0, 0, pumpPullZ))).Position
+		end
+	end
 
 	-- Update all 3 IK targets simultaneously on HumanoidRootPart (ZERO 1-frame feedback lag!)
 	if rightHandTargetAtt then
-		rightHandTargetAtt.WorldCFrame = desiredRightHandWorldCF
+		rightHandTargetAtt.WorldPosition = desiredRightHandPos
 	end
 	if leftHandTargetAtt then
 		leftHandTargetAtt.WorldPosition = finalLeftHandPos
@@ -1123,34 +1479,45 @@ local function applyProceduralShooterLocomotion(): ()
 	local waistMotor = getAnimJoint(char:FindFirstChild("UpperTorso"), "Waist")
 
 	if rootMotor and waistMotor then
-		-- 1. Hip-Torso Counter-Rotation so legs angle naturally into diagonal strafes while chest stays locked on target!
+		-- 1. Hip-Torso Counter-Rotation when strafing in combat (relaxed during free-flow running!)
+		local freeRunFactor = math.max(sprintBlend, runCarryBlend * 0.9)
 		local hipYaw = 0
-		if moveMag > 0.08 and sprintBlend < 0.85 and not airborne then
+		if moveMag > 0.08 and freeRunFactor < 0.85 and not airborne then
 			local strafeAmt = math.clamp(smoothedLocalRight, -1, 1)
 			local fwdSign = if smoothedLocalFwd < -0.18 then -1 else 1
-			hipYaw = -strafeAmt * fwdSign * math.rad(34) * (1 - sprintBlend) * math.clamp(moveMag * 1.4, 0, 1)
+			hipYaw = -strafeAmt * fwdSign * math.rad(34) * (1 - freeRunFactor) * math.clamp(moveMag * 1.4, 0, 1)
 		end
 
-		-- 2. Combat Crouch vertical hip drop + subtle rhythmic sprint/crouch bob
+		-- 2. Combat Crouch vertical hip drop + natural rhythmic stride bob while jogging/sprinting
 		local crouchDrop = -1.12 * charScale * crouchBlend
-		local sprintBob = if sprintBlend > 0.1 and not airborne then math.abs(math.sin(locomotionDist * 0.62)) * 0.14 * charScale * sprintBlend else 0
+		local runBob = if freeRunFactor > 0.08 and not airborne
+			then math.abs(math.sin(locomotionDist * 0.66)) * (0.07 + 0.08 * sprintBlend) * charScale * freeRunFactor
+			else 0
 		rootMotor.Transform = rootMotor.Transform
-			* CFrame.new(0, crouchDrop + sprintBob, 0)
+			* CFrame.new(0, crouchDrop + runBob, 0)
 			* CFrame.Angles(0, hipYaw, 0)
 
-		-- 3. Counter-rotate UpperTorso + apply weighty tactical strafe banking & athletic forward lean
+		-- 3. Dynamic UpperTorso Articulation: athletic run lean, stride twist, sword slash follow-through, AND gun shoulder recoil!
+		local runStrideTwist = if freeRunFactor > 0.08 and not airborne
+			then math.sin(locomotionDist * 0.66) * math.rad(5.5 + 3.5 * sprintBlend) * freeRunFactor
+			else 0
 		local leanPitch = -math.rad(
-			3.5 * (1 - sprintBlend)
+			3.0 * (1 - freeRunFactor)
 			+ 4.5 * adsBlend
-			+ 10.5 * sprintBlend
+			+ 7.5 * runCarryBlend
+			+ 6.0 * sprintBlend
 			+ 8.5 * crouchBlend
-			+ smoothedLocalFwd * 3.8 * (1 - sprintBlend)
+			+ smoothedLocalFwd * 3.5 * (1 - freeRunFactor)
+			+ slashTorsoPitchDeg
+			- shootTorsoPitchDeg
 		)
+		local leanYaw = -hipYaw * 0.92 + runStrideTwist + math.rad(slashTorsoYawDeg)
 		local leanRoll = -smoothedLocalRight * math.rad(6.2 * (1 - 0.35 * adsBlend))
+			+ math.rad(slashTorsoRollDeg + shootTorsoRollDeg)
 		waistMotor.Transform = waistMotor.Transform
-			* CFrame.Angles(leanPitch, -hipYaw * 0.92, leanRoll)
+			* CFrame.Angles(leanPitch, leanYaw, leanRoll)
 
-		-- 4. Grounded Backpedal, Side-Strafe & Combat Crouch Leg Articulation (Fixes Roblox forward-moonwalk skating!)
+		-- 4. Grounded Backpedal, Side-Strafe & Combat Crouch Leg Articulation (only in combat strafe mode!)
 		if not airborne then
 			local lHip = getAnimJoint(char:FindFirstChild("LeftUpperLeg"), "LeftHip")
 			local rHip = getAnimJoint(char:FindFirstChild("RightUpperLeg"), "RightHip")
@@ -1162,7 +1529,7 @@ local function applyProceduralShooterLocomotion(): ()
 			if lHip and rHip and lKnee and rKnee then
 				local backWeight = math.clamp((-smoothedLocalFwd - 0.12) / 0.55, 0, 1)
 				local pureSideWeight = math.clamp((math.abs(smoothedLocalRight) - 0.48) / 0.40, 0, 1) * (1 - math.clamp(math.abs(smoothedLocalFwd) * 1.6, 0, 1))
-				local footworkBlend = math.clamp(math.max(backWeight, pureSideWeight), 0, 1) * (1 - sprintBlend) * (1 - crouchBlend * 0.85)
+				local footworkBlend = math.clamp(math.max(backWeight, pureSideWeight), 0, 1) * (1 - freeRunFactor) * (1 - crouchBlend * 0.85)
 
 				if footworkBlend > 0.02 then
 					local stridePhase = locomotionDist * 0.62
@@ -1263,9 +1630,9 @@ local function updateAmmoHUD(tool: Tool?, wid: string?): ()
 	if profile.IsMelee then
 		if ammoWeaponLabel then ammoWeaponLabel.Text = profile.DisplayName end
 		if ammoTypeBadge then ammoTypeBadge.Text = "MELEE BLADE" end
-		if ammoMagLabel then ammoMagLabel.Text = "BLADE"; ammoMagLabel.TextColor3 = Color3.fromRGB(232, 230, 224) end
-		if ammoMaxLabel then ammoMaxLabel.Text = "CLOSE QUARTERS" end
-		if ammoReserveLabel then ammoReserveLabel.Text = "INF"; ammoReserveLabel.TextColor3 = Color3.fromRGB(178, 184, 196) end
+		if ammoMagLabel then ammoMagLabel.Text = "INF"; ammoMagLabel.TextColor3 = Color3.fromRGB(238, 232, 218) end
+		if ammoMaxLabel then ammoMaxLabel.Text = "CQC" end
+		if ammoReserveLabel then ammoReserveLabel.Text = "READY"; ammoReserveLabel.TextColor3 = Color3.fromRGB(166, 224, 186) end
 		if shellPipHolder then shellPipHolder.Visible = false end
 		if ammoBarBg then ammoBarBg.Visible = true end
 		if ammoBarFill then ammoBarFill.Size = UDim2.fromScale(1, 1); ammoBarFill.BackgroundColor3 = profile.AccentColor end
@@ -1496,17 +1863,23 @@ local function tryShoot(): ()
 	local mMultAttr = tool:GetAttribute("MasteryReloadMult")
 	local mMult = if typeof(mMultAttr) == "number" then math.clamp(mMultAttr, 0.72, 1.0) else 1.0
 
-	-- Melee Blade Swing Path (Knife & Samurai Katana: zero ammo cost, instant cleave + lunge!)
+	-- Melee Blade Swing Path (Knife & Samurai Katana: fluid 3-hit combo chain + whole-body follow-through!)
 	if profile.IsMelee then
 		if (now - lastClientFire) < (profile.Cooldown * mMult) then
 			return
 		end
+		if (now - lastMeleeSlashAt) <= 1.15 then
+			meleeComboStep = (meleeComboStep % 3) + 1
+		else
+			meleeComboStep = 1
+		end
 		lastClientFire = now
 		lastMeleeSlashAt = now
 		meleeSlashSide = -meleeSlashSide
-		aimFaceHoldUntil = now + 0.55
+		aimFaceHoldUntil = now + 0.65
 		sprintBlend = 0
-		AudioController.PlayMeleeSwing(0.95)
+		runCarryBlend = 0
+		AudioController.PlayMeleeSwing(if meleeComboStep == 3 then 0.85 else 0.98)
 		AudioController.NotifyCombatThreat(root.Position, "MeleeSwing")
 		local hitPos = getCleanAimWorldPoint(char, root)
 		fireEv:FireServer(wid, hitPos, 0)
@@ -1551,15 +1924,19 @@ local function tryShoot(): ()
 	lastSentSeqByWeapon[wid] = seq
 	lastShotTimeByWeapon[wid] = now
 
-	-- 3. Moderate, realistic weapon-specific 2-axis recoil impulse (tighter when ADS, Crouched, or with Heavy Barrel!)
+	-- 3. Expressive multi-axis weapon recoil + shoulder kickback impulse (tighter when ADS, Crouched, or Heavy Barrel!)
 	sprintBlend = 0
+	runCarryBlend = 0
 	local heavyBarrelMult = if tool:GetAttribute("Mod_HeavyBarrel") == true then 0.75 else 1.0
 	local stabilityMult = (1 - 0.28 * adsBlend) * (1 - 0.30 * crouchBlend) * heavyBarrelMult
 	recoilYawSign = -recoilYawSign
 	recoilBack = math.min(profile.MaxBack, recoilBack + profile.KickBack * stabilityMult)
-	recoilUp = math.min(0.22, recoilUp + profile.KickUp * stabilityMult)
+	recoilUp = math.min(0.24, recoilUp + profile.KickUp * stabilityMult)
 	recoilPitch = math.min(profile.MaxPitchDeg, recoilPitch + profile.KickPitchDeg * stabilityMult)
 	recoilYaw = math.clamp(recoilYaw + recoilYawSign * profile.KickYawDeg * stabilityMult * (0.6 + math.random() * 0.6), -4.5, 4.5)
+	recoilRoll = math.clamp(recoilRoll + recoilYawSign * math.min(6.0, profile.KickPitchDeg * 0.55) * stabilityMult, -7.5, 7.5)
+	shootTorsoPitchDeg = math.min(7.5, shootTorsoPitchDeg + math.min(4.2, profile.KickPitchDeg * 0.50) * stabilityMult)
+	shootTorsoRollDeg = math.clamp(shootTorsoRollDeg + 2.4 * stabilityMult, -5.0, 5.0)
 	recoilSpreadPx = math.min(18, recoilSpreadPx + profile.CrosshairBloom * stabilityMult)
 	aimFaceHoldUntil = now + 0.65
 

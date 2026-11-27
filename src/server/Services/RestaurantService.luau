@@ -54,6 +54,7 @@ local SyndicateFamilyService = require("./SyndicateFamilyService")
 local PrestigeVaultService = require("./PrestigeVaultService")
 local CombatLockService = require("./CombatLockService")
 local NightMafiaRaidService = require("./NightMafiaRaidService")
+local DefenseCompanionService = require("./DefenseCompanionService")
 
 local COLLISION_GROUP_PLAYERS = "FoodEmpirePlayers"
 local COLLISION_GROUP_NPCS = "FoodEmpireRestaurantNPCs"
@@ -2337,6 +2338,7 @@ local function buildClientPayload(player: Player): { [string]: any }
 		WaitingCustomer = waitingOrders[player],
 		SeatedPatience = buildSeatedPatienceSnapshot(player),
 		NightRaid = NightMafiaRaidService.GetSnapshot(player),
+		HiredCompanions = DefenseCompanionService.GetSnapshot(player),
 		Receipts = receiptHistory[player] or {},
 		LatestReceipt = if receiptHistory[player] then receiptHistory[player][1] else nil,
 		Shipments = ShipmentService.GetSnapshot(),
@@ -3191,6 +3193,9 @@ local function setupRemotes(): ()
 				ok, msg = BlackMarketService.EquipWeaponMasterySkin(player, arg.WeaponId, arg.SkinId)
 			elseif action == "HireMercenaryMafia" and typeof(arg) == "string" then
 				ok, msg = MercenaryMafiaService.TryHireWithGold(player, arg)
+			elseif action == "HireDefenseCompanion" and typeof(arg) == "table" and typeof(arg.CompanionType) == "string" then
+				local durMin = if typeof(arg.DurationMinutes) == "number" then arg.DurationMinutes else 5
+				ok, msg = DefenseCompanionService.TryHireCompanion(player, arg.CompanionType, durMin, false)
 			elseif action == "OrderMercenaryAssault" then
 				ok, msg = MercenaryMafiaService.OrderAssault(player, if typeof(arg) == "string" then arg else nil)
 			elseif action == "HireMafiaRestaurantChef" and typeof(arg) == "string" then
@@ -3458,6 +3463,27 @@ function RestaurantService.Start(): ()
 
 	MercenaryMafiaService.SetChangedCallback(function(player)
 		RestaurantService.PushStateToClient(player)
+	end)
+
+	DefenseCompanionService.SetChangedCallback(function(player)
+		RestaurantService.PushStateToClient(player)
+	end)
+
+	NightMafiaRaidService.OnRaidWarning(function(payload)
+		if payload.Owner and payload.Owner.Parent then
+			RestaurantService.PushStateToClient(payload.Owner)
+		end
+	end)
+	NightMafiaRaidService.OnRaidStarted(function(payload)
+		if payload.Owner and payload.Owner.Parent then
+			RestaurantService.PushStateToClient(payload.Owner)
+		end
+	end)
+	NightMafiaRaidService.OnRaidEnded(function(summary)
+		local owner = Players:GetPlayerByUserId(summary.OwnerUserId)
+		if owner and owner.Parent then
+			RestaurantService.PushStateToClient(owner)
+		end
 	end)
 
 	MonetizationService.SetAutoCookHandler(function(player)

@@ -479,6 +479,7 @@ local function spawnRaiderUnit(
 	model:SetAttribute("RaidGroup", groupSpec.Id)
 	model:SetAttribute("RaidGroupName", groupSpec.DisplayName)
 	model:SetAttribute("RaidOwnerUserId", owner.UserId)
+	model:SetAttribute("RaidObjective", tpl.Objective)
 	model:SetAttribute("RaidRole", tpl.RoleName)
 	model:SetAttribute("MafiaTitle", tpl.RoleName)
 	model:SetAttribute("IsMafiaBoss", tpl.IsBoss)

@@ -24,6 +24,9 @@ local WeaponConfig = require(
 local BodyguardConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("BodyguardConfig")
 )
+local RestaurantSecurityConfig = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("RestaurantSecurityConfig")
+)
 local ModelPreviewHelper = require("./ModelPreviewHelper")
 local CurrencyIconHelper = require("./CurrencyIconHelper")
 local AudioController = require("./AudioController")
@@ -1546,6 +1549,155 @@ local function renderUpgrades(state: { [string]: any }): ()
 		if nextDefCost then dualOpts.UpgradeDefenses.RobuxPrice else nil,
 		if nextDefCost then function() if dispatchAction then dispatchAction("BuyWithRobuxOption", { Kind = "UpgradeDefenses" }) end end else nil
 	)
+
+	-- =========================================================================
+	-- TIMED RESTAURANT SECURITY CONTRACTS (STAGE 5: 5-MIN / 10-MIN NINJAS & BODYGUARDS)
+	-- =========================================================================
+	local hcCfg = RestaurantSecurityConfig.HiredCompanions
+	local hcState = if typeof(state.HiredCompanions) == "table" then state.HiredCompanions else {}
+	local hcContracts = if typeof(hcState.Contracts) == "table" then hcState.Contracts else {}
+	local hcActiveCount = tonumber(hcState.ActiveCount) or 0
+	local hcMax = tonumber(hcState.MaxActive) or hcCfg.MaxActiveContractsPerPlayer
+	local playerCoins = tonumber(profile.Coins) or 0
+
+	local secHeader = makeCard(scrollFrame :: ScrollingFrame, 56, C_GOLD_HI)
+	local shTitle = Instance.new("TextLabel")
+	shTitle.Position = UDim2.new(0, 14, 0, 7)
+	shTitle.Size = UDim2.new(1, -28, 0, 18)
+	shTitle.BackgroundTransparency = 1
+	shTitle.Font = Enum.Font.GothamBlack
+	shTitle.TextXAlignment = Enum.TextXAlignment.Left
+	shTitle.TextSize = 13
+	shTitle.TextColor3 = C_GOLD_HI
+	shTitle.Text = string.format("TIMED RESTAURANT SECURITY CONTRACTS  |  ACTIVE %d / %d", hcActiveCount, hcMax)
+	shTitle.Parent = secHeader
+
+	local shSub = Instance.new("TextLabel")
+	shSub.Position = UDim2.new(0, 14, 0, 27)
+	shSub.Size = UDim2.new(1, -28, 0, 22)
+	shSub.BackgroundTransparency = 1
+	shSub.Font = Enum.Font.GothamBold
+	shSub.TextXAlignment = Enum.TextXAlignment.Left
+	shSub.TextWrapped = true
+	shSub.TextSize = 10
+	shSub.TextColor3 = C_TEXT_MUTED
+	shSub.Text = string.format(
+		"Hire Ninjas, Assassins & Bodyguards for 5 or 10 min • Auto-respawns in %ds if defeated while contract is active!",
+		hcCfg.RespawnDelaySeconds
+	)
+	shSub.Parent = secHeader
+
+	for _, compType in ipairs(hcCfg.TypeOrder) do
+		local cSpec = hcCfg.Types[compType]
+		if not cSpec then continue end
+		local activeEntry = hcContracts[compType]
+		local isDeployed = typeof(activeEntry) == "table" and activeEntry.State ~= "Expired"
+		local isRespawning = isDeployed and activeEntry.State == "Respawning"
+		local remSec = if isDeployed then (tonumber(activeEntry.TimeRemaining) or 0) else 0
+		local respSec = if isRespawning then (tonumber(activeEntry.RespawnRemaining) or 0) else 0
+
+		local cardBorder = if isRespawning then C_GOLD_HI elseif isDeployed then C_OWNED else cSpec.AccentColor
+		local cCard = makeCard(scrollFrame :: ScrollingFrame, 102, cardBorder)
+
+		ModelPreviewHelper.CreatePreview(
+			cCard,
+			cSpec.PreviewCategory,
+			cSpec.PreviewId,
+			UDim2.fromOffset(72, 72),
+			UDim2.new(0, 11, 0.5, -36),
+			Color3.fromRGB(16, 22, 36),
+			cSpec.AccentColor
+		)
+
+		local cTitle = Instance.new("TextLabel")
+		cTitle.Position = UDim2.new(0, 92, 0, 8)
+		cTitle.Size = UDim2.new(1, -310, 0, 18)
+		cTitle.BackgroundTransparency = 1
+		cTitle.Font = Enum.Font.GothamBlack
+		cTitle.TextXAlignment = Enum.TextXAlignment.Left
+		cTitle.TextSize = 13
+		cTitle.TextColor3 = Color3.new(1, 1, 1)
+		cTitle.Text = string.format("%s  [%s]", string.upper(cSpec.DisplayName), cSpec.RoleTag)
+		cTitle.Parent = cCard
+
+		local cStats = Instance.new("TextLabel")
+		cStats.Position = UDim2.new(0, 92, 0, 28)
+		cStats.Size = UDim2.new(1, -310, 0, 15)
+		cStats.BackgroundTransparency = 1
+		cStats.Font = Enum.Font.GothamBold
+		cStats.TextXAlignment = Enum.TextXAlignment.Left
+		cStats.TextSize = 10
+		cStats.TextColor3 = cSpec.AccentColor
+		cStats.Text = string.format(
+			"%d HP  •  %d DMG  •  %.1f SPD  •  %s",
+			cSpec.MaxHealth,
+			cSpec.Damage,
+			cSpec.WalkSpeed,
+			if cSpec.CombatStyle == "Melee" then "FAST BLADE" else "RANGED GUARD"
+		)
+		cStats.Parent = cCard
+
+		local cDesc = Instance.new("TextLabel")
+		cDesc.Position = UDim2.new(0, 92, 0, 46)
+		cDesc.Size = UDim2.new(1, -310, 0, 44)
+		cDesc.BackgroundTransparency = 1
+		cDesc.Font = Enum.Font.GothamMedium
+		cDesc.TextXAlignment = Enum.TextXAlignment.Left
+		cDesc.TextYAlignment = Enum.TextYAlignment.Top
+		cDesc.TextWrapped = true
+		cDesc.TextSize = 10
+		cDesc.TextColor3 = C_TEXT_MUTED
+		cDesc.Text = cSpec.Description
+		cDesc.Parent = cCard
+
+		if isDeployed then
+			local m = math.floor(remSec / 60)
+			local s = remSec % 60
+			local statusBadge = Instance.new("TextLabel")
+			statusBadge.AnchorPoint = Vector2.new(1, 0.5)
+			statusBadge.Position = UDim2.new(1, -12, 0.5, 0)
+			statusBadge.Size = UDim2.fromOffset(196, 48)
+			statusBadge.BackgroundColor3 = if isRespawning then Color3.fromRGB(78, 52, 16) else Color3.fromRGB(22, 68, 42)
+			statusBadge.Font = Enum.Font.GothamBlack
+			statusBadge.TextWrapped = true
+			statusBadge.TextSize = 11
+			statusBadge.TextColor3 = if isRespawning then Color3.fromRGB(255, 224, 128) else Color3.fromRGB(168, 245, 194)
+			statusBadge.Text = if isRespawning
+				then string.format("RESPAWNING IN %ds\nCONTRACT: %02d:%02d LEFT", respSec, m, s)
+				else string.format("DEPLOYED & DEFENDING\nCONTRACT: %02d:%02d LEFT", m, s)
+			statusBadge.Parent = cCard
+			makeCorner(statusBadge, 8)
+			makeStroke(statusBadge, if isRespawning then C_GOLD_HI else C_OWNED, 1.5)
+		else
+			local b5 = makeBtn(
+				cCard,
+				string.format("5 MIN  (%sG)", formatCommaInt(cSpec.Cost5Min)),
+				if playerCoins >= cSpec.Cost5Min then C_EMERALD else C_DISABLED,
+				UDim2.new(1, -210, 0, 14),
+				UDim2.fromOffset(198, 34),
+				function()
+					if dispatchAction then
+						dispatchAction("HireDefenseCompanion", { CompanionType = cSpec.Id, DurationMinutes = 5 })
+					end
+				end
+			)
+			b5.TextSize = 11
+
+			local b10 = makeBtn(
+				cCard,
+				string.format("10 MIN  (%sG)", formatCommaInt(cSpec.Cost10Min)),
+				if playerCoins >= cSpec.Cost10Min then C_BRASS else C_DISABLED,
+				UDim2.new(1, -210, 0, 54),
+				UDim2.fromOffset(198, 34),
+				function()
+					if dispatchAction then
+						dispatchAction("HireDefenseCompanion", { CompanionType = cSpec.Id, DurationMinutes = 10 })
+					end
+				end
+			)
+			b10.TextSize = 11
+		end
+	end
 
 	-- =========================================================================
 	-- RESTAURANT DEFENSE BODYGUARD COLLECTION (Replaces Vehicles — Protects HQ vs Mafia Attacks!)
@@ -4245,8 +4397,27 @@ local function computeTabSignature(tab: MenuTab, state: { [string]: any }): stri
 		for _, v in pairs(unlMap) do
 			if v then unlCnt += 1 end
 		end
+		local hc = if typeof(state.HiredCompanions) == "table" then state.HiredCompanions else {}
+		local hcList = if typeof(hc.List) == "table" then hc.List else {}
+		local hcParts: { string } = {}
+		for _, item in ipairs(hcList) do
+			if typeof(item) == "table" then
+				-- Bucket countdown by 5s in menu sig so menu updates smoothly without constant layout jitter
+				table.insert(
+					hcParts,
+					string.format(
+						"%s:%s:%d:%d",
+						tostring(item.CompanionType),
+						tostring(item.State),
+						math.floor((tonumber(item.TimeRemaining) or 0) / 5),
+						tonumber(item.RespawnRemaining) or 0
+					)
+				)
+			end
+		end
+		local hcSig = table.concat(hcParts, ";")
 		return string.format(
-			"%s|U:%d|%d|%d|%d|%s|%s|%s|%d|%s|%d|%d",
+			"%s|U:%d|%d|%d|%d|%s|%s|%s|%d|%s|%d|%s|%d",
 			base,
 			tonumber(prof.DefenseLevel) or 1,
 			tonumber(prof.CrewCount) or 0,
@@ -4258,6 +4429,7 @@ local function computeTabSignature(tab: MenuTab, state: { [string]: any }): stri
 			unlCnt,
 			tostring(bg.Stance or ""),
 			selectedGuardSlot,
+			hcSig,
 			tonumber(prof.TotalDishesServed) or 0
 		)
 	end
