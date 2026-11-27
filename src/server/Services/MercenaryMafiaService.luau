@@ -372,7 +372,7 @@ end
 function MercenaryMafiaService.OrderAssault(player: Player, targetArg: string?): (boolean, string)
 	local c = contracts[player]
 	if not c or os.clock() >= c.ExpiresAt then
-		return false, "Hire the Samurai Mafia or Ninja Mafia (20,000G or 199 R$) first!"
+		return false, "Hire the Samurai Mafia or Ninja Mafia (100,000G or 199 R$) first!"
 	end
 
 	if not targetArg or targetArg == "" or targetArg == "Follow" then

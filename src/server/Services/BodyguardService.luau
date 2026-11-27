@@ -516,9 +516,17 @@ function BodyguardService.TryRecruitClass(player: Player, classId: string, targe
 	end
 
 	-- Unlock class once with Gold (or Robux pass); once unlocked, assign/swap freely across your 4 squad slots!
+	local paidDealDiscount = false
+	local dealDiscPct = 0
+	local effectiveCost = spec.Cost
+	local savedGold = 0
 	if not alreadyUnlocked then
-		if spec.Cost <= 0 or not PlayerDataService.SpendCoins(player, spec.Cost) then
-			return false, string.format("Need %d Gold to recruit %s!", spec.Cost, spec.DisplayName)
+		if BodyguardConfig.GetClassMarketTier(spec.Id) == "BlackMarket" then
+			effectiveCost, paidDealDiscount, dealDiscPct = BlackMarketService.GetEffectivePrice("GuardClass", spec.Id, spec.Cost)
+			savedGold = math.max(0, spec.Cost - effectiveCost)
+		end
+		if effectiveCost <= 0 or not PlayerDataService.SpendCoins(player, effectiveCost) then
+			return false, string.format("Need %d Gold to recruit %s!", effectiveCost, spec.DisplayName)
 		end
 	end
 
@@ -597,6 +605,9 @@ function BodyguardService.TryRecruitClass(player: Player, classId: string, targe
 	end
 
 	local verb = if alreadyUnlocked then "Assigned" else "Recruited"
+	if paidDealDiscount then
+		return true, string.format("DON VINNIE'S DROP (-%d%%)! Recruited %s to Slot #%d for %dG (saved %dG)!", dealDiscPct, spec.DisplayName, finalSlotIdx, effectiveCost, savedGold)
+	end
 	return true, string.format("%s %s (%s) to Guard Slot #%d", verb, spec.DisplayName, spec.Role, finalSlotIdx)
 end
 
@@ -661,11 +672,21 @@ function BodyguardService.TryBuyGear(player: Player, gearId: string, useRobux: b
 	if prof.Level < gSpec.RequiredLevel then
 		return false, string.format("Requires Player Lv.%d for %s!", gSpec.RequiredLevel, gSpec.DisplayName)
 	end
-	if not PlayerDataService.SpendCoins(player, gSpec.Price) then
-		return false, string.format("Need %d Gold to buy %s!", gSpec.Price, gSpec.DisplayName)
+	local effectivePrice = gSpec.Price
+	local isDeal = false
+	local discPct = 0
+	if BodyguardConfig.GetGearMarketTier(gearId) == "BlackMarket" then
+		effectivePrice, isDeal, discPct = BlackMarketService.GetEffectivePrice("GuardGear", gearId, gSpec.Price)
+	end
+	if not PlayerDataService.SpendCoins(player, effectivePrice) then
+		return false, string.format("Need %d Gold to buy %s!", effectivePrice, gSpec.DisplayName)
 	end
 
-	return grantGearAndAutoEquip()
+	local ok, msg = grantGearAndAutoEquip()
+	if ok and isDeal then
+		return true, string.format("DON VINNIE'S DROP (-%d%%)! %s for %dG (saved %dG)!", discPct, msg, effectivePrice, math.max(0, gSpec.Price - effectivePrice))
+	end
+	return ok, msg
 end
 
 -- Equip Owned Gear onto a Specific Bodyguard Slot (Strict Server Compatibility Check!)

@@ -348,7 +348,7 @@ function CinematicRevealController.Play(payload: RevealPayload): ()
 	heroTopBar.ZIndex = 88
 	heroTopBar.Parent = heroShell
 
-	local heroViewport: ViewportFrame? = nil
+	local heroViewport: GuiObject? = nil
 	local orbitCam: Camera? = nil
 	local orbitCenter = Vector3.new(0, 0, 0)
 	local orbitDist = 9.5
@@ -366,18 +366,19 @@ function CinematicRevealController.Play(payload: RevealPayload): ()
 			primaryCol
 		)
 		vp.BackgroundTransparency = 0.06
-		vp.Ambient = Color3.fromRGB(190, 194, 208)
-		vp.LightColor = Color3.fromRGB(255, 244, 224)
 		vp.ZIndex = 87
 		makeCorner(vp, 8)
 		heroViewport = vp
-		orbitCam = vp.CurrentCamera
-		local mdl = vp:FindFirstChildOfClass("Model")
-		if mdl then
-			local bbCF, bbSz = mdl:GetBoundingBox()
-			orbitCenter = bbCF.Position + Vector3.new(0, bbSz.Y * 0.03, 0)
-			local maxDim = math.max(bbSz.X, bbSz.Y, bbSz.Z, 2.2)
-			if orbitCam then
+		if vp:IsA("ViewportFrame") then
+			vp.Ambient = Color3.fromRGB(190, 194, 208)
+			vp.LightColor = Color3.fromRGB(255, 244, 224)
+			orbitCam = vp.CurrentCamera
+			local mdl = vp:FindFirstChildOfClass("Model")
+			if mdl then
+				local bbCF, bbSz = mdl:GetBoundingBox()
+				orbitCenter = bbCF.Position + Vector3.new(0, bbSz.Y * 0.03, 0)
+				local maxDim = math.max(bbSz.X, bbSz.Y, bbSz.Z, 2.2)
+				if orbitCam then
 				orbitCam.FieldOfView = 38
 				local rel = orbitCam.CFrame.Position - bbCF.Position
 				-- Preserve the model's exact front-facing azimuth from ModelPreviewHelper, pulled back for full head-to-toe hero framing!
@@ -387,6 +388,7 @@ function CinematicRevealController.Play(payload: RevealPayload): ()
 				local sx = orbitCenter.X + math.sin(baseOrbitAngle) * orbitDist
 				local sz = orbitCenter.Z + math.cos(baseOrbitAngle) * orbitDist
 				orbitCam.CFrame = CFrame.lookAt(Vector3.new(sx, orbitCenter.Y + orbitHeight, sz), orbitCenter)
+				end
 			end
 		end
 	end

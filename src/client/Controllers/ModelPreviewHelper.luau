@@ -12,6 +12,11 @@ local MafiaVisualBuilder = require(
 local BodyguardConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("BodyguardConfig")
 )
+local ItemIconAssets = require(
+	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("ItemIconAssets")
+)
+
+task.spawn(ItemIconAssets.PreloadAll)
 
 local ModelPreviewHelper = {}
 
@@ -1669,6 +1674,58 @@ function ModelPreviewHelper.CreateCategoryIcon(
 	return vp
 end
 
+-- Renders a crisp, glossy AAA illustrated sprite icon from Roblox Cloud Atlases when available!
+local function createIllustratedIconShell(
+	parent: Instance,
+	spec: ItemIconAssets.IconSpriteSpec,
+	size: UDim2,
+	pos: UDim2,
+	bgColor: Color3?,
+	borderColor: Color3?
+): Frame
+	local shell = Instance.new("Frame")
+	shell.Name = "PreviewIcon2D"
+	shell.Position = pos
+	shell.Size = size
+	shell.BackgroundColor3 = bgColor or Color3.fromRGB(20, 26, 40)
+	shell.BackgroundTransparency = 0
+	shell.BorderSizePixel = 0
+	shell.Active = false
+	shell.Selectable = false
+	shell.Parent = parent
+
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 9)
+	c.Parent = shell
+
+	local st = Instance.new("UIStroke")
+	st.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+	st.Color = borderColor or Color3.fromRGB(64, 74, 96)
+	st.Thickness = 1.5
+	st.Parent = shell
+
+	local img = Instance.new("ImageLabel")
+	img.Name = "ArtworkImage"
+	img.AnchorPoint = Vector2.new(0.5, 0.5)
+	img.Position = UDim2.fromScale(0.5, 0.5)
+	img.Size = UDim2.fromScale(0.94, 0.94)
+	img.BackgroundTransparency = 1
+	img.BorderSizePixel = 0
+	img.Image = spec.AssetId
+	img.ImageRectOffset = spec.RectOffset
+	img.ImageRectSize = spec.RectSize
+	img.ScaleType = Enum.ScaleType.Fit
+	img.ResampleMode = Enum.ResamplerMode.Default
+	if spec.Tint then
+		img.ImageColor3 = spec.Tint
+	end
+	img.Active = false
+	img.Selectable = false
+	img.Parent = shell
+
+	return shell
+end
+
 function ModelPreviewHelper.CreatePreview(
 	parent: Instance,
 	kind: "Weapon" | "Ammo" | "Bodyguard" | "Guard" | "Equipment" | "Premium" | "Dish" | "Warehouse" | "Empire" | "CategoryIcon",
@@ -1677,7 +1734,13 @@ function ModelPreviewHelper.CreatePreview(
 	pos: UDim2,
 	bgColor: Color3?,
 	borderColor: Color3?
-): ViewportFrame
+): GuiObject
+	-- Prioritize crisp AAA illustrated sprite icons (zero blocky primitives, zero ViewportFrame aliasing!)
+	local spriteSpec = ItemIconAssets.GetIcon(kind, itemId)
+	if spriteSpec then
+		return createIllustratedIconShell(parent, spriteSpec, size, pos, bgColor, borderColor)
+	end
+
 	local vp = setupViewportShell(parent, size, pos, bgColor, borderColor)
 	local model: Model
 	local viewMode: "Weapon" | "Character" | "Object" | "IconPortrait" | "IconObject" | "IconWeapon" = "Object"
@@ -1751,7 +1814,7 @@ function ModelPreviewHelper.CreatePreview(
 end
 
 -- Renders ANY live Roblox Tool (Golden Spatula, Street Pistol, Shadow Sniper, etc.) cleanly for the 1-5 Hotbar!
-function ModelPreviewHelper.CreateToolPreview(parent: Instance, tool: Tool, size: UDim2, pos: UDim2): ViewportFrame
+function ModelPreviewHelper.CreateToolPreview(parent: Instance, tool: Tool, size: UDim2, pos: UDim2): GuiObject
 	local wid = tool:GetAttribute("WeaponId")
 	if typeof(wid) == "string" then
 		return ModelPreviewHelper.CreatePreview(parent, "Weapon", wid, size, pos, Color3.fromRGB(24, 26, 33))
