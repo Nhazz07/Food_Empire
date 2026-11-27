@@ -25,6 +25,7 @@ local NightController = require(controllersFolder:WaitForChild("NightController"
 local RaidWarningController = require(controllersFolder:WaitForChild("RaidWarningController"))
 local CinematicRevealController = require(controllersFolder:WaitForChild("CinematicRevealController"))
 local SpinWheelController = require(controllersFolder:WaitForChild("SpinWheelController"))
+local ScoreboardController = require(controllersFolder:WaitForChild("ScoreboardController"))
 
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local stateSync = remotes:WaitForChild("StateSync") :: RemoteEvent
@@ -91,6 +92,7 @@ end
 
 -- Initialize HUD, Tabbed Empire Menu, Minimap, Feedback VFX, Guide Arrow & Ambient Windmill/Boats
 local hudGui = HUDController.Init(function(tab)
+	ScoreboardController.Close()
 	WeaponController.ExitScope()
 	AudioController.PlayClick()
 	EmpireMenuController.ToggleTab(tab)
@@ -127,6 +129,9 @@ NightController.Init(hudGui, function()
 	sendAction("SkipDayNight", nil)
 end)
 RaidWarningController.Init(hudGui)
+ScoreboardController.Init(hudGui, function()
+	AudioController.PlayClick()
+end)
 WaypointController.Start()
 AmbientEffectsController.Start()
 CentralNPCController.Start()
@@ -137,8 +142,16 @@ WeaponController.Start(function()
 end)
 HotbarController.Init()
 
--- Keyboard shortcuts (C = Kitchen, B = Warehouses, U = Upgrades, H = Base, G = Guide Arrow, LeftShift = Sprint)
+-- Keyboard shortcuts (Tab = Scoreboard, C = Kitchen, B = Warehouses, U = Upgrades, H = Base, G = Guide Arrow, LeftShift = Sprint)
 UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
+	if input.KeyCode == Enum.KeyCode.Tab and not UserInputService:GetFocusedTextBox() then
+		ScoreboardController.Toggle()
+		return
+	end
+	if input.KeyCode == Enum.KeyCode.Escape and ScoreboardController.IsOpen() then
+		ScoreboardController.Close()
+		return
+	end
 	if gameProcessed then
 		return
 	end
