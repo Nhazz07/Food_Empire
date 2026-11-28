@@ -669,4 +669,196 @@ do
 	end
 end
 
+-- Phase 1 City Density Upgrade: 16 MidTown Stepped Towers + 37 Inner Wedge Infill Buildings + Tactical Alleys
+do
+	local wedges = {
+		{ sx = -1, sz = -1, swap = false, isWSW = false }, -- NNW
+		{ sx = -1, sz = -1, swap = true,  isWSW = false }, -- WNW
+		{ sx =  1, sz = -1, swap = false, isWSW = false }, -- NNE
+		{ sx =  1, sz = -1, swap = true,  isWSW = false }, -- ENE
+		{ sx = -1, sz =  1, swap = true,  isWSW = true  }, -- WSW (Black Market wedge)
+		{ sx = -1, sz =  1, swap = false, isWSW = false }, -- SSW
+		{ sx =  1, sz =  1, swap = false, isWSW = false }, -- SSE
+		{ sx =  1, sz =  1, swap = true,  isWSW = false }, -- ESE
+	}
+	local midTownBldgs = {
+		{ u = 56, v = 275, su = 36, sv = 21, major = true },
+		{ u = 57, v = 377, su = 36, sv = 19, major = true },
+	}
+	local standardInnerBldgs = {
+		{ u = 121, v = 234, su = 20, sv = 20, major = false },
+		{ u = 178, v = 240, su = 22, sv = 15, major = false },
+		{ u = 218, v = 279, su = 24, sv = 22, major = false },
+		{ u = 118, v = 330, su = 23, sv = 20, major = false },
+		{ u = 179, v = 330, su = 19, sv = 20, major = false },
+	}
+	local wswInnerBldgs = {
+		{ u = 113, v = 330, su = 32, sv = 20, major = false },
+	}
+	local standardAlleys = {
+		{ u = 62,  v = 438, su = 60, sv = 11 },
+		{ u = 197, v = 296, su = 14, sv = 96 },
+		{ u = 252, v = 320, su = 15, sv = 48 },
+		{ u = 115, v = 282, su = 26, sv = 32 },
+	}
+	local wswAlleys = {
+		{ u = 62,  v = 438, su = 60, sv = 11 },
+		{ u = 135, v = 316, su = 10, sv = 56 },
+		{ u = 90,  v = 316, su = 12, sv = 56 },
+	}
+
+	local function addRect(dest: { MapRect }, sx: number, sz: number, swap: boolean, item: { u: number, v: number, su: number, sv: number, major: boolean? })
+		table.insert(dest, {
+			x = if swap then sx * item.v else sx * item.u,
+			z = if swap then sz * item.u else sz * item.v,
+			sx = if swap then item.sv else item.su,
+			sz = if swap then item.su else item.sv,
+			major = item.major,
+		})
+	end
+
+	for _, w in ipairs(wedges) do
+		for _, b in ipairs(midTownBldgs) do
+			addRect(MinimapMapData.Buildings, w.sx, w.sz, w.swap, b)
+		end
+		local iwList = if w.isWSW then wswInnerBldgs else standardInnerBldgs
+		for _, b in ipairs(iwList) do
+			addRect(MinimapMapData.Buildings, w.sx, w.sz, w.swap, b)
+		end
+		local alList = if w.isWSW then wswAlleys else standardAlleys
+		for _, a in ipairs(alList) do
+			addRect(MinimapMapData.Alleys, w.sx, w.sz, w.swap, a)
+		end
+	end
+end
+
+-- Phase 2 City Density Upgrade: Outer Wedges (48) + Flank/Corner Infill (104) + 8 Roadside Nodes (O1-O8)
+do
+	local quads = { { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }
+	local outerWedgeBldgs = {
+		{ u = 183, v = 378, su = 25, sv = 18, major = false },
+		{ u = 242, v = 378, su = 25, sv = 18, major = false },
+		{ u = 182, v = 463, su = 25, sv = 17, major = false },
+		{ u = 224, v = 463, su = 26, sv = 17, major = false },
+		{ u = 136, v = 418, su = 32, sv = 24, major = false },
+		{ u = 354, v = 414, su = 21, sv = 17, major = false },
+	}
+	local flankBldgs = {
+		{ u = 536, v = 408, su = 28, sv = 22, major = false },
+		{ u = 536, v = 357, su = 28, sv = 22, major = false },
+		{ u = 680, v = 407, su = 26, sv = 20, major = false },
+		{ u = 680, v = 357, su = 26, sv = 20, major = false },
+		{ u = 634, v = 318, su = 21, sv = 17, major = false },
+	}
+	local cornerSideBldgs = {
+		{ u = 536, v = 863, su = 28, sv = 22, major = false },
+		{ u = 536, v = 813, su = 28, sv = 22, major = false },
+		{ u = 680, v = 862, su = 26, sv = 20, major = false },
+		{ u = 680, v = 813, su = 26, sv = 20, major = false },
+		{ u = 634, v = 773, su = 21, sv = 17, major = false },
+	}
+	local apexBldgs = {
+		{ x = 780, z = 860, sx = 26, sz = 19 },
+		{ x = 780, z = 816, sx = 26, sz = 19 },
+		{ x = 818, z = 782, sx = 19, sz = 24 },
+		{ x = 860, z = 782, sx = 20, sz = 24 },
+		{ x = 860, z = 894, sx = 20, sz = 22 },
+		{ x = 894, z = 860, sx = 22, sz = 19 },
+	}
+	local roadsideBldgs = {
+		-- Flush roadside plaza aligned parallel to LegOuter (u≈833, v≈312)!
+		{ u = 833, v = 312, su = 64, sv = 34, major = true },
+	}
+	local roadsideDrives = {
+		{ u = 824, v = 320, su = 76, sv = 20 },
+	}
+
+	local function pushUV(dest: { MapRect }, sx: number, sz: number, swap: boolean, it: { u: number, v: number, su: number, sv: number, major: boolean? }, rotDeg: number?)
+		table.insert(dest, {
+			x = if swap then sx * it.v else sx * it.u,
+			z = if swap then sz * it.u else sz * it.v,
+			sx = if swap then it.sv else it.su,
+			sz = if swap then it.su else it.sv,
+			major = it.major,
+			rot = rotDeg,
+		})
+	end
+
+	for _, q in ipairs(quads) do
+		local sx, sz = q[1], q[2]
+		for _, swap in ipairs({ false, true }) do
+			for _, b in ipairs(outerWedgeBldgs) do pushUV(MinimapMapData.Buildings, sx, sz, swap, b, nil) end
+			for _, b in ipairs(flankBldgs) do pushUV(MinimapMapData.Buildings, sx, sz, swap, b, nil) end
+			for _, b in ipairs(cornerSideBldgs) do pushUV(MinimapMapData.Buildings, sx, sz, swap, b, nil) end
+			local diagRot = if swap then (sx * sz * -42.9) else (sx * sz * 42.9)
+			for _, b in ipairs(roadsideBldgs) do pushUV(MinimapMapData.Buildings, sx, sz, swap, b, diagRot) end
+			for _, d in ipairs(roadsideDrives) do pushUV(MinimapMapData.Alleys, sx, sz, swap, d, diagRot) end
+		end
+		for _, ab in ipairs(apexBldgs) do
+			table.insert(MinimapMapData.Buildings, { x = sx * ab.x, z = sz * ab.z, sx = ab.sx, sz = ab.sz })
+		end
+	end
+end
+
+-- Phase 2 Gateway Plaza Density: 48 Phase-1 Style Storefronts + 56 Cobblestone Alleys (8 Triangular Plazas across NW, NE, SW, SE)
+do
+	local quads = { { -1, -1 }, { 1, -1 }, { -1, 1 }, { 1, 1 } }
+	local gatewayBldgs = {
+		{ u = 620,   v = 686,   su = 28, sv = 20, major = true  },
+		{ u = 654,   v = 698,   su = 22, sv = 15, major = false },
+		{ u = 532,   v = 590,   su = 22, sv = 28, major = true  },
+		{ u = 519.5, v = 561,   su = 15, sv = 17, major = false },
+		{ u = 608.5, v = 656.5, su = 22, sv = 22, major = false },
+		{ u = 567,   v = 615,   su = 22, sv = 20, major = false },
+	}
+	local gatewayAlleys = {
+		{ u = 565,    v = 694.5,  su = 12,   sv = 53   },
+		{ u = 528,    v = 648,    su = 56,   sv = 10   },
+		{ u = 550.5,  v = 610,    su = 8,    sv = 56   },
+		{ u = 523.25, v = 608.5,  su = 46.5, sv = 7    },
+		{ u = 590.5,  v = 656.25, su = 9,    sv = 38.5 },
+		{ u = 618.75, v = 671.25, su = 47.5, sv = 6.5  },
+		{ u = 639.9,  v = 697.75, su = 5.2,  sv = 46.5 },
+	}
+	local gatewayDiagAlleys = {
+		-- Perpendicular 45-deg cobblestone connectors flush to diagonal highway asphalt
+		{ u = 594.9, v = 629.1, su = 11.0, sv = 28.5 },
+		{ u = 553.7, v = 578.8, su = 8.0,  sv = 15.5 },
+		{ u = 645.5, v = 672.0, su = 6.6,  sv = 17.5 },
+	}
+
+	for _, q in ipairs(quads) do
+		local sx, sz = q[1], q[2]
+		for _, swap in ipairs({ false, true }) do
+			for _, b in ipairs(gatewayBldgs) do
+				table.insert(MinimapMapData.Buildings, {
+					x = if swap then sx * b.v else sx * b.u,
+					z = if swap then sz * b.u else sz * b.v,
+					sx = if swap then b.sv else b.su,
+					sz = if swap then b.su else b.sv,
+					major = b.major,
+				})
+			end
+			for _, a in ipairs(gatewayAlleys) do
+				table.insert(MinimapMapData.Alleys, {
+					x = if swap then sx * a.v else sx * a.u,
+					z = if swap then sz * a.u else sz * a.v,
+					sx = if swap then a.sv else a.su,
+					sz = if swap then a.su else a.sv,
+				})
+			end
+			local diagRot = sx * sz * 45
+			for _, d in ipairs(gatewayDiagAlleys) do
+				table.insert(MinimapMapData.Alleys, {
+					x = if swap then sx * d.v else sx * d.u,
+					z = if swap then sz * d.u else sz * d.v,
+					sx = d.su,
+					sz = d.sv,
+					rot = diagRot,
+				})
+			end
+		end
+	end
+end
+
 return MinimapMapData
