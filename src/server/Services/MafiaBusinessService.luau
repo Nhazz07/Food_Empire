@@ -67,6 +67,7 @@ local safeRepByPlayer: { [Player]: { [string]: number } } = {}
 local folder: Folder? = nil
 local isRunning = false
 local tickThread: thread? = nil
+local playerRemovingConn: RBXScriptConnection? = nil
 
 local function ensureSafeMaps(player: Player): ({ [string]: number }, { [string]: number })
 	local g = safeGoldByPlayer[player]
@@ -233,7 +234,7 @@ function MafiaBusinessService.Start(): ()
 
 	buildStorefronts()
 
-	Players.PlayerRemoving:Connect(function(p: Player)
+	playerRemovingConn = Players.PlayerRemoving:Connect(function(p: Player)
 		safeGoldByPlayer[p] = nil
 		safeRepByPlayer[p] = nil
 	end)
@@ -261,6 +262,7 @@ end
 function MafiaBusinessService.Stop(): ()
 	isRunning = false
 	if tickThread then task.cancel(tickThread); tickThread = nil end
+	if playerRemovingConn then playerRemovingConn:Disconnect(); playerRemovingConn = nil end
 end
 
 return MafiaBusinessService

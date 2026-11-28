@@ -26,6 +26,7 @@ local RaidWarningController = require(controllersFolder:WaitForChild("RaidWarnin
 local CinematicRevealController = require(controllersFolder:WaitForChild("CinematicRevealController"))
 local SpinWheelController = require(controllersFolder:WaitForChild("SpinWheelController"))
 local ScoreboardController = require(controllersFolder:WaitForChild("ScoreboardController"))
+local SyndicateFamilyController = require(controllersFolder:WaitForChild("SyndicateFamilyController"))
 
 local remotes = ReplicatedStorage:WaitForChild("Remotes")
 local stateSync = remotes:WaitForChild("StateSync") :: RemoteEvent
@@ -48,6 +49,7 @@ local function applyState(state: { [string]: any }): ()
 	UrbanNPCController.Update(state)
 	SpinWheelController.Update(state)
 	RaidWarningController.Update(state)
+	SyndicateFamilyController.Update(state)
 end
 
 local function sendAction(action: string, arg: any?): ()
@@ -93,6 +95,7 @@ end
 -- Initialize HUD, Tabbed Empire Menu, Minimap, Feedback VFX, Guide Arrow & Ambient Windmill/Boats
 local hudGui = HUDController.Init(function(tab)
 	ScoreboardController.Close()
+	SyndicateFamilyController.Close()
 	WeaponController.ExitScope()
 	AudioController.PlayClick()
 	EmpireMenuController.ToggleTab(tab)
@@ -130,7 +133,15 @@ NightController.Init(hudGui, function()
 end)
 RaidWarningController.Init(hudGui)
 ScoreboardController.Init(hudGui, function()
+	SyndicateFamilyController.Close()
 	AudioController.PlayClick()
+end)
+SyndicateFamilyController.Init(hudGui, sendAction, function()
+	AudioController.PlayClick()
+end, function()
+	ScoreboardController.Close()
+	EmpireMenuController.Close()
+	WeaponController.ExitScope()
 end)
 WaypointController.Start()
 AmbientEffectsController.Start()
@@ -142,36 +153,52 @@ WeaponController.Start(function()
 end)
 HotbarController.Init()
 
--- Keyboard shortcuts (Tab = Scoreboard, C = Kitchen, B = Warehouses, U = Upgrades, H = Base, G = Guide Arrow, LeftShift = Sprint)
+-- Keyboard shortcuts (Tab = Scoreboard, O = Syndicate Family, C = Kitchen, B = Warehouses, U = Upgrades, H = Base, G = Guide Arrow, LeftShift = Sprint)
 UserInputService.InputBegan:Connect(function(input: InputObject, gameProcessed: boolean)
 	if input.KeyCode == Enum.KeyCode.Tab and not UserInputService:GetFocusedTextBox() then
+		SyndicateFamilyController.Close()
 		ScoreboardController.Toggle()
 		return
 	end
-	if input.KeyCode == Enum.KeyCode.Escape and ScoreboardController.IsOpen() then
-		ScoreboardController.Close()
+	if input.KeyCode == Enum.KeyCode.O and not UserInputService:GetFocusedTextBox() then
+		SyndicateFamilyController.Toggle()
 		return
+	end
+	if input.KeyCode == Enum.KeyCode.Escape then
+		if SyndicateFamilyController.IsOpen() then
+			SyndicateFamilyController.Close()
+			return
+		end
+		if ScoreboardController.IsOpen() then
+			ScoreboardController.Close()
+			return
+		end
 	end
 	if gameProcessed then
 		return
 	end
 	if input.KeyCode == Enum.KeyCode.C then
+		SyndicateFamilyController.Close()
 		WeaponController.ExitScope()
 		AudioController.PlayClick()
 		EmpireMenuController.ToggleTab("Kitchen")
 	elseif input.KeyCode == Enum.KeyCode.B then
+		SyndicateFamilyController.Close()
 		WeaponController.ExitScope()
 		AudioController.PlayClick()
 		EmpireMenuController.ToggleTab("Warehouses")
 	elseif input.KeyCode == Enum.KeyCode.U then
+		SyndicateFamilyController.Close()
 		WeaponController.ExitScope()
 		AudioController.PlayClick()
 		EmpireMenuController.ToggleTab("Upgrades")
 	elseif input.KeyCode == Enum.KeyCode.P then
+		SyndicateFamilyController.Close()
 		WeaponController.ExitScope()
 		AudioController.PlayClick()
 		EmpireMenuController.ToggleTab("Shop")
 	elseif input.KeyCode == Enum.KeyCode.M then
+		SyndicateFamilyController.Close()
 		openMarket()
 	elseif input.KeyCode == Enum.KeyCode.N then
 		sendAction("SkipDayNight", nil)

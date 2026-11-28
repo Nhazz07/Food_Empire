@@ -663,32 +663,40 @@ local function applyDistinctRestaurantTheme(slot: BaseSlot): ()
 	local marble = Color3.fromRGB(226, 222, 214)
 	local ember = Color3.fromRGB(238, 112, 44)
 
-	-- 3A. Realistic Commercial Chef's Island Range on top of CookingStation (-17.5, 2.2, -17.5)
-	dPart("RangeCounterTop", Vector3.new(10.6, 0.28, 6.0), CFrame.new(-17.5, 3.94, -17.5), steel, Enum.Material.Metal, nil, false)
-	dPart("RangeBacksplash", Vector3.new(10.6, 1.45, 0.35), CFrame.new(-17.5, 4.75, -20.3), steel, Enum.Material.Metal, nil, false)
-	dPart("OvenDoorL", Vector3.new(4.2, 2.1, 0.18), CFrame.new(-20.0, 2.15, -14.65), darkSteel, Enum.Material.Metal, nil, false)
-	dPart("OvenDoorR", Vector3.new(4.2, 2.1, 0.18), CFrame.new(-15.0, 2.15, -14.65), darkSteel, Enum.Material.Metal, nil, false)
-	dPart("OvenHandleL", Vector3.new(3.4, 0.16, 0.24), CFrame.new(-20.0, 2.95, -14.5), steel, Enum.Material.Metal, nil, false)
-	dPart("OvenHandleR", Vector3.new(3.4, 0.16, 0.24), CFrame.new(-15.0, 2.95, -14.5), steel, Enum.Material.Metal, nil, false)
+	-- 3A. Gleaming Stainless Steel Commercial Range on top of CookingStation (-17.5, 2.2, -17.5) — matches Dual-Stove icon!
+	local brightSteel = Color3.fromRGB(196, 204, 216)
+	local brushedBody = Color3.fromRGB(168, 176, 188)
+	local flameOrange = Color3.fromRGB(255, 148, 36)
+	dPart("RangeBodyFront", Vector3.new(10.4, 3.2, 5.8), CFrame.new(-17.5, 2.25, -17.5), brushedBody, Enum.Material.Metal, nil, false)
+	dPart("RangeCounterTop", Vector3.new(10.8, 0.34, 6.2), CFrame.new(-17.5, 3.96, -17.5), brightSteel, Enum.Material.Metal, nil, false)
+	dPart("RangeBacksplash", Vector3.new(10.8, 2.0, 0.36), CFrame.new(-17.5, 5.05, -20.4), brightSteel, Enum.Material.Metal, nil, false)
+	dPart("RangeControlStrip", Vector3.new(10.5, 0.65, 0.28), CFrame.new(-17.5, 3.52, -14.55), Color3.fromRGB(48, 54, 66), Enum.Material.Metal, nil, false)
+	-- Wide Commercial Oven Doors with Glowing Viewing Windows & Brushed Stainless Tubular Handles
+	for _, ox in ipairs({ -20.0, -15.0 }) do
+		dPart("OvenDoor", Vector3.new(4.3, 2.2, 0.22), CFrame.new(ox, 2.0, -14.58), brightSteel, Enum.Material.Metal, nil, false)
+		dPart("OvenWindow", Vector3.new(3.1, 1.15, 0.26), CFrame.new(ox, 1.85, -14.54), Color3.fromRGB(255, 174, 82), Enum.Material.Neon, nil, false)
+		dPart("OvenWindowGlass", Vector3.new(3.2, 1.22, 0.28), CFrame.new(ox, 1.85, -14.51), Color3.fromRGB(28, 22, 18), Enum.Material.Glass, nil, false)
+		dPart("OvenHandle", Vector3.new(3.6, 0.18, 0.32), CFrame.new(ox, 2.86, -14.34), brightSteel, Enum.Material.Metal, nil, false)
+	end
 
-	-- 4 Cast-Iron Gas Burners + Simmering Stockpot & Copper Skillet + Teppanyaki Griddle + Hardwood Cutting Board
+	-- 4 Heavy Cast-Iron Gas Burners with Glowing Orange Flame Rings + Copper Sauté Skillets & Stockpot!
 	for bx = -21.2, -18.2, 3.0 do
 		for _, bz in ipairs({ -18.7, -16.3 }) do
-			dPart("BurnerGrate", Vector3.new(2.1, 0.18, 2.1), CFrame.new(bx, 4.15, bz), castIron, Enum.Material.Metal, nil, false)
-			dPart("BurnerFlame", Vector3.new(0.14, 1.25, 1.25), CFrame.new(bx, 4.12, bz) * CFrame.Angles(0, 0, math.rad(90)), ember, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, false)
+			dPart("BurnerGrate", Vector3.new(2.2, 0.22, 2.2), CFrame.new(bx, 4.18, bz), castIron, Enum.Material.Metal, nil, false)
+			dPart("BurnerFlame", Vector3.new(0.16, 1.45, 1.45), CFrame.new(bx, 4.18, bz) * CFrame.Angles(0, 0, math.rad(90)), flameOrange, Enum.Material.Neon, Enum.PartType.Cylinder, false)
 		end
 	end
-	-- Stockpot & Sauté Pan on the grates
-	dPart("CopperStockPot", Vector3.new(1.45, 1.55, 1.55), CFrame.new(-21.2, 4.92, -18.7) * CFrame.Angles(0, 0, math.rad(90)), copper, Enum.Material.Metal, Enum.PartType.Cylinder, false)
-	dPart("StockPotLid", Vector3.new(0.18, 1.62, 1.62), CFrame.new(-21.2, 5.72, -18.7) * CFrame.Angles(0, 0, math.rad(90)), steel, Enum.Material.Metal, Enum.PartType.Cylinder, false)
-	dPart("SauteSkillet", Vector3.new(0.32, 1.55, 1.55), CFrame.new(-18.2, 4.38, -16.3) * CFrame.Angles(0, 0, math.rad(90)), castIron, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+	dPart("CopperStockPot", Vector3.new(1.45, 1.65, 1.65), CFrame.new(-21.2, 4.98, -18.7) * CFrame.Angles(0, 0, math.rad(90)), copper, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+	dPart("StockPotSauce", Vector3.new(0.18, 1.45, 1.45), CFrame.new(-21.2, 5.66, -18.7) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(246, 188, 62), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, false)
+	dPart("SauteSkillet", Vector3.new(0.38, 1.75, 1.75), CFrame.new(-18.2, 4.44, -16.3) * CFrame.Angles(0, 0, math.rad(90)), castIron, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+	dPart("SkilletHandle", Vector3.new(0.22, 0.22, 1.6), CFrame.new(-18.2, 4.55, -14.85) * CFrame.Angles(math.rad(12), 0, 0), brightSteel, Enum.Material.Metal, nil, false)
 	-- Steel Teppanyaki / Plancha Flat Griddle + Hardwood Prep Board
-	dPart("TeppanyakiPlancha", Vector3.new(3.6, 0.22, 3.8), CFrame.new(-14.6, 4.16, -18.0), Color3.fromRGB(82, 88, 98), Enum.Material.Metal, nil, false)
-	dPart("PrepCuttingBoard", Vector3.new(2.6, 0.18, 1.6), CFrame.new(-14.6, 4.16, -15.4), Color3.fromRGB(168, 124, 78), Enum.Material.Wood, nil, false)
+	dPart("TeppanyakiPlancha", Vector3.new(3.6, 0.22, 3.8), CFrame.new(-14.6, 4.18, -18.0), Color3.fromRGB(82, 88, 98), Enum.Material.Metal, nil, false)
+	dPart("PrepCuttingBoard", Vector3.new(2.6, 0.18, 1.6), CFrame.new(-14.6, 4.18, -15.4), Color3.fromRGB(168, 124, 78), Enum.Material.Wood, nil, false)
 
-	-- Chrome temperature knobs along the front of the range
+	-- 6 Sculpted Chrome & Red-Accent Rotary Control Knobs along front strip
 	for kx = -21.5, -13.5, 1.3 do
-		dPart("RangeKnob", Vector3.new(0.22, 0.28, 0.28), CFrame.new(kx, 3.55, -14.62) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder, false)
+		dPart("RangeKnob", Vector3.new(0.26, 0.34, 0.34), CFrame.new(kx, 3.52, -14.38) * CFrame.Angles(0, math.rad(90), 0), brightSteel, Enum.Material.Metal, Enum.PartType.Cylinder, false)
 	end
 
 	-- Commercial Overhead Island Exhaust Canopy Hood + Twin Flue Ducts
@@ -833,24 +841,48 @@ function BaseService.SyncInteriorStations(slot: BaseSlot, hasDualStove: boolean,
 			p.Parent = stFolder
 			return p
 		end
-		local steel = Color3.fromRGB(148, 154, 164)
-		local darkSteel = Color3.fromRGB(36, 40, 46)
+		local steel = Color3.fromRGB(196, 204, 216)
+		local brushedBody = Color3.fromRGB(168, 176, 188)
+		local darkSteel = Color3.fromRGB(46, 52, 64)
 		local castIron = Color3.fromRGB(24, 26, 30)
-		local copper = Color3.fromRGB(184, 108, 64)
-		local ember = Color3.fromRGB(238, 112, 44)
+		local copper = Color3.fromRGB(194, 114, 62)
+		local flameOrange = Color3.fromRGB(255, 148, 36)
 
-		sPart("Stove2Body", Vector3.new(7.4, 3.2, 5.2), CFrame.new(-7.4, 2.2, -17.5), Color3.fromRGB(46, 50, 58), Enum.Material.Metal, nil)
-		sPart("Stove2Top", Vector3.new(7.8, 0.28, 5.6), CFrame.new(-7.4, 3.94, -17.5), steel, Enum.Material.Metal, nil)
+		-- Exact Icon-Matched Gleaming Stainless Steel Dual-Stove Commercial Range!
+		sPart("Stove2Body", Vector3.new(7.6, 3.2, 5.4), CFrame.new(-7.4, 2.25, -17.5), brushedBody, Enum.Material.Metal, nil)
+		sPart("Stove2Top", Vector3.new(8.0, 0.34, 5.8), CFrame.new(-7.4, 3.96, -17.5), steel, Enum.Material.Metal, nil)
+		sPart("Stove2Backsplash", Vector3.new(8.0, 2.0, 0.34), CFrame.new(-7.4, 5.05, -20.25), steel, Enum.Material.Metal, nil)
+		sPart("Stove2ControlStrip", Vector3.new(7.7, 0.62, 0.26), CFrame.new(-7.4, 3.52, -14.74), darkSteel, Enum.Material.Metal, nil)
+		for kx = -10.2, -4.6, 1.12 do
+			sPart("Stove2Knob", Vector3.new(0.24, 0.32, 0.32), CFrame.new(kx, 3.52, -14.56) * CFrame.Angles(0, math.rad(90), 0), steel, Enum.Material.Metal, Enum.PartType.Cylinder)
+		end
+		-- Wide Commercial Oven Door + Warm Glowing Oven Window + Stainless Tubular Handle
+		sPart("Stove2OvenDoor", Vector3.new(6.6, 2.15, 0.22), CFrame.new(-7.4, 1.98, -14.76), steel, Enum.Material.Metal, nil)
+		sPart("Stove2OvenGlow", Vector3.new(4.8, 1.12, 0.26), CFrame.new(-7.4, 1.85, -14.72), Color3.fromRGB(255, 174, 82), Enum.Material.Neon, nil)
+		sPart("Stove2OvenGlass", Vector3.new(4.95, 1.2, 0.28), CFrame.new(-7.4, 1.85, -14.69), Color3.fromRGB(28, 22, 18), Enum.Material.Glass, nil)
+		sPart("Stove2OvenHandle", Vector3.new(5.6, 0.18, 0.32), CFrame.new(-7.4, 2.86, -14.52), steel, Enum.Material.Metal, nil)
+
+		-- 4 Heavy Cast-Iron Burners with Glowing Orange Flame Rings + Twin Sauté Skillets!
 		for _, bx in ipairs({ -9.2, -5.6 }) do
 			for _, bz in ipairs({ -18.7, -16.3 }) do
-				sPart("Burner2Grate", Vector3.new(1.9, 0.18, 1.9), CFrame.new(bx, 4.15, bz), castIron, Enum.Material.Metal, nil)
-				sPart("Burner2Flame", Vector3.new(0.14, 1.15, 1.15), CFrame.new(bx, 4.12, bz) * CFrame.Angles(0, 0, math.rad(90)), ember, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+				sPart("Burner2Grate", Vector3.new(2.05, 0.22, 2.05), CFrame.new(bx, 4.18, bz), castIron, Enum.Material.Metal, nil)
+				sPart("Burner2Flame", Vector3.new(0.16, 1.38, 1.38), CFrame.new(bx, 4.18, bz) * CFrame.Angles(0, 0, math.rad(90)), flameOrange, Enum.Material.Neon, Enum.PartType.Cylinder)
 			end
 		end
-		sPart("BraisingPan2", Vector3.new(0.55, 1.5, 1.5), CFrame.new(-9.2, 4.45, -18.7) * CFrame.Angles(0, 0, math.rad(90)), copper, Enum.Material.Metal, Enum.PartType.Cylinder)
+		sPart("BraisingPan2", Vector3.new(0.55, 1.75, 1.75), CFrame.new(-9.2, 4.5, -18.7) * CFrame.Angles(0, 0, math.rad(90)), copper, Enum.Material.Metal, Enum.PartType.Cylinder)
+		sPart("BraisingPan2Sauce", Vector3.new(0.16, 1.5, 1.5), CFrame.new(-9.2, 4.78, -18.7) * CFrame.Angles(0, 0, math.rad(90)), Color3.fromRGB(246, 188, 62), Enum.Material.SmoothPlastic, Enum.PartType.Cylinder)
+		sPart("BraisingPan2Handle", Vector3.new(0.2, 0.2, 1.5), CFrame.new(-9.2, 4.65, -17.2) * CFrame.Angles(math.rad(14), 0, 0), steel, Enum.Material.Metal, nil)
+		sPart("SautePan2R", Vector3.new(0.45, 1.65, 1.65), CFrame.new(-5.6, 4.46, -16.3) * CFrame.Angles(0, 0, math.rad(90)), castIron, Enum.Material.Metal, Enum.PartType.Cylinder)
+		sPart("SautePan2RHandle", Vector3.new(0.2, 0.2, 1.45), CFrame.new(-5.6, 4.62, -14.9) * CFrame.Angles(math.rad(14), 0, 0), steel, Enum.Material.Metal, nil)
 		if hasDualStove then
-			sPart("Hood2", Vector3.new(8.0, 2.0, 5.8), CFrame.new(-7.4, 16.4, -17.5), darkSteel, Enum.Material.Metal, nil)
-			sPart("Hood2Brass", Vector3.new(8.1, 0.22, 5.9), CFrame.new(-7.4, 15.42, -17.5), theme.BrassAccent, Enum.Material.Metal, nil)
+			local hood2 = sPart("Hood2", Vector3.new(8.2, 2.1, 6.0), CFrame.new(-7.4, 16.4, -17.5), steel, Enum.Material.Metal, nil)
+			sPart("Hood2Brass", Vector3.new(8.3, 0.24, 6.1), CFrame.new(-7.4, 15.38, -17.5), theme.BrassAccent, Enum.Material.Metal, nil)
+			local h2Light = Instance.new("PointLight")
+			h2Light.Color = Color3.fromRGB(255, 224, 168)
+			h2Light.Brightness = 1.3
+			h2Light.Range = 20
+			h2Light.Shadows = false
+			h2Light.Parent = hood2
 		end
 		stFolder.Parent = hq
 	end
@@ -871,22 +903,71 @@ function BaseService.SyncInteriorStations(slot: BaseSlot, hasDualStove: boolean,
 			p.Anchored = true
 			p.CanCollide = false
 			p.CanQuery = false
+			p.TopSurface = Enum.SurfaceType.Smooth
+			p.BottomSurface = Enum.SurfaceType.Smooth
 			p.Parent = vipFolder
 			return p
 		end
-		-- Open-air VIP Private Dining Alcove (low brass stanchion corner posts — zero giant blocking wall!)
-		vPart("VIPCarpet", Vector3.new(12.5, 0.12, 11.5), CFrame.new(-25.5, 0.72, -6.5), Color3.fromRGB(94, 24, 30), Enum.Material.Fabric, nil)
-		vPart("VIPTable", Vector3.new(7.4, 0.45, 4.6), CFrame.new(-25.5, 3.75, -6.5), Color3.fromRGB(224, 220, 212), Enum.Material.Marble, nil)
-		vPart("VIPTableBase", Vector3.new(1.4, 3.0, 1.4), CFrame.new(-25.5, 2.1, -6.5), theme.BrassAccent, Enum.Material.Metal, nil)
-		vPart("VIPBoothBackN", Vector3.new(7.6, 3.6, 1.0), CFrame.new(-25.5, 2.6, -10.8), theme.SeatColor, Enum.Material.Leather, nil)
-		vPart("VIPBoothSeatN", Vector3.new(7.4, 1.6, 2.0), CFrame.new(-25.5, 1.6, -9.5), theme.SeatColor, Enum.Material.Leather, nil)
-		vPart("VIPBoothBackS", Vector3.new(7.6, 3.6, 1.0), CFrame.new(-25.5, 2.6, -2.2), theme.SeatColor, Enum.Material.Leather, nil)
-		vPart("VIPBoothSeatS", Vector3.new(7.4, 1.6, 2.0), CFrame.new(-25.5, 1.6, -3.5), theme.SeatColor, Enum.Material.Leather, nil)
-		for _, pz in ipairs({ -11.6, -1.4 }) do
-			vPart("VIPStanchionPost", Vector3.new(0.45, 3.1, 0.45), CFrame.new(-19.2, 2.2, pz), theme.BrassAccent, Enum.Material.Metal, nil)
-			vPart("VIPStanchionTop", Vector3.new(0.7, 0.7, 0.7), CFrame.new(-19.2, 3.85, pz), theme.BrassAccent, Enum.Material.Metal, Enum.PartType.Ball)
+
+		-- Exact Icon-Matched Curved Semicircular Crimson Velvet Tufted VIP Booth + Round Table + Glowing Brass Lamp!
+		local cx, cz = -25.5, -6.5
+		local velvetCrimson = Color3.fromRGB(158, 22, 38)
+		local velvetDark = Color3.fromRGB(116, 16, 28)
+		local walnutWood = Color3.fromRGB(94, 50, 28)
+		local goldBrass = Color3.fromRGB(238, 192, 68)
+		local lampGlow = Color3.fromRGB(255, 222, 134)
+
+		-- Plush Circular Crimson & Gold-Trimmed VIP Carpet Rug
+		vPart("VIPCarpetGold", Vector3.new(0.10, 13.6, 13.6), CFrame.new(cx, 0.69, cz) * CFrame.Angles(0, 0, math.rad(90)), goldBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		vPart("VIPCarpet", Vector3.new(0.12, 12.8, 12.8), CFrame.new(cx, 0.72, cz) * CFrame.Angles(0, 0, math.rad(90)), velvetDark, Enum.Material.Fabric, Enum.PartType.Cylinder)
+
+		-- Curved 180-degree Semicircular Velvet Tufted Banquette sweeping cleanly around the west/north/south (opening east toward dining hall!)
+		local segCount = 7
+		local arcRadius = 4.65
+		for i = 0, segCount - 1 do
+			-- Sweep from North (-90 deg) through West (180 deg) to South (+90 deg)
+			local frac = i / (segCount - 1)
+			local ang = math.rad(95 + frac * 170) -- X = cos(ang) goes ~0 -> -1 -> ~0, Z = sin(ang) goes +1 -> 0 -> -1
+			local sx = cx + math.cos(ang) * arcRadius
+			local sz = cz + math.sin(ang) * arcRadius
+			local faceCenter = CFrame.lookAt(Vector3.new(sx, 0, sz), Vector3.new(cx, 0, cz))
+			local rotOnly = faceCenter - faceCenter.Position
+
+			-- Brass Kick-Plate Base + Walnut Curved Outer Wood Shell
+			vPart("VIPKick_" .. i, Vector3.new(2.75, 0.55, 2.35), CFrame.new(sx, 1.0, sz) * rotOnly, goldBrass, Enum.Material.Metal, nil)
+			vPart("VIPShell_" .. i, Vector3.new(2.9, 4.4, 0.55), CFrame.new(sx, 2.95, sz) * rotOnly * CFrame.new(0, 0, 1.15), walnutWood, Enum.Material.Wood, nil)
+			vPart("VIPShellGoldTop_" .. i, Vector3.new(2.95, 0.28, 0.65), CFrame.new(sx, 5.2, sz) * rotOnly * CFrame.new(0, 0, 1.15), goldBrass, Enum.Material.Metal, nil)
+			-- Plush Tufted Velvet Seat Cushion + Curved Backrest + Rolled Bolster Top + Vertical Tufting Ribs
+			vPart("VIPSeat_" .. i, Vector3.new(2.65, 1.15, 2.15), CFrame.new(sx, 1.82, sz) * rotOnly * CFrame.new(0, 0, -0.05), velvetCrimson, Enum.Material.Fabric, nil)
+			vPart("VIPBack_" .. i, Vector3.new(2.65, 2.85, 0.78), CFrame.new(sx, 3.55, sz) * rotOnly * CFrame.new(0, 0, 0.62), velvetCrimson, Enum.Material.Fabric, nil)
+			vPart("VIPTuftRib_" .. i, Vector3.new(0.18, 2.65, 0.84), CFrame.new(sx, 3.55, sz) * rotOnly * CFrame.new(0, 0, 0.60), velvetDark, Enum.Material.Fabric, nil)
+			vPart("VIPBolster_" .. i, Vector3.new(2.72, 0.68, 0.85), CFrame.new(sx, 4.95, sz) * rotOnly * CFrame.new(0, 0, 0.64), velvetCrimson, Enum.Material.Fabric, nil)
 		end
-		vPart("VIPCandleLamp", Vector3.new(0.85, 0.7, 0.85), CFrame.new(-25.5, 4.35, -6.5) * CFrame.Angles(0, 0, math.rad(90)), theme.BrassAccent, Enum.Material.Metal, Enum.PartType.Cylinder)
+
+		-- Round Dark-Mahogany & Brass-Rimmed Luxury VIP Dining Table on Sculpted Brass Pedestal!
+		local tx = cx + 0.55
+		vPart("VIPTableFoot", Vector3.new(0.32, 3.0, 3.0), CFrame.new(tx, 0.88, cz) * CFrame.Angles(0, 0, math.rad(90)), goldBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		vPart("VIPTablePedestal", Vector3.new(2.8, 0.9, 0.9), CFrame.new(tx, 2.35, cz) * CFrame.Angles(0, 0, math.rad(90)), goldBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		vPart("VIPTableBrassRim", Vector3.new(0.42, 5.35, 5.35), CFrame.new(tx, 3.78, cz) * CFrame.Angles(0, 0, math.rad(90)), goldBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		vPart("VIPTableTop", Vector3.new(0.46, 5.05, 5.05), CFrame.new(tx, 3.81, cz) * CFrame.Angles(0, 0, math.rad(90)), walnutWood, Enum.Material.Wood, Enum.PartType.Cylinder)
+
+		-- Signature Warm Glowing Golden Table Lamp centered on the Round VIP Table (exact icon match!)
+		vPart("VIPLampFoot", Vector3.new(0.22, 0.95, 0.95), CFrame.new(tx, 4.14, cz) * CFrame.Angles(0, 0, math.rad(90)), goldBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		vPart("VIPLampStem", Vector3.new(1.05, 0.24, 0.24), CFrame.new(tx, 4.65, cz) * CFrame.Angles(0, 0, math.rad(90)), goldBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		local shade = vPart("VIPLampGlowShade", Vector3.new(1.15, 1.35, 1.15), CFrame.new(tx, 5.35, cz), lampGlow, Enum.Material.Neon, Enum.PartType.Ball)
+		vPart("VIPLampBrassCap", Vector3.new(0.28, 1.32, 1.32), CFrame.new(tx, 5.72, cz) * CFrame.Angles(0, 0, math.rad(90)), goldBrass, Enum.Material.Metal, Enum.PartType.Cylinder)
+		local vipLight = Instance.new("PointLight")
+		vipLight.Color = lampGlow
+		vipLight.Brightness = 1.8
+		vipLight.Range = 22
+		vipLight.Shadows = false
+		vipLight.Parent = shade
+
+		-- Matching Brass Entrance Stanchions flanking the VIP Alcove
+		for _, pz in ipairs({ -11.6, -1.4 }) do
+			vPart("VIPStanchionPost", Vector3.new(0.45, 3.1, 0.45), CFrame.new(-19.2, 2.2, pz), goldBrass, Enum.Material.Metal, nil)
+			vPart("VIPStanchionTop", Vector3.new(0.75, 0.75, 0.75), CFrame.new(-19.2, 3.85, pz), goldBrass, Enum.Material.Metal, Enum.PartType.Ball)
+		end
 		vipFolder.Parent = hq
 	end
 end

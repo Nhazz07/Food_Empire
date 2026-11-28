@@ -32,47 +32,47 @@ type ThemePalette = {
 
 local SLOT_PALETTES: { [string]: ThemePalette } = {
 	East = {
-		WallPrimary = Color3.fromRGB(224, 214, 194),
-		WallTrim = Color3.fromRGB(54, 36, 26),
-		FloorWood = Color3.fromRGB(118, 80, 48),
+		WallPrimary = Color3.fromRGB(238, 222, 192), -- Warm Classical Sandstone Cream (matches HQ icon!)
+		WallTrim = Color3.fromRGB(246, 240, 226),    -- Crisp Ivory Marble Columns & Cornices
+		FloorWood = Color3.fromRGB(122, 82, 48),
 		TableTop = Color3.fromRGB(156, 108, 66),
 		TableMat = Enum.Material.Wood,
-		SeatLeather = Color3.fromRGB(48, 62, 54),
-		BrassAccent = Color3.fromRGB(196, 162, 88),
-		RoofColor = Color3.fromRGB(46, 52, 62),
+		SeatLeather = Color3.fromRGB(142, 28, 42),
+		BrassAccent = Color3.fromRGB(238, 192, 68),  -- Gleaming Classical Gold Trim
+		RoofColor = Color3.fromRGB(54, 106, 122),    -- Signature Classical Dome Teal-Slate
 		BrandTitle = "KUROSHIO IZAKAYA",
 	},
 	West = {
-		WallPrimary = Color3.fromRGB(218, 206, 186),
-		WallTrim = Color3.fromRGB(64, 38, 28),
-		FloorWood = Color3.fromRGB(108, 70, 42),
+		WallPrimary = Color3.fromRGB(238, 222, 192),
+		WallTrim = Color3.fromRGB(246, 240, 226),
+		FloorWood = Color3.fromRGB(112, 74, 44),
 		TableTop = Color3.fromRGB(142, 94, 58),
 		TableMat = Enum.Material.Wood,
-		SeatLeather = Color3.fromRGB(98, 34, 38),
-		BrassAccent = Color3.fromRGB(204, 166, 86),
-		RoofColor = Color3.fromRGB(72, 42, 36),
+		SeatLeather = Color3.fromRGB(148, 26, 40),
+		BrassAccent = Color3.fromRGB(240, 194, 70),
+		RoofColor = Color3.fromRGB(54, 106, 122),
 		BrandTitle = "TRATTORIA CORLEONE",
 	},
 	North = {
-		WallPrimary = Color3.fromRGB(212, 210, 206),
-		WallTrim = Color3.fromRGB(36, 38, 46),
-		FloorWood = Color3.fromRGB(92, 68, 50),
-		TableTop = Color3.fromRGB(228, 224, 218),
+		WallPrimary = Color3.fromRGB(238, 222, 192),
+		WallTrim = Color3.fromRGB(246, 240, 226),
+		FloorWood = Color3.fromRGB(108, 76, 52),
+		TableTop = Color3.fromRGB(236, 232, 224),
 		TableMat = Enum.Material.Marble,
-		SeatLeather = Color3.fromRGB(42, 68, 56),
-		BrassAccent = Color3.fromRGB(206, 174, 96),
-		RoofColor = Color3.fromRGB(34, 38, 46),
+		SeatLeather = Color3.fromRGB(146, 26, 40),
+		BrassAccent = Color3.fromRGB(242, 196, 72),
+		RoofColor = Color3.fromRGB(54, 106, 122),
 		BrandTitle = "BRASSERIE LE NOIR",
 	},
 	South = {
-		WallPrimary = Color3.fromRGB(228, 212, 184),
-		WallTrim = Color3.fromRGB(74, 44, 28),
+		WallPrimary = Color3.fromRGB(238, 222, 192),
+		WallTrim = Color3.fromRGB(246, 240, 226),
 		FloorWood = Color3.fromRGB(124, 82, 48),
 		TableTop = Color3.fromRGB(154, 102, 58),
 		TableMat = Enum.Material.Wood,
-		SeatLeather = Color3.fromRGB(108, 46, 34),
-		BrassAccent = Color3.fromRGB(210, 168, 78),
-		RoofColor = Color3.fromRGB(82, 44, 32),
+		SeatLeather = Color3.fromRGB(150, 28, 38),
+		BrassAccent = Color3.fromRGB(240, 194, 70),
+		RoofColor = Color3.fromRGB(54, 106, 122),
 		BrandTitle = "CANTINA EL CARTEL",
 	},
 }
@@ -325,28 +325,47 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 				local origR = desc:GetAttribute("OrigRelRot")
 				local origS = desc:GetAttribute("OrigSize")
 
-				-- Always hide cramped old narrow door parts & replace with our grand 24W x 18.5H Double-Archway Entrance!
+				-- Always hide cramped old narrow door parts, striped bistro awnings, shutters, umbrellas & legacy sloped roofs
+				-- so our Classical Sandstone & Golden-Domed Palace architecture matches the UI icon 1:1 at every level!
 				if n == "DoorPillarL" or n == "DoorPillarR" or n == "DoorTransom" or n == "DoorSconce"
-					or n == "OpenDoorFrame" or n == "OpenDoorGlass" or n == "WelcomeMat" or n == "StoryBelt" then
+					or n == "OpenDoorFrame" or n == "OpenDoorGlass" or n == "WelcomeMat" or n == "StoryBelt"
+					or string.find(n, "Awning", 1, true) or string.find(n, "StringBulb", 1, true)
+					or string.find(n, "Shutter", 1, true) or string.find(n, "Umb", 1, true)
+					or n == "UpWinFrame" or n == "UpWinGlass" or n == "BalconyRail"
+					or n == "KitchenChimney" or n == "ChimneyCap"
+					or isRoofPart(n) then
 					hideArchPart(desc)
 				elseif n == "FrontBrickL" then
 					desc.Size = Vector3.new(24.5, 4.8, 1.8)
 					desc.CFrame = hqCF * CFrame.new(-25.8, 2.9, 18.0)
+					desc.Color = palette.WallPrimary
+					desc.Material = Enum.Material.SmoothPlastic
 				elseif n == "FrontBrickR" then
 					desc.Size = Vector3.new(24.5, 4.8, 1.8)
 					desc.CFrame = hqCF * CFrame.new(25.8, 2.9, 18.0)
+					desc.Color = palette.WallPrimary
+					desc.Material = Enum.Material.SmoothPlastic
 				elseif n == "FrontGlassL" then
 					desc.Size = Vector3.new(21.5, 14.2, 0.35)
 					desc.CFrame = hqCF * CFrame.new(-25.8, 12.6, 18.0)
+					desc.Color = Color3.fromRGB(255, 224, 152)
+					desc.Transparency = 0.38
 				elseif n == "FrontGlassR" then
 					desc.Size = Vector3.new(21.5, 14.2, 0.35)
 					desc.CFrame = hqCF * CFrame.new(25.8, 12.6, 18.0)
+					desc.Color = Color3.fromRGB(255, 224, 152)
+					desc.Transparency = 0.38
+				elseif n == "WinSill" or n == "WinTopBar" then
+					desc.Color = palette.WallTrim
+					desc.Material = Enum.Material.Marble
 				elseif n == "Mullion" and typeof(origP) == "Vector3" then
 					if math.abs(origP.X) < 13.0 then
 						hideArchPart(desc)
 					else
 						desc.Size = Vector3.new(0.45, 14.4, 0.7)
 						desc.CFrame = hqCF * CFrame.new(origP.X, 12.6, origP.Z)
+						desc.Color = palette.BrassAccent
+						desc.Material = Enum.Material.Metal
 					end
 				elseif n == "ChalkboardMenu" and typeof(origP) == "Vector3" then
 					desc.CFrame = hqCF * CFrame.new(-28.0, 3.1, 21.8) * CFrame.Angles(0, math.rad(14), 0)
@@ -359,52 +378,45 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 						local newH = origS.Y + FLOOR1_LIFT
 						desc.Size = Vector3.new(origS.X, newH, origS.Z)
 						desc.CFrame = hqCF * CFrame.new(origP.X, 6.5 + newH * 0.5, origP.Z)
+						if n ~= "LeftGlass" and n ~= "RightGlass" then
+							desc.Color = palette.WallPrimary
+							desc.Material = Enum.Material.SmoothPlastic
+						end
 					end
 				elseif (tier >= 2 and n == "RightBrick") or n == "LeftBrick" then
 					hideArchPart(desc)
-				elseif string.find(n, "Awning", 1, true) or string.find(n, "StringBulb", 1, true) then
-					if typeof(origP) == "Vector3" and typeof(origR) == "Vector3" then
-						-- Keep center clear for Lv.4+ Glass Portico; lift awnings cleanly to match our taller 21-stud entrance!
-						if tier >= 4 and math.abs(origP.X) < 15.0 then
-							hideArchPart(desc)
-						else
-							desc.CFrame = hqCF * CFrame.new(origP.X, origP.Y + FLOOR1_LIFT, origP.Z) * CFrame.fromOrientation(origR.X, origR.Y, origR.Z)
-						end
-					end
 				elseif tier <= 2 then
-					-- Genuine tall 1-story starter/expanded building (21-stud ceiling!): hide upper-story walls, shutters, rails, roof & marquee
+					-- Genuine tall 1-story Classical Sandstone starter palace (21-stud ceiling!): hide upper-story walls
 					local isHighPart = typeof(origP) == "Vector3" and origP.Y > 16.4 and n ~= "BackStucco" and n ~= "CornerPilaster"
 					if isUpperStoryPart(n) or isHighPart or n == "BackBrick" or n == "BackStucco" then
 						hideArchPart(desc)
 					elseif n == "CornerPilaster" and typeof(origP) == "Vector3" then
 						desc.Size = Vector3.new(2.8, 21.6, 2.8)
 						desc.CFrame = hqCF * CFrame.new(origP.X, 11.4, origP.Z)
+						desc.Color = palette.WallTrim
+						desc.Material = Enum.Material.Marble
 					end
 				else
-					-- Levels 3-10: Raise upper story by +FLOOR1_LIFT (sits cleanly on Y=22.20 Floor 2 deck!)
+					-- Levels 3-15: Classical 2nd-story Sandstone Palace walls (sits cleanly on Y=22.20 Floor 2 deck!)
 					if n == "BackBrick" or n == "BackStucco" then
 						hideArchPart(desc)
-					elseif tier >= 7 and isRoofPart(n) then
-						hideArchPart(desc)
 					elseif n == "CornerPilaster" and typeof(origP) == "Vector3" then
-						local pilH = if tier >= 7 then 42.5 else 38.0
-						desc.Size = Vector3.new(2.8, pilH, 2.8)
+						local pilH = if tier >= 7 then 42.5 else 42.0
+						desc.Size = Vector3.new(3.0, pilH, 3.0)
 						desc.CFrame = hqCF * CFrame.new(origP.X, pilH * 0.5 + 0.6, origP.Z)
+						desc.Color = palette.WallTrim
+						desc.Material = Enum.Material.Marble
 					elseif (isUpperStoryPart(n) or (typeof(origP) == "Vector3" and origP.Y > 16.4)) and typeof(origP) == "Vector3" and typeof(origR) == "Vector3" then
-						local extraLift = FLOOR1_LIFT
 						if n == "UpperFrontWall" or n == "LeftUpper" or n == "RightUpper" then
-							-- Stretch 2nd-floor walls cleanly from Floor 2 (22.2) to Floor 3 (42.8) = 20.6 tall!
+							-- Stretch 2nd-floor Classical Sandstone walls cleanly from Floor 2 (22.2) to Floor 3 (42.8)
 							if typeof(origS) == "Vector3" then
 								desc.Size = Vector3.new(origS.X, 20.4, origS.Z)
 								desc.CFrame = hqCF * CFrame.new(origP.X, 32.4, origP.Z) * CFrame.fromOrientation(origR.X, origR.Y, origR.Z)
+								desc.Color = palette.WallPrimary
+								desc.Material = Enum.Material.SmoothPlastic
 							end
-						elseif isRoofPart(n) then
-							desc.CFrame = hqCF * CFrame.new(origP.X, origP.Y + extraLift + 6.5, origP.Z) * CFrame.fromOrientation(origR.X, origR.Y, origR.Z)
 						else
-							desc.CFrame = hqCF * CFrame.new(origP.X, origP.Y + extraLift + 3.0, origP.Z) * CFrame.fromOrientation(origR.X, origR.Y, origR.Z)
-						end
-						if n == "RestaurantMarquee" then
-							setArchMarqueeText(desc, palette.BrandTitle, spec.Subtitle, palette.BrassAccent)
+							hideArchPart(desc)
 						end
 					end
 				end
@@ -526,9 +538,74 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 	local brushedSteel = Color3.fromRGB(154, 160, 170)
 	local copper = Color3.fromRGB(184, 108, 62)
 	local glassCol = Color3.fromRGB(168, 198, 218)
-	local marbleWhite = Color3.fromRGB(236, 232, 224)
-	local stoneWainscot = Color3.fromRGB(58, 56, 54)
-	local velvetRed = Color3.fromRGB(132, 28, 36)
+	local marbleWhite = Color3.fromRGB(246, 240, 226)
+	local stoneWainscot = Color3.fromRGB(224, 208, 178)
+	local velvetRed = Color3.fromRGB(168, 24, 38)
+	local warmWinGlow = Color3.fromRGB(255, 214, 128)
+	local hedgeCol = Color3.fromRGB(58, 134, 62)
+
+	-- Iconic Ribbed Classical Palace Dome Builder (1:1 visual match to the Restaurant HQ UI icon!)
+	local function buildClassicalDome(
+		prefix: string,
+		cx: number,
+		baseY: number,
+		cz: number,
+		radius: number,
+		drumH: number,
+		isGoldCrown: boolean
+	): ()
+		local domeMainCol = if isGoldCrown then Color3.fromRGB(240, 194, 68) else palette.RoofColor
+		local goldCol = palette.BrassAccent
+
+		-- Square Sandstone/Marble Plinth Base + Golden Cornice Belt
+		local plinthW = radius * 2.25
+		mPart(prefix .. "_Plinth", Vector3.new(plinthW, 2.2, plinthW), CFrame.new(cx, baseY + 1.1, cz), palette.WallPrimary, Enum.Material.SmoothPlastic, false)
+		mPart(prefix .. "_PlinthGold", Vector3.new(plinthW + 0.9, 0.65, plinthW + 0.9), CFrame.new(cx, baseY + 2.35, cz), goldCol, Enum.Material.Metal, false)
+
+		-- Circular Classical Marble Drum with Illuminated Warm Drum Windows
+		local drumY = baseY + 2.4 + drumH * 0.5
+		mPart(prefix .. "_Drum", Vector3.new(drumH, radius * 2.02, radius * 2.02), CFrame.new(cx, drumY, cz) * CFrame.Angles(0, 0, math.rad(90)), marbleWhite, Enum.Material.Marble, false, nil, Enum.PartType.Cylinder)
+		mPart(prefix .. "_DrumCrown", Vector3.new(0.85, radius * 2.16, radius * 2.16), CFrame.new(cx, baseY + 2.4 + drumH, cz) * CFrame.Angles(0, 0, math.rad(90)), goldCol, Enum.Material.Metal, false, nil, Enum.PartType.Cylinder)
+
+		-- 8 Warm Illuminated Drum Windows around the circular drum
+		for i = 0, 7 do
+			local ang = math.rad(i * 45)
+			local wx = cx + math.sin(ang) * (radius * 0.98)
+			local wz = cz + math.cos(ang) * (radius * 0.98)
+			mPart(prefix .. "_DrumWin_" .. i, Vector3.new(radius * 0.34, drumH * 0.56, 0.55), CFrame.new(wx, drumY, wz) * CFrame.Angles(0, ang, 0), warmWinGlow, Enum.Material.Neon, false, 0.12)
+		end
+
+		-- True Hemispherical Classical Dome Shell (sunk slightly into drum crown so bottom half hides cleanly!)
+		local domeCenterY = baseY + 2.4 + drumH + 0.2
+		mPart(prefix .. "_DomeShell", Vector3.new(radius * 1.98, radius * 1.72, radius * 1.98), CFrame.new(cx, domeCenterY, cz), domeMainCol, Enum.Material.Metal, false, nil, Enum.PartType.Ball)
+
+		-- 6 Bold Gleaming Golden Meridian Ribs hugging the classical dome (pops crisply day & night!)
+		local ribGold = Color3.fromRGB(252, 206, 72)
+		for r = 0, 5 do
+			local rotY = math.rad(r * 30)
+			mPart(prefix .. "_DomeRib_" .. r, Vector3.new(radius * 2.08, radius * 1.80, math.max(0.95, radius * 0.105)), CFrame.new(cx, domeCenterY, cz) * CFrame.Angles(0, rotY, 0), ribGold, Enum.Material.Metal, false, nil, Enum.PartType.Ball)
+		end
+
+		-- Classical Golden Lantern Cupola + Tapered Spire Finial
+		local lanternBaseY = domeCenterY + radius * 0.86
+		mPart(prefix .. "_CupolaRing", Vector3.new(0.75, radius * 0.54, radius * 0.54), CFrame.new(cx, lanternBaseY, cz) * CFrame.Angles(0, 0, math.rad(90)), goldCol, Enum.Material.Metal, false, nil, Enum.PartType.Cylinder)
+		local lanternCore = mPart(prefix .. "_CupolaLantern", Vector3.new(radius * 0.34, radius * 0.42, radius * 0.42), CFrame.new(cx, lanternBaseY + radius * 0.20, cz) * CFrame.Angles(0, 0, math.rad(90)), warmWinGlow, Enum.Material.Neon, false, 0.08, Enum.PartType.Cylinder)
+		addWarmLight(lanternCore, math.min(95, radius * 3.8), 1.8, Color3.fromRGB(255, 224, 148))
+		mPart(prefix .. "_CupolaCap", Vector3.new(radius * 0.48, radius * 0.38, radius * 0.48), CFrame.new(cx, lanternBaseY + radius * 0.40, cz), goldCol, Enum.Material.Metal, false, nil, Enum.PartType.Ball)
+		mPart(prefix .. "_SpireShaft", Vector3.new(radius * 0.52, math.max(0.6, radius * 0.08), math.max(0.6, radius * 0.08)), CFrame.new(cx, lanternBaseY + radius * 0.72, cz) * CFrame.Angles(0, 0, math.rad(90)), goldCol, Enum.Material.Metal, false, nil, Enum.PartType.Cylinder)
+		mPart(prefix .. "_SpireOrb", Vector3.new(radius * 0.19, radius * 0.19, radius * 0.19), CFrame.new(cx, lanternBaseY + radius * 0.98, cz), Color3.fromRGB(255, 232, 146), Enum.Material.Neon, false, nil, Enum.PartType.Ball)
+	end
+
+	-- Reusable Warm Glowing Classical Arched Window Bay (matches the golden arched windows in the HQ icon!)
+	local function addClassicalArchedWindow(prefix: string, wx: number, wy: number, wz: number, w: number, h: number): ()
+		mPart(prefix .. "_Frame", Vector3.new(w + 0.9, h + 0.6, 0.65), CFrame.new(wx, wy, wz), marbleWhite, Enum.Material.Marble, false)
+		mPart(prefix .. "_Glass", Vector3.new(w, h, 0.42), CFrame.new(wx, wy, wz + 0.22), warmWinGlow, Enum.Material.Neon, false, 0.14)
+		mPart(prefix .. "_ArchTop", Vector3.new(0.42, w, w), CFrame.new(wx, wy + h * 0.5, wz + 0.22) * CFrame.Angles(0, math.rad(90), 0), warmWinGlow, Enum.Material.Neon, false, 0.14, Enum.PartType.Cylinder)
+		mPart(prefix .. "_ArchRim", Vector3.new(0.6, w + 0.85, w + 0.85), CFrame.new(wx, wy + h * 0.5, wz + 0.05) * CFrame.Angles(0, math.rad(90), 0), marbleWhite, Enum.Material.Marble, false, nil, Enum.PartType.Cylinder)
+		mPart(prefix .. "_Sill", Vector3.new(w + 1.4, 0.55, 1.15), CFrame.new(wx, wy - h * 0.5 - 0.3, wz + 0.3), marbleWhite, Enum.Material.Marble, false)
+		mPart(prefix .. "_MullionV", Vector3.new(0.24, h + w * 0.45, 0.55), CFrame.new(wx, wy + w * 0.15, wz + 0.28), palette.BrassAccent, Enum.Material.Metal, false)
+		mPart(prefix .. "_MullionH", Vector3.new(w + 0.1, 0.24, 0.55), CFrame.new(wx, wy + 0.2, wz + 0.28), palette.BrassAccent, Enum.Material.Metal, false)
+	end
 
 	local function buildWingShell(
 		prefix: string,
@@ -565,31 +642,50 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 		mPart(prefix .. "_WallB_Low", Vector3.new(w, 5.2, 1.6), CFrame.new(cx, 3.2, zBack), wallLowColor, wallLowMat, true)
 		mPart(prefix .. "_WallB_Top", Vector3.new(w, 15.6, 1.6), CFrame.new(cx, 13.4, zBack), palette.WallPrimary, Enum.Material.SmoothPlastic, true)
 
-		-- Tall Corner Columns + Front Awning
+		-- Tall Fluted Ivory Classical Columns + Golden Cornice Trim (matches HQ icon!)
 		for _, pz in ipairs({ zBack, cz, zFront }) do
-			mPart(prefix .. "_Col", Vector3.new(2.4, 21.2, 2.4), CFrame.new(outerX + outerSign * 0.2, 11.1, pz), palette.WallTrim, Enum.Material.Wood, true)
+			mPart(prefix .. "_Col", Vector3.new(21.2, 2.3, 2.3), CFrame.new(outerX + outerSign * 0.2, 11.1, pz) * CFrame.Angles(0, 0, math.rad(90)), marbleWhite, Enum.Material.Marble, true, nil, Enum.PartType.Cylinder)
+			mPart(prefix .. "_ColCap", Vector3.new(2.9, 0.85, 2.9), CFrame.new(outerX + outerSign * 0.2, 21.2, pz), palette.BrassAccent, Enum.Material.Metal, false)
 		end
-		mPart(prefix .. "_Awning", Vector3.new(math.max(12, w - 2.0), 0.55, 5.8), CFrame.new(cx, 18.8, zFront + 2.9) * CFrame.Angles(math.rad(14), 0, 0), palette.RoofColor, Enum.Material.Fabric, false)
+		mPart(prefix .. "_ClassicalCorniceF", Vector3.new(math.max(12, w + 1.4), 0.9, 2.4), CFrame.new(cx, 21.8, zFront + 0.8), marbleWhite, Enum.Material.Marble, false)
 	end
 
 	-- =========================================================================
-	-- ALL LEVELS (LV.1-10): GRAND 24-STUD-WIDE x 18.5-STUD-TALL FRONT ENTRANCE ARCHWAY!
+	-- ALL LEVELS (LV.1-15): CLASSICAL GRAND PALACE FRONT ENTRANCE, CORINTHIAN COLUMNS,
+	-- ROYAL RED CARPET STEPS & MANICURED BOXWOOD HEDGES (1:1 MATCH TO HQ ICON!)
 	-- =========================================================================
-	mPart("GrandDoor_Threshold", Vector3.new(25.6, 0.22, 6.2), CFrame.new(0, 0.65, 19.2), marbleWhite, Enum.Material.Marble, false)
-	for _, dx in ipairs({ -13.0, 13.0 }) do
-		mPart("GrandDoor_Pillar", Vector3.new(2.8, 20.6, 2.8), CFrame.new(dx, 10.9, 18.0), palette.WallTrim, Enum.Material.Wood, true)
-		mPart("GrandDoor_Plinth", Vector3.new(3.4, 1.4, 3.4), CFrame.new(dx, 1.3, 18.0), marbleWhite, Enum.Material.Marble, false)
-		mPart("GrandDoor_BrassCap", Vector3.new(3.3, 0.75, 3.3), CFrame.new(dx, 20.4, 18.0), palette.BrassAccent, Enum.Material.Metal, false)
-		local lantern = mPart("GrandDoor_Lantern", Vector3.new(1.2, 2.2, 1.2), CFrame.new(dx, 14.5, 19.8), Color3.fromRGB(255, 224, 152), Enum.Material.Glass, false, 0.2)
-		addWarmLight(lantern, 26, 1.2)
-		-- Swung-open decorative glass double-door leaves neatly tucked alongside the wide opening!
-		local leafSign = if dx < 0 then 1 else -1
-		mPart("GrandDoor_OpenLeaf", Vector3.new(0.45, 17.0, 5.2), CFrame.new(dx + leafSign * 1.4, 9.2, 15.2), palette.WallTrim, Enum.Material.Wood, false)
-		mPart("GrandDoor_OpenGlass", Vector3.new(0.22, 14.6, 4.0), CFrame.new(dx + leafSign * 1.4, 9.2, 15.2), glassCol, Enum.Material.Glass, false, 0.5)
+	mPart("GrandDoor_Threshold", Vector3.new(26.4, 0.28, 9.0), CFrame.new(0, 0.65, 20.6), marbleWhite, Enum.Material.Marble, false)
+	-- Royal Red Velvet Carpet Runner with Golden Trim right up the Front Entrance (from Lv.1+ just like the icon!)
+	mPart("Classic_RedCarpet", Vector3.new(11.6, 0.14, 14.0), CFrame.new(0, 0.82, 23.2), velvetRed, Enum.Material.Fabric, false)
+	mPart("Classic_CarpetTrimL", Vector3.new(0.45, 0.16, 14.0), CFrame.new(-5.8, 0.83, 23.2), palette.BrassAccent, Enum.Material.Metal, false)
+	mPart("Classic_CarpetTrimR", Vector3.new(0.45, 0.16, 14.0), CFrame.new(5.8, 0.83, 23.2), palette.BrassAccent, Enum.Material.Metal, false)
+
+	-- Classical Fluted Ivory Corinthian Columns flanking the Grand Archway + Facade Bays!
+	for _, cx in ipairs({ -36.5, -24.8, -13.0, 13.0, 24.8, 36.5 }) do
+		local isDoorCol = (math.abs(cx) < 14.0)
+		local colZ = if isDoorCol then 19.2 else 18.6
+		mPart("Classic_ColBase", Vector3.new(3.2, 1.5, 3.2), CFrame.new(cx, 1.35, colZ), marbleWhite, Enum.Material.Marble, false)
+		mPart("Classic_ColShaft", Vector3.new(19.0, 2.35, 2.35), CFrame.new(cx, 11.4, colZ) * CFrame.Angles(0, 0, math.rad(90)), marbleWhite, Enum.Material.Marble, isDoorCol, nil, Enum.PartType.Cylinder)
+		mPart("Classic_ColCap", Vector3.new(3.3, 0.9, 3.3), CFrame.new(cx, 20.9, colZ), palette.BrassAccent, Enum.Material.Metal, false)
 	end
-	mPart("GrandDoor_Header", Vector3.new(29.0, 2.4, 2.8), CFrame.new(0, 19.8, 18.0), palette.WallTrim, Enum.Material.Wood, true)
-	mPart("GrandDoor_BrassArch", Vector3.new(27.2, 0.55, 3.1), CFrame.new(0, 18.5, 18.0), palette.BrassAccent, Enum.Material.Metal, false)
-	-- Front upper frieze beam connecting left/right walls cleanly at Y = 20.4
+	for _, dx in ipairs({ -13.0, 13.0 }) do
+		local lantern = mPart("GrandDoor_Lantern", Vector3.new(1.2, 2.2, 1.2), CFrame.new(dx, 14.5, 20.8), warmWinGlow, Enum.Material.Neon, false, 0.12)
+		addWarmLight(lantern, 28, 1.3)
+		-- Swung-open decorative glass & brass double-door leaves neatly tucked alongside the wide 24-stud opening!
+		local leafSign = if dx < 0 then 1 else -1
+		mPart("GrandDoor_OpenLeaf", Vector3.new(0.45, 17.0, 5.2), CFrame.new(dx + leafSign * 1.4, 9.2, 15.2), palette.BrassAccent, Enum.Material.Metal, false)
+		mPart("GrandDoor_OpenGlass", Vector3.new(0.22, 14.6, 4.0), CFrame.new(dx + leafSign * 1.4, 9.2, 15.2), warmWinGlow, Enum.Material.Glass, false, 0.45)
+	end
+
+	-- Classical Entablature Header & Golden Pediment Trim above Entrance
+	mPart("GrandDoor_Header", Vector3.new(78.6, 2.2, 2.6), CFrame.new(0, 20.2, 18.4), marbleWhite, Enum.Material.Marble, true)
+	mPart("GrandDoor_BrassArch", Vector3.new(79.4, 0.65, 3.0), CFrame.new(0, 21.5, 18.4), palette.BrassAccent, Enum.Material.Metal, false)
+	-- Manicured Green Boxwood Hedges in Classical Sandstone Planters flanking Front Entrance (exact icon match!)
+	for _, hx in ipairs({ -24.5, 24.5 }) do
+		mPart("Classic_Planter", Vector3.new(16.0, 1.8, 2.8), CFrame.new(hx, 1.5, 21.0), marbleWhite, Enum.Material.Marble, false)
+		mPart("Classic_Hedge", Vector3.new(15.2, 2.2, 2.2), CFrame.new(hx, 3.2, 21.0), hedgeCol, Enum.Material.Grass, false)
+	end
+	-- Front upper frieze beam connecting left/right walls cleanly at Y = 20.2
 	mPart("FrontWall_TopBeamL", Vector3.new(25.0, 2.0, 1.8), CFrame.new(-25.8, 20.2, 18.0), palette.WallPrimary, Enum.Material.SmoothPlastic, true)
 	mPart("FrontWall_TopBeamR", Vector3.new(25.0, 2.0, 1.8), CFrame.new(25.8, 20.2, 18.0), palette.WallPrimary, Enum.Material.SmoothPlastic, true)
 
@@ -618,15 +714,18 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 		mPart("CoopWestDoor_BrassTrim", Vector3.new(2.4, 0.45, 13.4), CFrame.new(-37.5, 15.3, -10.5), palette.BrassAccent, Enum.Material.Metal, false)
 		mPart("CoopWestDoor_Threshold", Vector3.new(6.8, 0.22, 13.6), CFrame.new(-39.2, 0.65, -10.5), marbleWhite, Enum.Material.Marble, false)
 
-		mPart("Lv12_ParapetRoof", Vector3.new(80.0, 1.4, 52.0), CFrame.new(0, 22.1, -6.5), palette.RoofColor, Enum.Material.Slate, true)
-		mPart("Lv12_RoofTrimFront", Vector3.new(80.8, 1.2, 1.4), CFrame.new(0, 22.9, 18.8), palette.WallTrim, Enum.Material.Wood, false)
-		mPart("Lv12_RoofTrimBack", Vector3.new(80.8, 1.2, 1.4), CFrame.new(0, 22.9, -31.6), palette.WallTrim, Enum.Material.Wood, false)
-		mPart("Lv12_BrassCornice", Vector3.new(81.4, 0.55, 53.0), CFrame.new(0, 23.6, -6.5), palette.BrassAccent, Enum.Material.Metal, false)
-		mPart("Lv12_SignBox", Vector3.new(36.0, 5.6, 2.4), CFrame.new(0, 25.8, 18.2), palette.WallTrim, Enum.Material.Wood, false)
-		local signFace = mPart("Lv12_SignMarquee", Vector3.new(34.2, 4.8, 0.3), CFrame.new(0, 25.8, 19.5), Color3.fromRGB(16, 18, 22), Enum.Material.SmoothPlastic, false)
+		mPart("Lv12_ParapetRoof", Vector3.new(80.4, 1.6, 52.4), CFrame.new(0, 22.1, -6.5), marbleWhite, Enum.Material.Marble, true)
+		mPart("Lv12_RoofTrimFront", Vector3.new(81.6, 1.4, 1.6), CFrame.new(0, 23.1, 18.8), marbleWhite, Enum.Material.Marble, false)
+		mPart("Lv12_RoofTrimBack", Vector3.new(81.6, 1.4, 1.6), CFrame.new(0, 23.1, -31.6), marbleWhite, Enum.Material.Marble, false)
+		mPart("Lv12_BrassCornice", Vector3.new(82.2, 0.6, 53.4), CFrame.new(0, 23.9, -6.5), palette.BrassAccent, Enum.Material.Metal, false)
+		mPart("Lv12_SignBox", Vector3.new(36.0, 5.4, 2.2), CFrame.new(0, 25.8, 18.2), marbleWhite, Enum.Material.Marble, false)
+		local signFace = mPart("Lv12_SignMarquee", Vector3.new(34.2, 4.6, 0.3), CFrame.new(0, 25.8, 19.4), Color3.fromRGB(16, 18, 22), Enum.Material.SmoothPlastic, false)
 		if signFace then
 			setArchMarqueeText(signFace, palette.BrandTitle, spec.Subtitle, palette.BrassAccent)
 		end
+
+		-- Iconic Classical Ribbed Golden-Teal Palace Dome right from Lv.1-2 (matches HQ icon immediately!)
+		buildClassicalDome("Lv12_PalaceDome", 0, 23.2, -6.5, if tier >= 2 then 13.5 else 11.5, 4.4, false)
 	end
 
 	-- =========================================================================
@@ -693,9 +792,9 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 			end
 		end
 
-		-- Improved Kitchen Prep Island & Elevated Copper Pot Rack
-		mPart("Lv2_PrepIslandBase", Vector3.new(8.5, 2.8, 3.6), CFrame.new(-26.5, 2.2, -13.0), darkSteel, Enum.Material.Metal, true)
-		mPart("Lv2_PrepIslandTop", Vector3.new(8.9, 0.25, 4.0), CFrame.new(-26.5, 3.72, -13.0), brushedSteel, Enum.Material.Metal, true)
+		-- Improved Kitchen Prep Island (positioned cleanly clear of VIP Curved Booth!) & Elevated Copper Pot Rack
+		mPart("Lv2_PrepIslandBase", Vector3.new(7.4, 2.8, 3.2), CFrame.new(-30.5, 2.2, -21.0), darkSteel, Enum.Material.Metal, true)
+		mPart("Lv2_PrepIslandTop", Vector3.new(7.8, 0.25, 3.6), CFrame.new(-30.5, 3.72, -21.0), brushedSteel, Enum.Material.Metal, true)
 		mPart("Lv2_PotRackBar", Vector3.new(9.2, 0.25, 2.4), CFrame.new(-17.5, 16.4, -19.5), copper, Enum.Material.Metal, false)
 		for _, px in ipairs({ -20.5, -17.5, -14.5 }) do
 			mPart("Lv2_CopperPan", Vector3.new(0.55, 1.4, 1.4), CFrame.new(px, 15.6, -19.5) * CFrame.Angles(0, 0, math.rad(90)), copper, Enum.Material.Metal, false, nil, Enum.PartType.Cylinder)
@@ -708,7 +807,30 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 	if tier >= 3 then
 		-- 3A. SOLID 1.4-STUD-THICK 2ND FLOOR DECK (Y = 20.8..22.2, top = 22.20 -> ZERO feet poking through ceiling!)
 		mPart("Floor2_MainDeck", Vector3.new(74.4, 1.4, 48.2), CFrame.new(0.0, 21.5, -6.5), palette.FloorWood, Enum.Material.WoodPlanks, true)
-		mPart("Floor2_ExtBeltF", Vector3.new(78.4, 1.4, 1.2), CFrame.new(0, 21.5, 18.6), palette.WallTrim, Enum.Material.Wood, false)
+		mPart("Floor2_ExtBeltF", Vector3.new(79.4, 1.4, 1.8), CFrame.new(0, 21.8, 18.6), marbleWhite, Enum.Material.Marble, false)
+		mPart("Floor2_GoldBeltF", Vector3.new(80.0, 0.55, 2.2), CFrame.new(0, 22.7, 18.6), palette.BrassAccent, Enum.Material.Metal, false)
+
+		-- Classical 2nd-Story Fluted Columns & 4 Warm Glowing Arched Windows across Front Facade (exact 2-story HQ icon match!)
+		for _, cx2 in ipairs({ -36.5, -18.5, 0.0, 18.5, 36.5 }) do
+			mPart("Floor2_ClassicCol", Vector3.new(19.6, 2.1, 2.1), CFrame.new(cx2, 32.4, 18.8) * CFrame.Angles(0, 0, math.rad(90)), marbleWhite, Enum.Material.Marble, false, nil, Enum.PartType.Cylinder)
+			mPart("Floor2_ClassicCap", Vector3.new(2.8, 0.8, 2.8), CFrame.new(cx2, 42.1, 18.8), palette.BrassAccent, Enum.Material.Metal, false)
+		end
+		for _, wx2 in ipairs({ -27.5, -9.2, 9.2, 27.5 }) do
+			addClassicalArchedWindow("Floor2_ArchWin_" .. tostring(math.floor(wx2)), wx2, 31.2, 18.9, 6.2, 7.6)
+		end
+
+		-- For Levels 3-6: Classical Marble Cornice Roof + Marquee + Grand Ribbed Golden-Teal Palace Dome!
+		if tier <= 6 then
+			mPart("Floor2_ClassicRoof", Vector3.new(80.6, 1.6, 52.6), CFrame.new(0, 42.9, -6.5), marbleWhite, Enum.Material.Marble, true)
+			mPart("Floor2_RoofCornice", Vector3.new(82.4, 1.4, 54.4), CFrame.new(0, 44.1, -6.5), marbleWhite, Enum.Material.Marble, false)
+			mPart("Floor2_RoofGoldTrim", Vector3.new(83.2, 0.65, 55.2), CFrame.new(0, 45.0, -6.5), palette.BrassAccent, Enum.Material.Metal, false)
+			mPart("Floor2_SignBox", Vector3.new(38.0, 5.8, 2.2), CFrame.new(0, 47.4, 18.4), marbleWhite, Enum.Material.Marble, false)
+			local sign2 = mPart("Floor2_SignMarquee", Vector3.new(36.2, 5.0, 0.3), CFrame.new(0, 47.4, 19.6), Color3.fromRGB(16, 18, 22), Enum.Material.SmoothPlastic, false)
+			if sign2 then
+				setArchMarqueeText(sign2, palette.BrandTitle, spec.Subtitle, palette.BrassAccent)
+			end
+			buildClassicalDome("Lv36_GrandPalaceDome", 0, 44.0, -6.5, if tier >= 5 then 16.5 else 15.0, 5.2, false)
+		end
 
 		-- Framed Rear Back Wall with a HUGE 28-stud-wide open Grand Archway (X = -14..+14) into the Rear Atrium!
 		local backTopH = if tier >= 7 then 43.0 else 41.5
@@ -974,12 +1096,13 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 					mPart("Floor3_Col", Vector3.new(2.0, 15.5, 2.0), CFrame.new(cx, 51.3, cz), marbleWhite, Enum.Material.Marble, true)
 				end
 			end
-			mPart("Floor3_SkyRoof", Vector3.new(76.0, 1.6, 42.0), CFrame.new(0, 59.6, -4.0), palette.RoofColor, Enum.Material.Slate, true)
-			mPart("Floor3_SkyRoofTrim", Vector3.new(77.0, 0.75, 43.0), CFrame.new(0, 60.6, -4.0), palette.BrassAccent, Enum.Material.Metal, false)
+			mPart("Floor3_SkyRoof", Vector3.new(78.0, 1.6, 44.0), CFrame.new(0, 59.6, -4.0), marbleWhite, Enum.Material.Marble, true)
+			mPart("Floor3_SkyRoofTrim", Vector3.new(79.4, 0.85, 45.4), CFrame.new(0, 60.6, -4.0), palette.BrassAccent, Enum.Material.Metal, false)
 			local sign3 = mPart("Floor3_Marquee", Vector3.new(38.0, 6.4, 0.5), CFrame.new(0, 64.4, 17.5), Color3.fromRGB(16, 18, 22), Enum.Material.SmoothPlastic, false)
 			if sign3 then
 				setArchMarqueeText(sign3, palette.BrandTitle, spec.Subtitle, palette.BrassAccent)
 			end
+			buildClassicalDome("Lv78_SkyPalaceDome", 0, 60.6, -6.5, 17.8, 5.6, false)
 		end
 
 		addDiningTableSet("Floor3Sky_R", 24.0, 43.60, 8.0, true)
@@ -1034,27 +1157,16 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 		addDiningTableSet("BallroomVIP_R", 24.0, 43.60, -14.0, true)
 		addDiningTableSet("BallroomVIP_L", -24.0, 43.60, -14.0, true)
 		addDiningTableSet("BallroomVIP_C", 0.0, 43.60, -14.0, true)
+		if tier == 9 then
+			buildClassicalDome("Lv9_RoyalBallroomDome", 0, 71.8, -6.5, 19.5, 6.0, false)
+		end
 	end
 
 	-- =========================================================================
-	-- LEVEL 10 (MAX): FOOD EMPEROR IMPERIAL PALACE — SOARING 106-STUD GLASS SKY-ATRIUM DOME!
+	-- LEVEL 10+: FOOD EMPEROR IMPERIAL PALACE — SOARING RIBBED GOLDEN-TEAL CLASSICAL DOME!
 	-- =========================================================================
 	if tier >= 10 then
-		mPart("Lv10_DomePlinth", Vector3.new(56.0, 3.6, 32.0), CFrame.new(0, 73.8, -6.5), marbleWhite, Enum.Material.Marble, false)
-		mPart("Lv10_DomeGoldBand", Vector3.new(57.4, 1.2, 33.4), CFrame.new(0, 76.0, -6.5), palette.BrassAccent, Enum.Material.Metal, false)
-		mPart("Lv10_DomeGlass", Vector3.new(46.0, 14.0, 24.0), CFrame.new(0, 83.6, -6.5), glassCol, Enum.Material.Glass, false, 0.36)
-		for _, cx in ipairs({ -23.0, -7.8, 7.8, 23.0 }) do
-			for _, cz in ipairs({ -18.5, 5.5 }) do
-				mPart("Lv10_DomeRib", Vector3.new(1.4, 14.6, 1.4), CFrame.new(cx, 83.6, cz), palette.BrassAccent, Enum.Material.Metal, false)
-			end
-		end
-		mPart("Lv10_DomeCap", Vector3.new(48.8, 2.4, 26.8), CFrame.new(0, 91.6, -6.5), darkSteel, Enum.Material.Metal, false)
-		mPart("Lv10_CrownBase", Vector3.new(28.0, 4.0, 19.0), CFrame.new(0, 94.8, -6.5), palette.BrassAccent, Enum.Material.Metal, false)
-		if tier < 15 then
-			local imperialSpire = mPart("Lv10_ImperialFinial", Vector3.new(9.2, 8.2, 9.2), CFrame.new(0, 100.8, -6.5) * CFrame.Angles(0, math.rad(45), 0), palette.BrassAccent, Enum.Material.Metal, false)
-			addWarmLight(imperialSpire, 84, 2.2, Color3.fromRGB(255, 224, 146))
-		end
-
+		buildClassicalDome("Lv10_ImperialPalaceDome", 0, 71.8, -6.5, 22.0, 6.8, tier >= 15)
 		addDiningTableSet("EmperorPenthouse_VIP", 0.0, 43.60, -28.0, true)
 	end
 
@@ -1087,10 +1199,8 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 					mPart("Lv12_SkyTowerCol", Vector3.new(1.8, 13.2, 1.8), CFrame.new(tx + cx, 33.6, tz + cz), marbleWhite, Enum.Material.Marble, false)
 				end
 			end
-			mPart("Lv12_SkyTowerRoof", Vector3.new(25.4, 2.4, 21.4), CFrame.new(tx, 41.2, tz), palette.RoofColor, Enum.Material.Slate, false)
-			mPart("Lv12_SkyTowerCrown", Vector3.new(14.0, 3.2, 11.0), CFrame.new(tx, 44.0, tz), palette.BrassAccent, Enum.Material.Metal, false)
-			local finial = mPart("Lv12_SkyTowerSpire", Vector3.new(3.6, 6.2, 3.6), CFrame.new(tx, 48.6, tz) * CFrame.Angles(0, math.rad(45), 0), palette.BrassAccent, Enum.Material.Metal, false)
-			addWarmLight(finial, 52, 1.6, Color3.fromRGB(255, 224, 152))
+			mPart("Lv12_SkyTowerRoof", Vector3.new(25.4, 2.2, 21.4), CFrame.new(tx, 41.2, tz), marbleWhite, Enum.Material.Marble, false)
+			buildClassicalDome("Lv12_WingDome_" .. (if side < 0 then "W" else "E"), tx, 42.2, tz, 8.6, 3.0, tier >= 15)
 		end
 	end
 
@@ -1123,18 +1233,15 @@ function RestaurantExpansionBuilder.BuildTierForHQ(
 	end
 
 	-- =========================================================================
-	-- LEVEL 15 (MAX): SUPREME FOOD EMPIRE CITADEL — 128-STUD GOLDEN CROWN BEACON!
+	-- LEVEL 15 (MAX): SUPREME FOOD EMPIRE CITADEL — GOLDEN IMPERIAL CROWN BEACON!
 	-- =========================================================================
 	if tier >= 15 then
 		local goldBright = Color3.fromRGB(246, 198, 68)
-		mPart("Lv15_CitadelDrum", Vector3.new(22.0, 10.0, 15.0), CFrame.new(0, 101.8, -6.5), marbleWhite, Enum.Material.Marble, false)
-		mPart("Lv15_CitadelGoldCollar", Vector3.new(23.6, 1.6, 16.6), CFrame.new(0, 107.4, -6.5), goldBright, Enum.Material.Metal, false)
-		local crownLantern = mPart("Lv15_CitadelBeaconCore", Vector3.new(14.0, 8.6, 10.0), CFrame.new(0, 112.5, -6.5), Color3.fromRGB(255, 232, 162), Enum.Material.Neon, false, 0.12)
-		addWarmLight(crownLantern, 110, 2.6, Color3.fromRGB(255, 224, 140))
-		mPart("Lv15_CitadelCrownCap", Vector3.new(17.0, 2.2, 13.0), CFrame.new(0, 117.8, -6.5), goldBright, Enum.Material.Metal, false)
-		mPart("Lv15_SupremeSpire", Vector3.new(8.5, 3.2, 3.2), CFrame.new(0, 123.0, -6.5) * CFrame.Angles(0, 0, math.rad(90)), goldBright, Enum.Material.Metal, false, nil, Enum.PartType.Cylinder)
+		local crownBeacon = mPart("Lv15_SupremeStarOrb", Vector3.new(5.6, 5.6, 5.6), CFrame.new(0, 124.5, -6.5), Color3.fromRGB(255, 232, 162), Enum.Material.Neon, false, 0.08, Enum.PartType.Ball)
+		addWarmLight(crownBeacon, 115, 2.8, Color3.fromRGB(255, 224, 140))
+		mPart("Lv15_SupremeHaloRing", Vector3.new(1.1, 14.5, 14.5), CFrame.new(0, 121.0, -6.5) * CFrame.Angles(0, 0, math.rad(90)), goldBright, Enum.Material.Neon, false, 0.2, Enum.PartType.Cylinder)
 
-		local sign15 = mPart("Lv15_SupremeCrestMarquee", Vector3.new(52.0, 8.4, 0.7), CFrame.new(0, 76.2, 11.2), Color3.fromRGB(16, 18, 22), Enum.Material.SmoothPlastic, false)
+		local sign15 = mPart("Lv15_SupremeCrestMarquee", Vector3.new(52.0, 8.4, 0.7), CFrame.new(0, 75.5, 20.6), Color3.fromRGB(16, 18, 22), Enum.Material.SmoothPlastic, false)
 		if sign15 then
 			setArchMarqueeText(sign15, "★ " .. palette.BrandTitle .. " ★", "LV.15 MAX • STRONGEST FOOD EMPIRE IN THE CITY", goldBright)
 		end

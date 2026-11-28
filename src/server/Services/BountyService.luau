@@ -11,6 +11,8 @@ local MafiaVisualBuilder = require(
 local PlayerDataService = require("./PlayerDataService")
 local BlackMarketService = require("./BlackMarketService")
 local CombatLockService = require("./CombatLockService")
+local BaseService = require("./BaseService")
+local SyndicateFamilyService = require("./SyndicateFamilyService")
 
 type ActiveHitTarget = {
 	Owner: Player,
@@ -34,6 +36,7 @@ local playerBounties: { [Player]: number } = {}
 local activeHits: { [Player]: ActiveHitTarget } = {}
 local hitCooldownUntil: { [Player]: number } = {}
 local bountyFolder: Folder? = nil
+local playerRemovingConn: RBXScriptConnection? = nil
 local isRunning = false
 
 local function sendToast(player: Player?, msg: string): ()
@@ -44,19 +47,26 @@ local function sendToast(player: Player?, msg: string): ()
 	end
 end
 
+local function isAlliedPlayer(a: Player, b: Player): boolean
+	return a == b or BaseService.AreBaseTeammates(a, b) or SyndicateFamilyService.AreFamilyAllies(a, b)
+end
+
 function BountyService.PlacePlayerBounty(placer: Player, targetName: string?, amountRaw: number?): (boolean, string)
 	local amount = math.clamp(math.floor(amountRaw or 250), 200, 1000)
 	local target: Player? = nil
 	if typeof(targetName) == "string" and targetName ~= "" then
 		for _, p in ipairs(Players:GetPlayers()) do
 			if p ~= placer and (string.lower(p.Name) == string.lower(targetName) or string.lower(p.DisplayName) == string.lower(targetName)) then
+				if isAlliedPlayer(placer, p) then
+					return false, "You cannot place a Syndicate Bounty on your own Co-op Base Partner or Family ally!"
+				end
 				target = p
 				break
 			end
 		end
 	else
 		for _, p in ipairs(Players:GetPlayers()) do
-			if p ~= placer then
+			if not isAlliedPlayer(placer, p) then
 				target = p
 				break
 			end
@@ -206,7 +216,11 @@ function BountyService.Start(): ()
 		end
 	end)
 
-	Players.PlayerRemoving:Connect(function(p: Player)
+	if playerRemovingConn then
+		playerRemovingConn:Disconnect()
+		playerRemovingConn = nil
+	end
+	playerRemovingConn = Players.PlayerRemoving:Connect(function(p: Player)
 		playerBounties[p] = nil
 		if activeHits[p] and activeHits[p].Model.Parent then
 			activeHits[p].Model:Destroy()
@@ -220,6 +234,10 @@ end
 
 function BountyService.Stop(): ()
 	isRunning = false
+	if playerRemovingConn then
+		playerRemovingConn:Disconnect()
+		playerRemovingConn = nil
+	end
 	for _, h in pairs(activeHits) do
 		if h.Model.Parent then h.Model:Destroy() end
 	end

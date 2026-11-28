@@ -2201,12 +2201,22 @@ local function renderUpgrades(state: { [string]: any }): ()
 		)
 
 		local pLv = tonumber(pv.PrestigeLevel) or 0
+		local maxP = tonumber(pv.MaxPrestigeLevel) or 10
+		local reqRep = tonumber(pv.RequiredRep) or 2000
+		local isMaxP = pv.IsMaxPrestige == true
 		local canP = pv.CanPrestige == true
+		local reqLabel = if isMaxP
+			then "MAX PRESTIGE"
+			elseif pLv == 0 then string.format("REQ LV.10 / %s REP", formatCommaInt(reqRep))
+			else string.format("REQ LV.10 & %s REP", formatCommaInt(reqRep))
 		addUpgradeRow(
 			"PRS",
-			string.format("GODFATHER PRESTIGE  |  CURRENT: P%d (+%d%% GOLD & REP)", pLv, pLv * 25),
-			"At HQ Lv.10 or 2,000 Rep, rebirth your HQ for a permanent +25% lifetime multiplier while keeping all weapons, gear & bodyguards!",
-			if canP then "PRESTIGE NOW" else "REQ LV.10 / 2K REP",
+			string.format("GODFATHER PRESTIGE  |  CURRENT: P%d / P%d (+%d%% GOLD & REP)", pLv, maxP, pLv * 25),
+			if isMaxP
+				then "Maximum Godfather Prestige reached! Enjoy your permanent +250% lifetime Gold & Reputation multiplier!"
+				elseif pLv == 0 then string.format("At HQ Lv.10 or %s Rep, rebirth your HQ for a permanent +25%% lifetime multiplier while keeping all weapons, gear & bodyguards!", formatCommaInt(reqRep))
+				else string.format("Rebuild HQ to Lv.10 & reach %s Rep to ascend to P%d (+%d%% lifetime Gold & Rep). Keeps all weapons, gear & bodyguards!", formatCommaInt(reqRep), pLv + 1, (pLv + 1) * 25),
+			if isMaxP then "MAXED" elseif canP then "PRESTIGE NOW" else reqLabel,
 			if canP then C_BRASS else C_DISABLED,
 			function()
 				if canP and dispatchAction then dispatchAction("TriggerGodfatherPrestige", nil) end
@@ -2214,51 +2224,7 @@ local function renderUpgrades(state: { [string]: any }): ()
 		)
 	end
 
-	-- Syndicate Families (Co-op Crew Alliance)
-	local fam = state.SyndicateFamily
-	if typeof(fam) == "table" then
-		local inFam = fam.InFamily == true
-		local membersStr = if typeof(fam.Members) == "table" then table.concat(fam.Members, ", ") else ""
-		local famCard = makeCard(scrollFrame :: ScrollingFrame, 84, if inFam then C_OWNED else C_BRASS)
-		ModelPreviewHelper.CreatePreview(famCard, "Empire", "FAM", UDim2.fromOffset(54, 54), UDim2.new(0, 14, 0, 15), Color3.fromRGB(22, 24, 31), if inFam then C_OWNED else C_BRASS)
-		local fTitle = Instance.new("TextLabel")
-		fTitle.Position = UDim2.new(0, 78, 0, 10)
-		fTitle.Size = UDim2.new(1, -334, 0, 20)
-		fTitle.BackgroundTransparency = 1
-		fTitle.Font = Enum.Font.GothamBlack
-		fTitle.TextXAlignment = Enum.TextXAlignment.Left
-		fTitle.TextSize = 13
-		fTitle.TextColor3 = C_TEXT_PRIMARY
-		fTitle.Text = if inFam then string.format("SYNDICATE FAMILY: %s", tostring(fam.FamilyName or "FAMILY")) else "SYNDICATE FAMILIES  |  CO-OP ALLIANCE"
-		fTitle.Parent = famCard
-
-		local fDesc = Instance.new("TextLabel")
-		fDesc.Position = UDim2.new(0, 78, 0, 32)
-		fDesc.Size = UDim2.new(1, -334, 0, 42)
-		fDesc.BackgroundTransparency = 1
-		fDesc.Font = Enum.Font.Gotham
-		fDesc.TextWrapped = true
-		fDesc.TextXAlignment = Enum.TextXAlignment.Left
-		fDesc.TextSize = 11
-		fDesc.TextColor3 = C_TEXT_MUTED
-		fDesc.Text = if inFam
-			then ("Members: " .. membersStr .. "  |  No Friendly Fire + +20% Co-op Raid Dividends!")
-			else "Found or join a Mafia Family with friends in the server for zero friendly fire & shared +20% raid dividends."
-		fDesc.Parent = famCard
-
-		if inFam then
-			makeBtn(famCard, "LEAVE FAMILY", C_OXBLOOD_DARK, UDim2.new(1, -156, 0.5, -17), UDim2.fromOffset(144, 34), function()
-				if dispatchAction then dispatchAction("LeaveFamily", nil) end
-			end)
-		else
-			makeBtn(famCard, "JOIN OPEN", C_STEEL, UDim2.new(1, -242, 0.5, -17), UDim2.fromOffset(82, 34), function()
-				if dispatchAction then dispatchAction("JoinFamily", nil) end
-			end)
-			makeBtn(famCard, "CREATE FAMILY", C_OWNED, UDim2.new(1, -152, 0.5, -17), UDim2.fromOffset(140, 34), function()
-				if dispatchAction then dispatchAction("CreateFamily", nil) end
-			end)
-		end
-	end
+	-- Note: Syndicate Families moved directly to the On-Screen HUD (SyndicateFamilyController) for instant access!
 
 	local keycards = tonumber(state.VaultKeycards) or 0
 	addUpgradeRow(

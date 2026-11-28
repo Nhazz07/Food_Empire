@@ -8,6 +8,7 @@ local WarehouseConfig = require(
 	ReplicatedStorage:WaitForChild("shared"):WaitForChild("config"):WaitForChild("WarehouseConfig")
 )
 local BaseService = require("./BaseService")
+local WarehouseVisualBuilder = require("./WarehouseVisualBuilder")
 
 export type WarehouseCategory = WarehouseConfig.WarehouseCategory
 export type WarehouseSnapshot = {
@@ -203,155 +204,11 @@ local function updateWarehouseVisualsForSlot(slot: BaseService.BaseSlot, state: 
 				local total = getCategoryTotalFromState(state, category)
 				local cap = getCapacityFromState(state, category)
 
-				-- Update progressive Lv.2 -> Lv.10 visual architecture on the 3D Warehouse building!
-				local tier2Folder = plot:FindFirstChild("Tier2")
-				local tier3Folder = plot:FindFirstChild("Tier3")
-				local padPart = plot:FindFirstChild("PlotPivot")
-
-				if padPart and padPart:IsA("BasePart") then
-					if tier2Folder then tier2Folder:ClearAllChildren() end
-					if tier3Folder then tier3Folder:ClearAllChildren() end
-
-					local evoFolder = plot:FindFirstChild("WarehouseEvolutionVisuals")
-					local builtLv = if evoFolder then evoFolder:GetAttribute("BuiltLevel") else -1
-					if builtLv ~= level then
-						if evoFolder then
-							evoFolder:Destroy()
-						end
-						if level >= 2 then
-							local evo = Instance.new("Folder")
-							evo.Name = "WarehouseEvolutionVisuals"
-							evo:SetAttribute("BuiltLevel", level)
-							local baseCF = padPart.CFrame
-							local gold = Color3.fromRGB(248, 196, 56)
-							local neonGold = Color3.fromRGB(255, 224, 96)
-							local diamond = Color3.fromRGB(112, 232, 255)
-							local steel = Color3.fromRGB(168, 178, 192)
-							local darkSteel = Color3.fromRGB(54, 60, 74)
-
-							local function wPart(name: string, sz: Vector3, rel: CFrame, col: Color3, mat: Enum.Material, shape: Enum.PartType?, transp: number?): Part
-								local p = Instance.new("Part")
-								p.Name = name
-								p.Size = sz
-								p.CFrame = baseCF * rel
-								p.Color = col
-								p.Material = mat
-								if shape then p.Shape = shape end
-								if transp then p.Transparency = transp end
-								p.Anchored = true
-								p.CanCollide = false
-								p.CastShadow = false
-								p.Parent = evo
-								return p
-							end
-
-							-- Lv.2: Rooftop Storage Loft + Warm Entry Lanterns
-							wPart("Lv2_Loft", Vector3.new(14, 4.8, 12), CFrame.new(0, 21.2, -2), Color3.fromRGB(246, 240, 228), Enum.Material.SmoothPlastic, nil, nil)
-							wPart("Lv2_LoftRoof", Vector3.new(15.6, 1.5, 13.6), CFrame.new(0, 24.4, -2), spec.AccentColor, Enum.Material.SmoothPlastic, nil, nil)
-							for _, lx in ipairs({ -12.0, 12.0 }) do
-								wPart("Lv2_Lantern", Vector3.new(1.4, 1.8, 1.4), CFrame.new(lx, 10.4, 10.6), Color3.fromRGB(255, 226, 152), Enum.Material.Neon, nil, nil)
-							end
-
-							-- Lv.3: Gold Architectural Trim Band + Glowing Roof Orb
-							if level >= 3 then
-								wPart("Lv3_GoldTrim", Vector3.new(23.4, 1.1, 21.4), CFrame.new(0, 11.2, -2), gold, Enum.Material.Metal, nil, nil)
-								local orb = wPart("Lv3_Beacon", Vector3.new(3.4, 3.4, 3.4), CFrame.new(0, 27.2, -2), neonGold, Enum.Material.Neon, Enum.PartType.Ball, nil)
-								local pl = Instance.new("PointLight")
-								pl.Color = neonGold
-								pl.Brightness = 1.4
-								pl.Range = 26
-								pl.Shadows = false
-								pl.Parent = orb
-							end
-
-							-- Lv.4: Side Refrigerated Silo Tank + Industrial Piping
-							if level >= 4 then
-								wPart("Lv4_SiloTank", Vector3.new(13.0, 6.2, 6.2), CFrame.new(14.5, 7.2, -2) * CFrame.Angles(0, 0, math.rad(90)), steel, Enum.Material.Metal, Enum.PartType.Cylinder, nil)
-								wPart("Lv4_SiloBand", Vector3.new(1.6, 6.6, 6.6), CFrame.new(14.5, 9.5, -2) * CFrame.Angles(0, 0, math.rad(90)), spec.AccentColor, Enum.Material.SmoothPlastic, Enum.PartType.Cylinder, nil)
-								wPart("Lv4_SiloCap", Vector3.new(6.2, 3.2, 6.2), CFrame.new(14.5, 13.8, -2), steel, Enum.Material.Metal, Enum.PartType.Ball, nil)
-							end
-
-							-- Lv.5: Glowing Neon Category Trim Frame + Dual Cargo Floodlights
-							if level >= 5 then
-								wPart("Lv5_NeonRim", Vector3.new(24.0, 0.7, 22.0), CFrame.new(0, 17.6, -2), spec.AccentColor, Enum.Material.Neon, nil, nil)
-								for _, fx in ipairs({ -8.0, 8.0 }) do
-									wPart("Lv5_Flood", Vector3.new(2.2, 1.0, 1.2), CFrame.new(fx, 16.5, 9.4), Color3.fromRGB(255, 246, 212), Enum.Material.Neon, nil, nil)
-								end
-							end
-
-							-- Lv.6: Steel Rooftop Cargo Crane Gantry
-							if level >= 6 then
-								wPart("Lv6_CraneMast", Vector3.new(1.6, 12.0, 1.6), CFrame.new(-9.0, 26.0, -2), darkSteel, Enum.Material.Metal, nil, nil)
-								wPart("Lv6_CraneBoom", Vector3.new(14.5, 1.2, 1.4), CFrame.new(-3.0, 31.6, -2), gold, Enum.Material.Metal, nil, nil)
-								wPart("Lv6_CraneCable", Vector3.new(0.25, 4.0, 0.25), CFrame.new(2.5, 29.0, -2), darkSteel, Enum.Material.Metal, nil, nil)
-							end
-
-							-- Lv.7: Twin Illuminated Corner Glass Storage Towers
-							if level >= 7 then
-								for _, tx in ipairs({ -13.5, 13.5 }) do
-									wPart("Lv7_GlassTower", Vector3.new(4.4, 16.5, 4.4), CFrame.new(tx, 9.0, 7.5), Color3.fromRGB(168, 228, 250), Enum.Material.Glass, nil, 0.35)
-									wPart("Lv7_TowerCap", Vector3.new(5.2, 1.2, 5.2), CFrame.new(tx, 17.8, 7.5), gold, Enum.Material.Metal, nil, nil)
-								end
-							end
-
-							-- Lv.8: Upper Logistics Observatory Deck + Glass Penthouse
-							if level >= 8 then
-								wPart("Lv8_ObsGlass", Vector3.new(11.0, 4.6, 10.0), CFrame.new(0, 27.6, -2), Color3.fromRGB(174, 232, 255), Enum.Material.Glass, nil, 0.3)
-								wPart("Lv8_ObsRoof", Vector3.new(13.2, 1.2, 12.2), CFrame.new(0, 30.4, -2), gold, Enum.Material.Metal, nil, nil)
-							end
-
-							-- Lv.9: Golden Corner Columns + Glowing Supply Halo Ring
-							if level >= 9 then
-								for _, cx in ipairs({ -12.0, 12.0 }) do
-									for _, cz in ipairs({ -12.0, 8.5 }) do
-										wPart("Lv9_GoldCol", Vector3.new(1.5, 18.0, 1.5), CFrame.new(cx, 9.5, cz), gold, Enum.Material.Metal, nil, nil)
-									end
-								end
-								wPart("Lv9_HaloRing", Vector3.new(0.8, 16.5, 16.5), CFrame.new(0, 32.8, -2) * CFrame.Angles(0, 0, math.rad(90)), neonGold, Enum.Material.Neon, Enum.PartType.Cylinder, 0.25)
-							end
-
-							-- Lv.10 (MAX MEGA DEPOT): Radiant Diamond-Gold Spire + Sky Beacon!
-							if level >= 10 then
-								local spire = wPart("Lv10_DiamondSpire", Vector3.new(4.2, 7.5, 4.2), CFrame.new(0, 36.8, -2) * CFrame.Angles(0, math.rad(45), 0), diamond, Enum.Material.Neon, nil, nil)
-								wPart("Lv10_SkyBeam", Vector3.new(42, 2.2, 2.2), CFrame.new(0, 56, -2) * CFrame.Angles(0, 0, math.rad(90)), diamond, Enum.Material.Neon, Enum.PartType.Cylinder, 0.65)
-								local pl10 = Instance.new("PointLight")
-								pl10.Color = diamond
-								pl10.Brightness = 2.2
-								pl10.Range = 42
-								pl10.Shadows = false
-								pl10.Parent = spire
-							end
-
-							evo.Parent = plot
-						end
-					end
+				-- Apply 100% UI-icon-matched 3D Warehouse architecture & cohesive Lv.0 -> Lv.10 upgrades!
+				if plot:IsA("Model") then
+					WarehouseVisualBuilder.ApplyToPlot(plot, category, level)
 				end
-
-				-- Show Blueprint Ghost for Locked Warehouses (Lv.0) vs Solid Building when Unlocked (Lv.1+)
 				local isLocked = (level <= 0)
-				local evoVis = plot:FindFirstChild("WarehouseEvolutionVisuals")
-				for _, desc in ipairs(plot:GetDescendants()) do
-					if desc:IsA("BasePart") then
-						local n = desc.Name
-						local isExempt = (n == "PlotPivot" or n == "BasePad" or n == "SignPlate" or n == "CargoDoor" or n == "Foundation")
-						local inEvo = evoVis ~= nil and desc:IsDescendantOf(evoVis)
-						if not isExempt and not inEvo and desc.Parent ~= tier2Folder and desc.Parent ~= tier3Folder then
-							if desc:GetAttribute("OrigTrans") == nil then
-								desc:SetAttribute("OrigTrans", desc.Transparency)
-								desc:SetAttribute("OrigCollide", desc.CanCollide)
-							end
-							if isLocked then
-								desc.Transparency = 0.78
-								desc.CanCollide = false
-							else
-								local ot = desc:GetAttribute("OrigTrans")
-								local oc = desc:GetAttribute("OrigCollide")
-								desc.Transparency = if typeof(ot) == "number" then ot else 0
-								desc.CanCollide = if typeof(oc) == "boolean" then oc else true
-							end
-						end
-					end
-				end
 
 				-- Update SignPlate label with locked/unlocked status & live capacity
 				local signPlate = plot:FindFirstChild("SignPlate", true)
@@ -746,6 +603,11 @@ function WarehouseService.Start(): ()
 	isRunning = true
 
 	wireWarehousePrompts()
+
+	-- Immediately apply the icon-matched 3D Warehouse architecture across all 4 base estates on startup!
+	for _, slot in ipairs(BaseService.GetSlotOrder()) do
+		updateWarehouseVisualsForSlot(slot, slotStates[slot] or createDefaultState())
+	end
 
 	playerAddedConn = Players.PlayerAdded:Connect(function(player)
 		ensureState(player)

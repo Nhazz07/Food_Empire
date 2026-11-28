@@ -76,10 +76,37 @@ function PrestigeVaultService.ClaimDailyVault(player: Player): (boolean, string)
 	return true, string.format("DAILY SYNDICATE VAULT CLAIMED (%s)!", reward.Label)
 end
 
+local MAX_PRESTIGE_LEVEL = 10
+
+local function getRequiredRepForNextPrestige(currentPrestige: number): number
+	return 2000 * (currentPrestige + 1)
+end
+
+local function canTriggerPrestige(prof: { [string]: any }): (boolean, number, number)
+	local pLv = math.max(0, math.floor(tonumber(prof.PrestigeLevel) or 0))
+	local reqRep = getRequiredRepForNextPrestige(pLv)
+	if pLv >= MAX_PRESTIGE_LEVEL then
+		return false, reqRep, pLv
+	end
+	-- First rebirth (P0 -> P1): HQ Lv.10 OR 2,000 Rep.
+	-- Subsequent rebirths (P1+): must rebuild HQ to Lv.10 AND reach the next Rep milestone (prevents infinite prestige spamming!).
+	if pLv == 0 then
+		return (prof.RestaurantLevel >= 10) or (prof.Reputation >= reqRep), reqRep, pLv
+	end
+	return (prof.RestaurantLevel >= 10) and (prof.Reputation >= reqRep), reqRep, pLv
+end
+
 function PrestigeVaultService.TriggerGodfatherPrestige(player: Player): (boolean, string)
 	local prof = PlayerDataService.GetProfile(player)
-	if prof.RestaurantLevel < 10 and prof.Reputation < 2000 then
-		return false, string.format("Requires Restaurant HQ Lv.10 OR 2,000 Reputation for Godfather Prestige (Current: HQ Lv.%d, %d Rep)!", prof.RestaurantLevel, prof.Reputation)
+	local eligible, reqRep, pLv = canTriggerPrestige(prof)
+	if pLv >= MAX_PRESTIGE_LEVEL then
+		return false, string.format("You have reached MAX Godfather Prestige (P%d, +%d%% Gold & Rep)!", MAX_PRESTIGE_LEVEL, MAX_PRESTIGE_LEVEL * 25)
+	end
+	if not eligible then
+		if pLv == 0 then
+			return false, string.format("Requires Restaurant HQ Lv.10 OR %d Reputation for Godfather Prestige (Current: HQ Lv.%d, %d Rep)!", reqRep, prof.RestaurantLevel, prof.Reputation)
+		end
+		return false, string.format("Prestige P%d requires Restaurant HQ Lv.10 AND %d Reputation (Current: HQ Lv.%d, %d Rep)!", pLv + 1, reqRep, prof.RestaurantLevel, prof.Reputation)
 	end
 	local newPrestige = PlayerDataService.IncrementPrestige(player)
 	return true, string.format("REBORN AS GODFATHER PRESTIGE P%d! Permanent +%d%% Lifetime Gold & Rep Boost unlocked (all weapons, vehicles & bodyguards kept)!", newPrestige, newPrestige * 25)
@@ -93,14 +120,18 @@ function PrestigeVaultService.GetSnapshot(player: Player): { [string]: any }
 		then (if (prof.LastDailyClaimDay or 0) == (today - 1) then ((prof.DailyStreak or 0) % 7) + 1 else 1)
 		else math.max(1, prof.DailyStreak or 1)
 	local rew = DAILY_REWARDS[previewDay] or DAILY_REWARDS[1]
+	local eligible, reqRep, pLv = canTriggerPrestige(prof)
 	return {
 		Streak = prof.DailyStreak or 0,
 		CanClaimToday = canClaim,
 		NextDayNum = previewDay,
 		NextRewardLabel = rew.Label,
-		PrestigeLevel = prof.PrestigeLevel or 0,
-		PrestigeBonusPct = (prof.PrestigeLevel or 0) * 25,
-		CanPrestige = (prof.RestaurantLevel >= 10) or (prof.Reputation >= 2000),
+		PrestigeLevel = pLv,
+		MaxPrestigeLevel = MAX_PRESTIGE_LEVEL,
+		IsMaxPrestige = pLv >= MAX_PRESTIGE_LEVEL,
+		RequiredRep = reqRep,
+		PrestigeBonusPct = pLv * 25,
+		CanPrestige = eligible,
 	}
 end
 

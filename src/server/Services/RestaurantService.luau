@@ -3956,6 +3956,12 @@ function RestaurantService.Start(): ()
 		end
 	end)
 
+	SyndicateFamilyService.OnFamilyChanged(function()
+		for _, p in ipairs(Players:GetPlayers()) do
+			RestaurantService.PushStateToClient(p)
+		end
+	end)
+
 	print("[Food Empire] RestaurantService started (Co-op Shared Kitchen/Orders, Customer Patience 15-20s, Anti-Blocking & HQ Upgrades ready)!")
 end
 
